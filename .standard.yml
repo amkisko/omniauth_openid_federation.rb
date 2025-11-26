@@ -1,0 +1,10 @@
+# Standard Ruby style guide configuration
+ruby_version: 2.7
+ignore:
+  - "**/vendor/**/*"
+  - "**/tmp/**/*"
+  - "**/coverage/**/*"
+  - "**/spec/fixtures/**/*"
+  - "**/gemfiles/**/*"
+  - "**/sig/**/*"
+

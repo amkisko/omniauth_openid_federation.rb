@@ -1,0 +1,206 @@
+# Federation Endpoint Configuration
+# This enables publishing an entity statement at /.well-known/openid-federation
+# Required for OpenID Federation 1.0 compliance with signed JWKS support
+#
+# The entity statement is a self-signed JWT that contains:
+# - Entity metadata (endpoints, configuration)
+# - JWKS for signature validation (both signing and encryption keys)
+# - Issuer and subject information
+#
+# Supports two entity types:
+# - openid_relying_party (RP): For clients/relying parties (PRIMARY USE CASE)
+# - openid_provider (OP): For providers/servers (secondary use case)
+#
+# Automatic Key Provisioning:
+# - Extracts JWKS from entity_statement_path if provided (cached, supports key rotation)
+# - Supports separate signing_key and encryption_key (RECOMMENDED for production)
+# - Falls back to single private_key (DEV/TESTING ONLY - not recommended for production)
+# - Automatically generates both signing and encryption keys from provided keys
+
+require "omniauth_openid_federation"
+
+# ============================================================================
+# Global Configuration (Optional but Recommended)
+# ============================================================================
+OmniauthOpenidFederation.configure do |config|
+  # Security instrumentation - get notified about security events, MITM attacks, etc.
+  # Example with Sentry:
+  # config.instrumentation = ->(event, data) do
+  #   Sentry.capture_message(
+  #     "OpenID Federation: #{event}",
+  #     level: data[:severity] == :error ? :error : :warning,
+  #     extra: data
+  #   )
+  # end
+  
+  # Example with Honeybadger:
+  # config.instrumentation = ->(event, data) do
+  #   Honeybadger.notify("OpenID Federation: #{event}", context: data)
+  # end
+  
+  # Example with custom logger:
+  # config.instrumentation = ->(event, data) do
+  #   Rails.logger.warn("[Security] #{event}: #{data.inspect}")
+  # end
+  
+  # Cache configuration (optional)
+  # config.cache_ttl = 3600  # Refresh provider keys every hour
+  # config.rotate_on_errors = true  # Auto-handle provider key rotation
+end
+
+# ============================================================================
+# EXAMPLE 1: Relying Party (RP) Configuration (PRIMARY USE CASE)
+# ============================================================================
+# For client applications that authenticate users via OpenID Federation
+
+app_url = ENV["APP_URL"] || "https://your-app.example.com"
+
+# Production Setup (RECOMMENDED): Separate signing and encryption keys
+signing_key_path = Rails.root.join("config", "client-signing-private-key.pem")
+encryption_key_path = Rails.root.join("config", "client-encryption-private-key.pem")
+
+if File.exist?(signing_key_path) && File.exist?(encryption_key_path)
+  # Production: Use separate keys
+  signing_key = OpenSSL::PKey::RSA.new(File.read(signing_key_path))
+  encryption_key = OpenSSL::PKey::RSA.new(File.read(encryption_key_path))
+
+  OmniauthOpenidFederation::FederationEndpoint.auto_configure(
+    issuer: app_url,
+    signing_key: signing_key,
+    encryption_key: encryption_key,
+    entity_statement_path: Rails.root.join("config", "client-entity-statement.jwt"), # Cache for key rotation
+    metadata: {
+      openid_relying_party: {
+        redirect_uris: [
+          "#{app_url}/users/auth/openid_federation/callback"
+        ],
+        client_registration_types: ["automatic"],
+        application_type: "web",
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "private_key_jwt",
+        token_endpoint_auth_signing_alg: "RS256",
+        request_object_signing_alg: "RS256",
+        id_token_encrypted_response_alg: "RSA-OAEP",
+        id_token_encrypted_response_enc: "A128CBC-HS256"
+      }
+    },
+    expiration_seconds: (ENV["FEDERATION_EXPIRATION_SECONDS"] || 86400).to_i,
+    jwks_cache_ttl: (ENV["FEDERATION_JWKS_CACHE_TTL"] || 3600).to_i,
+    auto_provision_keys: true
+  )
+else
+  # Development/Testing (NOT RECOMMENDED FOR PRODUCTION): Single private key
+  private_key_path = Rails.root.join("config", "client-private-key.pem")
+  unless File.exist?(private_key_path)
+    Rails.logger.warn "[FederationEndpoint] Private key not found at #{private_key_path}. Generate it first."
+    Rails.logger.warn "  Run: bundle exec rake omniauth_openid_federation:prepare_client_keys"
+    next
+  end
+  private_key = OpenSSL::PKey::RSA.new(File.read(private_key_path))
+
+  OmniauthOpenidFederation::FederationEndpoint.auto_configure(
+    issuer: app_url,
+    private_key: private_key, # DEV/TESTING ONLY - not recommended for production
+    entity_statement_path: Rails.root.join("config", "client-entity-statement.jwt"),
+    metadata: {
+      openid_relying_party: {
+        redirect_uris: [
+          "#{app_url}/users/auth/openid_federation/callback"
+        ],
+        client_registration_types: ["automatic"],
+        application_type: "web",
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "private_key_jwt",
+        token_endpoint_auth_signing_alg: "RS256",
+        request_object_signing_alg: "RS256",
+        id_token_encrypted_response_alg: "RSA-OAEP",
+        id_token_encrypted_response_enc: "A128CBC-HS256"
+      }
+    },
+    expiration_seconds: (ENV["FEDERATION_EXPIRATION_SECONDS"] || 86400).to_i,
+    jwks_cache_ttl: (ENV["FEDERATION_JWKS_CACHE_TTL"] || 3600).to_i,
+    auto_provision_keys: true
+  )
+end
+
+# ============================================================================
+# EXAMPLE 2: OpenID Provider (OP) Configuration (SECONDARY USE CASE)
+# ============================================================================
+# For provider/server applications that serve authentication
+# Uncomment and configure if you're building a provider:
+
+# Production Setup (RECOMMENDED): Separate signing and encryption keys
+# provider_url = ENV["PROVIDER_URL"] || "https://provider.example.com"
+#
+# signing_key = OpenSSL::PKey::RSA.new(File.read("config/provider-signing-key.pem"))
+# encryption_key = OpenSSL::PKey::RSA.new(File.read("config/provider-encryption-key.pem"))
+#
+# OmniauthOpenidFederation::FederationEndpoint.auto_configure(
+#   issuer: provider_url,
+#   signing_key: signing_key,
+#   encryption_key: encryption_key,
+#   entity_statement_path: Rails.root.join("config", "provider-entity-statement.jwt"),
+#   metadata: {
+#     openid_provider: {
+#       issuer: provider_url,
+#       authorization_endpoint: "#{provider_url}/oauth2/authorize",
+#       token_endpoint: "#{provider_url}/oauth2/token",
+#       userinfo_endpoint: "#{provider_url}/oauth2/userinfo",
+#       jwks_uri: "#{provider_url}/.well-known/jwks.json",
+#       signed_jwks_uri: "#{provider_url}/.well-known/signed-jwks.json",
+#       federation_fetch_endpoint: "#{provider_url}/.well-known/openid-federation/fetch" # Auto-added for OPs
+#     }
+#   },
+#   expiration_seconds: (ENV["FEDERATION_EXPIRATION_SECONDS"] || 86400).to_i,
+#   jwks_cache_ttl: (ENV["FEDERATION_JWKS_CACHE_TTL"] || 3600).to_i,
+#   auto_provision_keys: true
+# )
+
+# Development/Testing (NOT RECOMMENDED FOR PRODUCTION): Single private key
+# provider_url = ENV["PROVIDER_URL"] || "https://provider.example.com"
+# private_key = OpenSSL::PKey::RSA.new(File.read("config/provider-private-key.pem"))
+#
+# OmniauthOpenidFederation::FederationEndpoint.auto_configure(
+#   issuer: provider_url,
+#   private_key: private_key, # DEV/TESTING ONLY - not recommended for production
+#   entity_statement_path: Rails.root.join("config", "provider-entity-statement.jwt"),
+#   metadata: {
+#     openid_provider: {
+#       issuer: provider_url,
+#       authorization_endpoint: "#{provider_url}/oauth2/authorize",
+#       token_endpoint: "#{provider_url}/oauth2/token",
+#       userinfo_endpoint: "#{provider_url}/oauth2/userinfo",
+#       jwks_uri: "#{provider_url}/.well-known/jwks.json",
+#       signed_jwks_uri: "#{provider_url}/.well-known/signed-jwks.json",
+#       federation_fetch_endpoint: "#{provider_url}/.well-known/openid-federation/fetch" # Auto-added for OPs
+#     }
+#   },
+#   expiration_seconds: (ENV["FEDERATION_EXPIRATION_SECONDS"] || 86400).to_i,
+#   jwks_cache_ttl: (ENV["FEDERATION_JWKS_CACHE_TTL"] || 3600).to_i,
+#   auto_provision_keys: true
+# )
+
+# ============================================================================
+# Routes Configuration
+# ============================================================================
+# Add to config/routes.rb:
+#
+#   OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
+#
+# This mounts all endpoints:
+#   - GET /.well-known/openid-federation (entity statement)
+#   - GET /.well-known/openid-federation/fetch (fetch endpoint - OPs only)
+#   - GET /.well-known/jwks.json (standard JWKS)
+#   - GET /.well-known/signed-jwks.json (signed JWKS)
+#
+# Or manually:
+#   get "/.well-known/openid-federation", to: "omniauth_openid_federation/federation#show"
+#   get "/.well-known/openid-federation/fetch", to: "omniauth_openid_federation/federation#fetch"
+#   get "/.well-known/jwks.json", to: "omniauth_openid_federation/federation#jwks"
+#   get "/.well-known/signed-jwks.json", to: "omniauth_openid_federation/federation#signed_jwks"
+
+Rails.logger.info "[FederationEndpoint] Configured. Add the route in config/routes.rb:"
+Rails.logger.info "  OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)"
+

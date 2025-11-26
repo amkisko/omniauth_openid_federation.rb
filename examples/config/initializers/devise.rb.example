@@ -1,0 +1,97 @@
+# Example Devise configuration for OmniAuth OpenID Federation
+# Copy this to config/initializers/devise.rb and customize for your provider
+
+require "omniauth_openid_federation"
+
+# Configure global settings (optional but recommended)
+OmniauthOpenidFederation.configure do |config|
+  # Security instrumentation - get notified about security events, MITM attacks, etc.
+  # Example with Sentry:
+  # config.instrumentation = ->(event, data) do
+  #   Sentry.capture_message(
+  #     "OpenID Federation: #{event}",
+  #     level: data[:severity] == :error ? :error : :warning,
+  #     extra: data
+  #   )
+  # end
+  
+  # Example with Honeybadger:
+  # config.instrumentation = ->(event, data) do
+  #   Honeybadger.notify("OpenID Federation: #{event}", context: data)
+  # end
+  
+  # Example with custom logger:
+  # config.instrumentation = ->(event, data) do
+  #   Rails.logger.warn("[Security] #{event}: #{data.inspect}")
+  # end
+  
+  # Cache configuration (optional)
+  # config.cache_ttl = 3600  # Refresh provider keys every hour
+  # config.rotate_on_errors = true  # Auto-handle provider key rotation
+end
+
+# Provider configuration
+provider_issuer = ENV["OPENID_PROVIDER_ISSUER"] || "https://provider.example.com"
+client_id = ENV["OPENID_CLIENT_ID"] || "your-client-id"
+redirect_uri = "#{ENV["APP_URL"] || "https://your-app.com"}/users/auth/openid_federation/callback"
+
+# File paths
+private_key_path = Rails.root.join("config", "client-private-key.pem")
+entity_statement_path = Rails.root.join("config", "provider-entity-statement.jwt")
+
+# Load private key
+unless File.exist?(private_key_path)
+  raise "Private key not found at #{private_key_path}. Generate it first using the example in README."
+end
+private_key = OpenSSL::PKey::RSA.new(File.read(private_key_path))
+
+# Resolve endpoints from entity statement or manual configuration
+endpoints = if File.exist?(entity_statement_path)
+  # Use entity statement if available (recommended for OpenID Federation)
+  OmniauthOpenidFederation::EndpointResolver.resolve(
+    entity_statement_path: entity_statement_path.to_s,
+    config: {}
+  )
+else
+  # Fallback to manual configuration
+  {
+    authorization_endpoint: ENV["OPENID_AUTHORIZATION_ENDPOINT"] || "/oauth2/authorize",
+    token_endpoint: ENV["OPENID_TOKEN_ENDPOINT"] || "/oauth2/token",
+    userinfo_endpoint: ENV["OPENID_USERINFO_ENDPOINT"] || "/oauth2/userinfo",
+    jwks_uri: ENV["OPENID_JWKS_URI"] || "/.well-known/jwks.json",
+    audience: provider_issuer
+  }
+end
+
+# Validate endpoints
+OmniauthOpenidFederation::EndpointResolver.validate_and_build_audience(
+  endpoints,
+  issuer_uri: URI.parse(provider_issuer)
+)
+
+Devise.setup do |config|
+  # ... your other Devise configuration ...
+
+  config.omniauth :openid_federation,
+    name: :openid_federation,
+    scope: [:openid],
+    response_type: "code",
+    discovery: true,
+    issuer: provider_issuer,
+    client_auth_method: :jwt_bearer,
+    client_signing_alg: :RS256,
+    audience: endpoints[:audience],
+    entity_statement_path: entity_statement_path.to_s,
+    client_options: {
+      identifier: client_id,
+      redirect_uri: redirect_uri,
+      private_key: private_key,
+      scheme: URI.parse(provider_issuer).scheme,
+      host: URI.parse(provider_issuer).host,
+      authorization_endpoint: endpoints[:authorization_endpoint],
+      token_endpoint: endpoints[:token_endpoint],
+      userinfo_endpoint: endpoints[:userinfo_endpoint],
+      jwks_uri: endpoints[:jwks_uri]
+    }
+end
+

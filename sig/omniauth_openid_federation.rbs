@@ -1,0 +1,254 @@
+module OmniauthOpenidFederation
+  VERSION: String
+
+  def self.configure: () { (Configuration) -> void } -> Configuration
+  def self.config: () -> Configuration
+  def self.rotate_jwks: (String jwks_uri, ?entity_statement_path: String?) -> Hash[String, untyped]
+
+  class Configuration
+    attr_accessor verify_ssl: bool
+    attr_accessor cache_ttl: Integer?
+    attr_accessor rotate_on_errors: bool
+    attr_accessor http_timeout: Integer
+    attr_accessor max_retries: Integer
+    attr_accessor retry_delay: Integer
+    attr_accessor http_options: Hash[Symbol, untyped] | Proc | nil
+    attr_accessor cache_adapter: untyped
+    attr_accessor root_path: String?
+    attr_accessor clock_skew_tolerance: Integer
+    attr_accessor instrumentation: Proc | untyped | nil
+
+    def self.config: () -> Configuration
+    def self.reset!: () -> void
+    def self.configure: () { (Configuration) -> void } -> Configuration
+    def initialize: () -> void
+  end
+
+  class Error < StandardError; end
+  class ConfigurationError < Error; end
+  class SecurityError < Error; end
+  class NetworkError < Error; end
+  class ValidationError < Error; end
+  class DecryptionError < SecurityError; end
+  class EncryptionError < SecurityError; end
+  class SignatureError < SecurityError; end
+  class FetchError < NetworkError; end
+  class KeyRelatedError < FetchError
+    def key_related_error?: () -> bool
+  end
+  class KeyRelatedValidationError < ValidationError
+    def key_related_error?: () -> bool
+  end
+
+  module Cache
+    def self.key_for_jwks: (String jwks_uri) -> String
+    def self.key_for_signed_jwks: (String signed_jwks_uri) -> String
+    def self.delete_jwks: (String jwks_uri) -> void
+    def self.delete_signed_jwks: (String signed_jwks_uri) -> void
+  end
+
+  module Constants
+    KEY_ROTATION_HTTP_CODES: Array[Integer]
+    REQUEST_OBJECT_EXPIRATION_SECONDS: Integer
+    MAX_RETRY_DELAY_SECONDS: Integer
+  end
+
+  module Utils
+    def self.to_indifferent_hash: (untyped hash) -> Hash[String, untyped] | ActiveSupport::HashWithIndifferentAccess
+    def self.sanitize_path: (String? path) -> String
+    def self.sanitize_uri: (String? uri) -> String
+    def self.build_endpoint_url: (String | URI issuer_uri, String endpoint_path) -> String
+    def self.build_entity_statement_url: (String | URI issuer_uri, ?entity_statement_endpoint: String?) -> String
+    def self.validate_file_path!: (String path, ?allowed_dirs: Array[String]?) -> String
+    def self.valid_jwt_format?: (String? str) -> bool
+    def self.extract_jwks_from_entity_statement: (String entity_statement_content) -> Hash[String, untyped]?
+    def self.rsa_key_to_jwk: (untyped key, ?use: String?) -> Hash[String, untyped]
+  end
+
+  module RateLimiter
+    def self.allow?: (String key, ?max_requests: Integer, ?window: Integer) -> bool
+    def self.reset!: (String key) -> void
+  end
+
+  class HttpClient
+    def self.get: (String uri, ?timeout: Integer, ?max_retries: Integer, ?retry_delay: Integer) -> untyped
+  end
+
+  class Logger
+    def self.logger: () -> untyped
+    def self.logger=: (untyped logger) -> void
+    def self.debug: (String message) -> void
+    def self.info: (String message) -> void
+    def self.warn: (String message) -> void
+    def self.error: (String message) -> void
+  end
+
+  class Jws
+    attr_accessor private_key: untyped
+    attr_accessor state: String?
+    attr_accessor nonce: String?
+    attr_accessor ftn_spname: String?
+
+    def initialize: (
+      client_id: String,
+      redirect_uri: String,
+      ?scope: String,
+      ?issuer: String?,
+      ?audience: String?,
+      ?state: String?,
+      ?nonce: String?,
+      ?response_type: String,
+      ?response_mode: String?,
+      ?login_hint: String?,
+      ?ui_locales: String?,
+      ?claims_locales: String?,
+      ?prompt: String?,
+      ?hd: String?,
+      ?acr_values: String?,
+      ?extra_params: Hash[Symbol, untyped],
+      ?private_key: untyped,
+      ?entity_statement_path: String?
+    ) -> void
+
+    def add_claim: (Symbol key, untyped value) -> void
+    def sign: (?provider_metadata: Hash[String, untyped]?, ?always_encrypt: bool) -> String
+  end
+
+  class EntityStatementReader
+    def self.fetch_keys: (?entity_statement_path: String?) -> Array[untyped]
+    def self.parse_metadata: (?entity_statement_path: String?) -> Hash[Symbol, untyped]?
+    def self.validate_fingerprint: (
+      String entity_statement_content,
+      String expected_fingerprint
+    ) -> bool
+  end
+
+  class EndpointResolver
+    def self.resolve: (
+      ?entity_statement_path: String?,
+      ?config: Hash[Symbol, String?]
+    ) -> Hash[Symbol, String?]
+
+    def self.validate_and_build_audience: (
+      Hash[Symbol, String?] endpoints,
+      ?issuer_uri: URI
+    ) -> Hash[Symbol, String?]
+  end
+
+  class KeyExtractor
+    def self.extract_signing_key: (
+      ?jwks: Hash[String, untyped] | Array[Hash[String, untyped]] | nil,
+      ?metadata: Hash[String, untyped]?,
+      ?private_key: untyped
+    ) -> untyped
+
+    def self.extract_encryption_key: (
+      ?jwks: Hash[String, untyped] | Array[Hash[String, untyped]] | nil,
+      ?metadata: Hash[String, untyped]?,
+      ?private_key: untyped
+    ) -> untyped
+  end
+
+  class RackEndpoint
+    def call: (Hash[String, untyped] env) -> Array[Integer, Hash[String, String], Array[String]]
+  end
+
+  module TasksHelper
+    def self.resolve_path: (String file_path) -> String
+    def self.fetch_entity_statement: (
+      url: String,
+      output_file: String,
+      ?fingerprint: String?
+    ) -> Hash[Symbol, untyped]
+
+    def self.validate_entity_statement: (
+      file_path: String,
+      ?fingerprint: String?
+    ) -> Hash[Symbol, untyped]
+
+    def self.parse_entity_statement: (String file_path) -> Hash[String, untyped]
+
+    def self.fetch_jwks: (
+      jwks_uri: String,
+      output_file: String
+    ) -> Hash[Symbol, untyped]
+
+    def self.prepare_client_keys: (
+      ?key_type: String,
+      ?output_dir: String
+    ) -> Hash[Symbol, untyped]
+  end
+
+  module StringHelpers
+    def self.present?: (untyped value) -> bool
+    def self.blank?: (untyped value) -> bool
+  end
+
+  module Validators
+    def self.validate_private_key!: (untyped private_key) -> void
+    def self.normalize_hash: (untyped hash) -> Hash[Symbol, untyped]
+  end
+
+  module Instrumentation
+    EVENT_CSRF_DETECTED: String
+    EVENT_SIGNATURE_VERIFICATION_FAILED: String
+    EVENT_DECRYPTION_FAILED: String
+    EVENT_TOKEN_VALIDATION_FAILED: String
+    EVENT_KEY_ROTATION_DETECTED: String
+    EVENT_KID_NOT_FOUND: String
+    EVENT_ENTITY_STATEMENT_VALIDATION_FAILED: String
+    EVENT_FINGERPRINT_MISMATCH: String
+    EVENT_TRUST_CHAIN_VALIDATION_FAILED: String
+    EVENT_ENDPOINT_MISMATCH: String
+    EVENT_UNEXPECTED_AUTHENTICATION_BREAK: String
+    EVENT_STATE_MISMATCH: String
+    EVENT_MISSING_REQUIRED_CLAIMS: String
+    EVENT_AUDIENCE_MISMATCH: String
+    EVENT_ISSUER_MISMATCH: String
+    EVENT_EXPIRED_TOKEN: String
+    EVENT_INVALID_NONCE: String
+
+    def self.notify: (
+      String event,
+      ?data: Hash[Symbol, untyped],
+      ?severity: Symbol
+    ) -> void
+
+    def self.notify_csrf_detected: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_signature_verification_failed: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_decryption_failed: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_token_validation_failed: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_key_rotation_detected: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_kid_not_found: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_entity_statement_validation_failed: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_fingerprint_mismatch: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_trust_chain_validation_failed: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_endpoint_mismatch: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_unexpected_authentication_break: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_state_mismatch: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_missing_required_claims: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_audience_mismatch: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_issuer_mismatch: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_expired_token: (?Hash[Symbol, untyped] data) -> void
+    def self.notify_invalid_nonce: (?Hash[Symbol, untyped] data) -> void
+  end
+
+  class CacheAdapter
+    def self.available?: () -> bool
+    def self.get: (String key) -> untyped
+    def self.set: (String key, untyped value, ?ttl: Integer) -> void
+    def self.delete: (String key) -> void
+  end
+
+  module Jwks
+    class Cache
+      attr_reader jwks_source: untyped
+      attr_reader timeout_sec: Integer
+      attr_reader cache_last_update: Integer
+
+      def initialize: (untyped jwks_source, ?timeout_sec: Integer) -> void
+      def call: (?Hash[Symbol, untyped] options) -> Array[Hash[String, untyped]]
+      def clear!: () -> void
+    end
+  end
+end

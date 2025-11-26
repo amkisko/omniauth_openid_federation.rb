@@ -1,0 +1,210 @@
+# OpenID Connect Configuration Class
+# This example shows how to structure OpenID Federation configuration
+# using a configuration class pattern (similar to Anyway::Config)
+#
+# Usage:
+#   1. Copy this file to config/configs/open_id_connect_config.rb
+#   2. Customize the configuration attributes for your needs
+#   3. Use it in your initializers (see federation_endpoint.rb.example)
+#
+# Environment Variables:
+#   OPEN_ID_CONNECT_ENABLED=true
+#   OPEN_ID_CONNECT_CLIENT_ID=your-client-id
+#   OPEN_ID_CONNECT_PRIVATE_KEY_PATH=config/client-private-key.pem
+#   OPEN_ID_CONNECT_SIGNING_KEY_PATH=config/client-signing-private-key.pem
+#   OPEN_ID_CONNECT_ENCRYPTION_KEY_PATH=config/client-encryption-private-key.pem
+#   OPEN_ID_CONNECT_REDIRECT_URI=https://your-app.example.com/users/auth/openid_federation/callback
+#   OPEN_ID_CONNECT_ENTITY_STATEMENT_URL=https://provider.example.com/.well-known/openid-federation
+#   OPEN_ID_CONNECT_CLIENT_ENTITY_STATEMENT_PATH=config/client-entity-statement.jwt
+#   OPEN_ID_CONNECT_CLIENT_ENTITY_STATEMENT_URL=https://your-app.example.com/.well-known/openid-federation
+#   OPEN_ID_CONNECT_ORGANIZATION_NAME=Your Organization Name
+
+require "openssl"
+require "json"
+
+# Base configuration class (if using Anyway::Config gem)
+# If not using Anyway::Config, you can use a simpler pattern:
+#
+# class ApplicationConfig
+#   class << self
+#     delegate_missing_to :instance
+#
+#     private
+#
+#     def instance
+#       @instance ||= new
+#     end
+#   end
+#
+#   def enabled?
+#     ["true", "1"].include?(ENV["#{config_name.to_s.upcase}_ENABLED"]&.to_s&.downcase)
+#   end
+# end
+
+class OpenIdConnectConfig < ApplicationConfig
+  config_name :open_id_connect
+
+  # Configuration attributes
+  # These can be set via environment variables with OPEN_ID_CONNECT_ prefix
+  # or via YAML files (if using Anyway::Config)
+  attr_config :enabled,
+    :client_id,
+    :private_key_path,
+    :private_key_base64,
+    :signing_key_path,
+    :signing_key_base64,
+    :encryption_key_path,
+    :encryption_key_base64,
+    :redirect_uri,
+    :entity_statement_path,
+    :entity_statement_url,
+    :entity_statement_fingerprint,
+    :client_entity_statement_path,
+    :client_entity_statement_url,
+    :client_entity_identifier,
+    :ftn_spname,
+    :acr_values,
+    :organization_name
+
+  # Load private key from file or base64 encoded string
+  # Used for both signing and encryption (DEV/TESTING ONLY)
+  # For production, use separate signing_key and encryption_key
+  def private_key
+    @private_key ||= begin
+      private_key_pem = if private_key_base64.present?
+        Base64.decode64(private_key_base64)
+      elsif private_key_path.present?
+        File.read(Rails.root.join(private_key_path))
+      end
+
+      raise "Private key not found. Set OPEN_ID_CONNECT_PRIVATE_KEY_PATH or OPEN_ID_CONNECT_PRIVATE_KEY_BASE64" if private_key_pem.blank?
+
+      OpenSSL::PKey::RSA.new(private_key_pem)
+    end
+  end
+
+  # Load signing key from file or base64 encoded string
+  # RECOMMENDED for production: Use separate signing key
+  def signing_key
+    return nil if signing_key_path.blank? && signing_key_base64.blank?
+
+    @signing_key ||= begin
+      signing_key_pem = if signing_key_base64.present?
+        Base64.decode64(signing_key_base64)
+      elsif signing_key_path.present?
+        File.read(Rails.root.join(signing_key_path))
+      end
+
+      return nil if signing_key_pem.blank?
+
+      OpenSSL::PKey::RSA.new(signing_key_pem)
+    end
+  end
+
+  # Load encryption key from file or base64 encoded string
+  # RECOMMENDED for production: Use separate encryption key
+  def encryption_key
+    return nil if encryption_key_path.blank? && encryption_key_base64.blank?
+
+    @encryption_key ||= begin
+      encryption_key_pem = if encryption_key_base64.present?
+        Base64.decode64(encryption_key_base64)
+      elsif encryption_key_path.present?
+        File.read(Rails.root.join(encryption_key_path))
+      end
+
+      return nil if encryption_key_pem.blank?
+
+      OpenSSL::PKey::RSA.new(encryption_key_pem)
+    end
+  end
+
+  # Note: client_jwk_signing_key is now automatically extracted by the
+  # omniauth_openid_federation gem from client_entity_statement_path or
+  # client_entity_statement_url when provided.
+  # No manual extraction needed - the library handles this automatically.
+
+  # OpenID Federation 1.0 Section 9: Entity Configuration endpoint
+  # Entity statements MUST be available at /.well-known/openid-federation
+  # URL is the source of truth per OpenID Federation spec
+  def entity_statement_absolute_path
+    return nil if entity_statement_path.blank?
+    @entity_statement_absolute_path ||= Rails.root.join(entity_statement_path)
+  end
+
+  # Get provider entity statement URL
+  # OpenID Federation 1.0 Section 9: MUST be at /.well-known/openid-federation
+  # URL is always required per OpenID Federation specification
+  def entity_statement_url
+    return values[:entity_statement_url] if values[:entity_statement_url].present?
+    nil # Return nil if not configured - must be provided via environment variable
+  end
+
+  # Get client entity statement absolute path
+  def client_entity_statement_absolute_path
+    return nil if client_entity_statement_path.blank?
+    @client_entity_statement_absolute_path ||= Rails.root.join(client_entity_statement_path)
+  end
+
+  # Get client entity statement path for strategy configuration
+  # Prefers URL over path - only returns path if URL is not available
+  def client_entity_statement_path_for_strategy
+    return nil if client_entity_statement_url.present?
+    client_entity_statement_absolute_path
+  end
+
+  # Get client registration type based on entity statement configuration
+  # :automatic - Uses entity statement for automatic client registration
+  # :explicit - Uses explicit client_id and manual registration
+  def client_registration_type
+    (values[:client_entity_statement_url].present? || values[:client_entity_statement_path].present?) ? :automatic : :explicit
+  end
+
+  # Generate client entity statement URL
+  # URL is for external consumers (providers) - we never access it ourselves
+  # Uses standard path /.well-known/openid-federation (mounted by library)
+  def client_entity_statement_url
+    return values[:client_entity_statement_url] if values[:client_entity_statement_url].present?
+    # Default to standard federation endpoint if not explicitly configured
+    app_url = ENV["APP_URL"] || "https://your-app.example.com"
+    "#{app_url}/.well-known/openid-federation"
+  end
+end
+
+# Usage in initializer (config/initializers/omniauth_openid_federation.rb):
+#
+# open_id_config = OpenIdConnectConfig.new
+# if open_id_config.enabled? && open_id_config.private_key.present?
+#   app_url = ENV["APP_URL"] || "https://your-app.example.com"
+#
+#   OmniauthOpenidFederation::FederationEndpoint.auto_configure(
+#     issuer: app_url,
+#     # Production (RECOMMENDED): Use separate keys
+#     signing_key: open_id_config.signing_key,
+#     encryption_key: open_id_config.encryption_key,
+#     # Development/Testing (NOT RECOMMENDED FOR PRODUCTION): Single key
+#     # private_key: open_id_config.private_key,
+#     entity_statement_path: open_id_config.client_entity_statement_absolute_path,
+#     metadata: {
+#       openid_relying_party: {
+#         redirect_uris: [
+#           open_id_config.redirect_uri
+#         ],
+#         client_registration_types: ["automatic"],
+#         application_type: "web",
+#         grant_types: ["authorization_code"],
+#         response_types: ["code"],
+#         token_endpoint_auth_method: "private_key_jwt",
+#         token_endpoint_auth_signing_alg: "RS256",
+#         request_object_signing_alg: "RS256",
+#         id_token_encrypted_response_alg: "RSA-OAEP",
+#         id_token_encrypted_response_enc: "A128CBC-HS256",
+#         organization_name: open_id_config.organization_name
+#       }
+#     },
+#     expiration_seconds: (ENV["FEDERATION_EXPIRATION_SECONDS"] || 86400).to_i,
+#     jwks_cache_ttl: (ENV["FEDERATION_JWKS_CACHE_TTL"] || 3600).to_i,
+#     auto_provision_keys: true
+#   )
+# end
+

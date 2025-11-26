@@ -1,0 +1,60 @@
+# Background job for proactive JWKS key rotation
+# This job runs periodically to refresh JWKS cache before expiration,
+# ensuring keys are always up-to-date without blocking client requests.
+#
+# Usage:
+# 1. Schedule this job to run periodically (e.g., every 12 hours)
+# 2. Configure cache TTL to be longer than job frequency (e.g., 24 hours)
+# 3. This ensures keys are refreshed proactively, not reactively
+#
+# Example scheduling (using GoodJob, Sidekiq, or similar):
+#
+#   # config/initializers/schedule.rb (for GoodJob)
+#   GoodJob::Cron::Schedule.add("jwks_rotation", {
+#     cron: "0 */12 * * *", # Every 12 hours
+#     class: "JwksRotationJob"
+#   })
+#
+#   # Or with Sidekiq-Cron
+#   Sidekiq::Cron::Job.create(
+#     name: "JWKS Rotation",
+#     cron: "0 */12 * * *",
+#     class: "JwksRotationJob"
+#   )
+class JwksRotationJob < ApplicationJob
+  queue_as :default
+
+  # Rotate JWKS for a specific provider
+  #
+  # @param jwks_uri [String] The JWKS URI to refresh
+  # @param entity_statement_path [String, nil] Path to entity statement for signed JWKS
+  def perform(jwks_uri, entity_statement_path: nil)
+    OmniauthOpenidFederation.rotate_jwks(jwks_uri, entity_statement_path: entity_statement_path)
+  rescue => e
+    # Log error but don't fail - request-level rotation will handle it
+    Rails.logger.error("[JwksRotationJob] Failed to rotate JWKS for #{jwks_uri}: #{e.class} - #{e.message}")
+    # Optionally, send to error tracking service (Sentry, Rollbar, etc.)
+    # Sentry.capture_exception(e) if defined?(Sentry)
+    raise # Re-raise to allow job retry if configured
+  end
+
+  # Rotate JWKS for all configured providers
+  # This is useful when you have multiple providers configured
+  def self.rotate_all
+    # Example: Get all providers from Devise config
+    providers = Devise.omniauth_configs.keys.select { |k| k.to_s.start_with?("openid") }
+    
+    providers.each do |provider_name|
+      config = Devise.omniauth_configs[provider_name]
+      options = config.options
+      client_options = options[:client_options] || options["client_options"] || {}
+      jwks_uri = client_options[:jwks_uri] || client_options["jwks_uri"]
+      entity_statement_path = options[:entity_statement_path] || options["entity_statement_path"]
+
+      if jwks_uri
+        perform_later(jwks_uri, entity_statement_path: entity_statement_path)
+      end
+    end
+  end
+end
+

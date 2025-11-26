@@ -1,0 +1,218 @@
+module OmniauthOpenidFederation
+  module Federation
+    class EntityStatement
+      attr_reader entity_statement: String
+      attr_reader fingerprint: String
+      attr_reader metadata: Hash[Symbol, untyped]?
+
+      def initialize: (String entity_statement_content, ?fingerprint: String?) -> void
+
+      def self.fetch_from_issuer!: (
+        String | URI issuer_uri,
+        ?entity_statement_endpoint: String?,
+        ?fingerprint: String?,
+        ?previous_statement: untyped,
+        ?timeout: Integer
+      ) -> EntityStatement
+
+      def self.fetch!: (
+        String url,
+        ?fingerprint: String?,
+        ?previous_statement: untyped,
+        ?timeout: Integer
+      ) -> EntityStatement
+
+      def calculate_fingerprint: () -> String
+      def validate_fingerprint: (String expected_fingerprint) -> bool
+      def validate_against_previous: (untyped previous_statement) -> bool
+      def parse: () -> Hash[Symbol, untyped]
+      def save_to_file: (String file_path) -> void
+      def decode_payload: () -> Hash[String, untyped]
+    end
+
+    module EntityStatementHelper
+      def self.parse_for_signed_jwks: (String entity_statement_path) -> Hash[Symbol, untyped]?
+      def self.parse_for_signed_jwks_from_content: (String entity_statement_content) -> Hash[Symbol, untyped]?
+    end
+
+    class EntityStatementParser
+      def self.parse: (
+        String jwt_string,
+        ?validate_signature: bool,
+        ?validate_full: bool,
+        ?issuer_entity_configuration: untyped
+      ) -> Hash[Symbol, untyped]
+
+      def initialize: (
+        String jwt_string,
+        ?validate_signature: bool,
+        ?validate_full: bool,
+        ?issuer_entity_configuration: untyped
+      ) -> void
+
+      def parse: () -> Hash[Symbol, untyped]
+    end
+
+    class EntityStatementValidator
+      def initialize: (
+        jwt_string: String,
+        ?issuer_entity_configuration: untyped,
+        ?clock_skew_tolerance: Integer?
+      ) -> void
+
+      def validate!: () -> void
+    end
+
+    class EntityStatementBuilder
+      def initialize: (
+        issuer: String,
+        subject: String,
+        private_key: untyped,
+        jwks: Hash[String, untyped],
+        metadata: Hash[String, untyped],
+        ?expiration_seconds: Integer,
+        ?kid: String?,
+        ?authority_hints: Array[String]?,
+        ?trust_marks: Array[Hash[String, untyped]]?,
+        ?trust_mark_issuers: Hash[String, untyped]?,
+        ?trust_mark_owners: Hash[String, untyped]?,
+        ?metadata_policy: Hash[String, untyped]?,
+        ?metadata_policy_crit: Array[String]?,
+        ?constraints: Hash[String, untyped]?,
+        ?source_endpoint: String?,
+        ?crit: Array[String]?
+      ) -> void
+
+      def build: () -> String
+    end
+
+    class SignedJWKS
+      def self.fetch!: (
+        String signed_jwks_uri,
+        untyped entity_jwks,
+        ?cache_key: String?,
+        ?cache_ttl: Integer?,
+        ?force_refresh: bool
+      ) -> Hash[String, untyped]
+
+      def initialize: (String signed_jwks_uri, untyped entity_jwks) -> void
+      def fetch_and_validate: () -> Hash[String, untyped]
+    end
+
+    class TrustChainResolver
+      def initialize: (
+        leaf_entity_id: String,
+        trust_anchors: Array[Hash[Symbol, untyped]],
+        ?max_chain_length: Integer,
+        ?timeout: Integer
+      ) -> void
+
+      def resolve!: () -> Array[Hash[Symbol, untyped]]
+    end
+
+    class MetadataPolicyMerger
+      def initialize: (trust_chain: Array[Hash[Symbol, untyped]]) -> void
+      def merge_policies: () -> Hash[String, untyped]
+      def apply_policies: (Hash[String, untyped] entity_metadata) -> Hash[String, untyped]
+      def merge_and_apply: (Hash[String, untyped] entity_metadata) -> Hash[String, untyped]
+    end
+  end
+
+  class FederationEndpoint
+    def self.configure: () { (FederationEndpoint::Configuration) -> void } -> FederationEndpoint::Configuration
+    def self.auto_configure: (
+      issuer: String,
+      ?signing_key: untyped,
+      ?encryption_key: untyped,
+      ?private_key: untyped,
+      ?jwks: Hash[String, untyped]?,
+      ?subject: String?,
+      ?entity_statement_path: String?,
+      ?entity_statement_url: String?,
+      ?metadata: Hash[String, untyped]?,
+      ?expiration_seconds: Integer?,
+      ?jwks_cache_ttl: Integer?,
+      ?auto_provision_keys: bool,
+      ?key_rotation_period: Integer?
+    ) -> FederationEndpoint::Configuration
+
+    def self.provision_jwks: (
+      ?signing_key: untyped,
+      ?encryption_key: untyped,
+      ?private_key: untyped,
+      ?entity_statement_path: String?,
+      ?issuer: String?,
+      ?subject: String?,
+      ?metadata: Hash[String, untyped]?,
+      ?entity_statement_path_provided: bool
+    ) -> Hash[String, untyped]?
+
+    def self.configuration: () -> FederationEndpoint::Configuration
+    def self.generate_entity_statement: () -> String
+    def self.generate_signed_jwks: () -> String
+    def self.current_jwks: () -> Hash[String, untyped]
+    def self.rack_app: () -> RackEndpoint
+    def self.mount_routes: (
+      untyped router,
+      ?entity_statement_path: String,
+      ?fetch_path: String,
+      ?jwks_path: String,
+      ?signed_jwks_path: String,
+      ?as: Symbol
+    ) -> void
+
+    def self.generate_fresh_keys: (
+      entity_statement_path: String,
+      ?issuer: String?,
+      ?subject: String?,
+      ?metadata: Hash[String, untyped]?,
+      ?keys_output_dir: String?
+    ) -> Hash[String, untyped]?
+
+    def self.rotate_keys_if_needed: (FederationEndpoint::Configuration config) -> void
+    def self.ensure_jwks_endpoints: (
+      Hash[String, untyped] metadata,
+      String issuer,
+      Symbol? entity_type
+    ) -> Hash[String, untyped]
+
+    def self.generate_subordinate_statement: (
+      subject_entity_id: String,
+      ?subject_metadata: Hash[String, untyped]?,
+      ?metadata_policy: Hash[String, untyped]?,
+      ?constraints: Hash[String, untyped]?,
+      ?source_endpoint: String?
+    ) -> String
+
+    def self.get_subordinate_statement: (String subject_entity_id) -> String?
+
+    class Configuration
+      attr_accessor issuer: String?
+      attr_accessor subject: String?
+      attr_accessor private_key: untyped
+      attr_accessor jwks: Hash[String, untyped]?
+      attr_accessor metadata: Hash[String, untyped]?
+      attr_accessor expiration_seconds: Integer
+      attr_accessor kid: String?
+      attr_accessor entity_type: Symbol
+      attr_accessor signing_key: untyped
+      attr_accessor encryption_key: untyped
+      attr_accessor auto_provision_keys: bool
+      attr_accessor entity_statement_path: String?
+      attr_accessor key_rotation_period: Integer?
+      attr_accessor current_jwks: Hash[String, untyped]?
+      attr_accessor current_jwks_proc: Proc?
+      attr_accessor signed_jwks_payload: Hash[String, untyped]?
+      attr_accessor signed_jwks_payload_proc: Proc?
+      attr_accessor signed_jwks_expiration_seconds: Integer
+      attr_accessor signed_jwks_signing_kid: String?
+      attr_accessor jwks_cache_ttl: Integer
+      attr_accessor subordinate_statements: Hash[String, Hash[Symbol, untyped]]?
+      attr_accessor subordinate_statements_proc: Proc?
+      attr_accessor authority_hints: Array[String]?
+
+      def initialize: () -> void
+    end
+  end
+end
+

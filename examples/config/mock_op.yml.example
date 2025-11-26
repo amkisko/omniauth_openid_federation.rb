@@ -1,0 +1,83 @@
+# Mock OpenID Provider (OP) Server Configuration
+#
+# Copy this file to config/mock_op.yml and customize for your testing needs
+
+# Entity Identifier (Entity ID) for the OP
+entity_id: "https://op.example.com"
+
+# Server host and port
+server_host: "localhost:9292"
+
+# Private key for signing entity statements and ID tokens
+# Can be:
+#   - PEM format (with BEGIN/END markers)
+#   - Base64 encoded PEM
+#   - Path to key file (not recommended for production)
+# If not provided, a new key will be generated (for testing only)
+signing_key: |
+  -----BEGIN RSA PRIVATE KEY-----
+  MIIEpAIBAAKCAQEA...
+  -----END RSA PRIVATE KEY-----
+
+# Trust Anchors for validating incoming RPs
+# Each trust anchor must have:
+#   - entity_id: Trust Anchor Entity Identifier
+#   - jwks: Trust Anchor JWKS for validation
+trust_anchors:
+  - entity_id: "https://ta.example.com"
+    jwks:
+      keys:
+        - kty: "RSA"
+          use: "sig"
+          kid: "ta-key-1"
+          n: "..."
+          e: "AQAB"
+
+# Authority hints (for OP's Entity Configuration)
+# List of Immediate Superiors' Entity Identifiers
+# Leave empty if this OP is a Trust Anchor
+authority_hints:
+  - "https://federation.example.com"
+
+# OP Metadata (OpenID Provider metadata)
+op_metadata:
+  issuer: "https://op.example.com"
+  authorization_endpoint: "https://op.example.com/auth"
+  token_endpoint: "https://op.example.com/token"
+  userinfo_endpoint: "https://op.example.com/userinfo"
+  jwks_uri: "https://op.example.com/.well-known/jwks.json"
+  signed_jwks_uri: "https://op.example.com/.well-known/signed-jwks.json"
+  client_registration_types_supported:
+    - "automatic"
+    - "explicit"
+  response_types_supported:
+    - "code"
+  grant_types_supported:
+    - "authorization_code"
+  id_token_signing_alg_values_supported:
+    - "RS256"
+  scopes_supported:
+    - "openid"
+    - "profile"
+    - "email"
+
+# Subordinate Statements (for Fetch Endpoint)
+# Maps subject Entity IDs to their Subordinate Statement configuration
+subordinate_statements:
+  "https://rp.example.com":
+    metadata:
+      openid_relying_party:
+        redirect_uris:
+          - "https://rp.example.com/callback"
+        client_registration_types:
+          - "automatic"
+        application_type: "web"
+    metadata_policy:
+      openid_relying_party:
+        grant_types:
+          subset_of:
+            - "authorization_code"
+        response_types:
+          subset_of:
+            - "code"
+

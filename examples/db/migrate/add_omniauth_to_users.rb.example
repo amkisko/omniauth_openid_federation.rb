@@ -1,0 +1,16 @@
+# Example migration for adding OmniAuth fields to users table
+# Copy this to db/migrate/XXXXXX_add_omniauth_to_users.rb
+
+class AddOmniauthToUsers < ActiveRecord::Migration[7.0]
+  def change
+    add_column :users, :provider, :string
+    add_column :users, :uid, :string
+    add_index :users, [:provider, :uid], unique: true
+    
+    # Optional: add user info fields if not already present
+    add_column :users, :name, :string unless column_exists?(:users, :name)
+    add_column :users, :first_name, :string unless column_exists?(:users, :first_name)
+    add_column :users, :last_name, :string unless column_exists?(:users, :last_name)
+  end
+end
+
