@@ -72,6 +72,40 @@ OmniauthOpenidFederation::EndpointResolver.validate_and_build_audience(
 Devise.setup do |config|
   # ... your other Devise configuration ...
 
+  # OmniAuth 2.0+ defaults to POST only for CSRF protection (CVE-2015-9284)
+  # Always use POST for security - forms must include CSRF token
+  if defined?(OmniAuth)
+    OmniAuth.config.allowed_request_methods = [:post]
+    OmniAuth.config.silence_get_warning = false
+
+    # Configure CSRF validation to check tokens only for request phase (initiating OAuth)
+    # Callback phase uses OAuth state parameter for CSRF protection (validated in strategy)
+    # This ensures:
+    # - Request phase: Forms must include Rails CSRF tokens (standard Rails protection)
+    # - Callback phase: OAuth state parameter provides CSRF protection (external providers can't include Rails tokens)
+    OmniAuth.config.request_validation_phase = lambda do |env|
+      request = Rack::Request.new(env)
+      path = request.path
+
+      # Skip CSRF validation for callback paths (external providers can't include Rails CSRF tokens)
+      # OAuth state parameter provides CSRF protection for callbacks (validated in OpenIDFederation strategy)
+      return true if path.end_with?("/callback")
+
+      # For request phase, use Rails' standard CSRF token validation
+      # This ensures forms must include valid CSRF tokens when initiating OAuth
+      session = env["rack.session"] || {}
+      token = request.params["authenticity_token"] || request.get_header("X-CSRF-Token")
+      expected_token = session[:_csrf_token] || session["_csrf_token"]
+
+      # Validate CSRF token using constant-time comparison
+      if token.present? && expected_token.present?
+        ActiveSupport::SecurityUtils.secure_compare(token.to_s, expected_token.to_s)
+      else
+        false
+      end
+    end
+  end
+
   config.omniauth :openid_federation,
     name: :openid_federation,
     scope: [:openid],
