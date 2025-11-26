@@ -2,6 +2,10 @@
 # Copy this to app/controllers/users/omniauth_callbacks_controller.rb
 
 class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
+  # Skip Rails CSRF protection for OAuth callbacks
+  # OAuth callbacks from external providers cannot include Rails CSRF tokens
+  # CSRF protection is handled by OAuth state parameter validation in the strategy
+  skip_before_action :verify_authenticity_token, only: [:openid_federation, :failure]
   skip_before_action :authenticate_user!, only: [:openid_federation, :failure]
 
   def openid_federation

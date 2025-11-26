@@ -128,6 +128,8 @@ config.omniauth :openid_federation,
 - `entity_statement_path` is optional - only for offline development (cached copy)
 - `discovery: true` automatically discovers all endpoints from entity statement
 
+**Important**: Don't forget to configure CSRF protection (see [Step 7: Configure CSRF Protection](#step-7-configure-csrf-protection)) to ensure proper security for both request and callback phases.
+
 #### For OmniAuth (non-Rails)
 
 ```ruby
@@ -207,13 +209,65 @@ Rails.application.routes.draw do
 end
 ```
 
-### Step 7: Create Callback Controller
+### Step 7: Configure CSRF Protection
+
+OmniAuth requires CSRF protection configuration to handle both the request phase (initiating OAuth) and callback phase (external provider redirect).
+
+**Important**: The request phase uses Rails CSRF tokens (forms must include them), while the callback phase uses OAuth state parameter for CSRF protection (external providers cannot include Rails CSRF tokens).
+
+#### For Devise (Rails)
+
+```ruby
+# config/initializers/devise.rb
+if defined?(OmniAuth)
+  OmniAuth.config.allowed_request_methods = [:post]
+  OmniAuth.config.silence_get_warning = false
+
+  # Configure CSRF validation to check tokens only for request phase (initiating OAuth)
+  # Callback phase uses OAuth state parameter for CSRF protection (validated in strategy)
+  # This ensures:
+  # - Request phase: Forms must include Rails CSRF tokens (standard Rails protection)
+  # - Callback phase: OAuth state parameter provides CSRF protection (external providers can't include Rails tokens)
+  OmniAuth.config.request_validation_phase = lambda do |env|
+    request = Rack::Request.new(env)
+    path = request.path
+
+    # Skip CSRF validation for callback paths (external providers can't include Rails CSRF tokens)
+    # OAuth state parameter provides CSRF protection for callbacks (validated in OpenIDFederation strategy)
+    return true if path.end_with?("/callback")
+
+    # For request phase, use Rails' standard CSRF token validation
+    # This ensures forms must include valid CSRF tokens when initiating OAuth
+    session = env["rack.session"] || {}
+    token = request.params["authenticity_token"] || request.get_header("X-CSRF-Token")
+    expected_token = session[:_csrf_token] || session["_csrf_token"]
+
+    # Validate CSRF token using constant-time comparison
+    if token.present? && expected_token.present?
+      ActiveSupport::SecurityUtils.secure_compare(token.to_s, expected_token.to_s)
+    else
+      false
+    end
+  end
+end
+```
+
+**Security Notes**:
+- **Request phase** (initiating OAuth): Forms must include Rails CSRF tokens via `button_to` or `form_with` helpers
+- **Callback phase** (external provider redirect): OAuth `state` parameter provides CSRF protection (automatically validated in `OpenIDFederation` strategy using constant-time comparison)
+- Both layers provide equivalent security - Rails CSRF tokens for request phase, OAuth state parameter for callbacks
+
+### Step 8: Create Callback Controller
 
 #### For Devise
 
 ```ruby
 # app/controllers/users/omniauth_callbacks_controller.rb
 class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
+  # Skip Rails CSRF protection for OAuth callbacks
+  # OAuth callbacks from external providers cannot include Rails CSRF tokens
+  # CSRF protection is handled by OAuth state parameter validation in the strategy
+  skip_before_action :verify_authenticity_token, only: [:openid_federation, :failure]
   skip_before_action :authenticate_user!, only: [:openid_federation, :failure]
 
   def openid_federation
@@ -233,7 +287,9 @@ class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
 end
 ```
 
-### Step 8: Create User Model Method
+**Note**: The `skip_before_action :verify_authenticity_token` is required because Rails' `protect_from_forgery` in `ApplicationController` checks CSRF tokens for all POST requests. External providers cannot include Rails CSRF tokens in callbacks, so we skip Rails' check while relying on OAuth state parameter validation (handled by the strategy).
+
+### Step 9: Create User Model Method
 
 ```ruby
 # app/models/user.rb
@@ -363,7 +419,8 @@ end
 ```
 
 **Instrumented Events**:
-- `csrf_detected` - CSRF attack detected (state mismatch)
+- `csrf_detected` - CSRF attack detected (state mismatch in callback phase)
+- `authenticity_error` - OmniAuth CSRF protection blocked request (Rails CSRF token validation failed in request phase)
 - `signature_verification_failed` - JWT signature verification failed (possible MITM)
 - `decryption_failed` - Token decryption failed (possible MITM or key mismatch)
 - `token_validation_failed` - Token validation failed (possible tampering)
@@ -372,8 +429,13 @@ end
 - `entity_statement_validation_failed` - Entity statement validation failed (possible MITM)
 - `fingerprint_mismatch` - Entity statement fingerprint mismatch (possible MITM)
 - `trust_chain_validation_failed` - Trust chain validation failed
-- `unexpected_authentication_break` - Unexpected authentication failure
+- `unexpected_authentication_break` - Unexpected authentication failure (missing code, token exchange errors, unknown errors)
 - `missing_required_claims` - Token missing required claims
+
+**Note**: All blocking exceptions are automatically reported through instrumentation, including:
+- OmniAuth middleware errors (like `AuthenticityTokenProtection` blocking requests)
+- Strategy-level errors (CSRF detected, missing code, token exchange failures)
+- Unknown error types (reported as `unexpected_authentication_break`)
 
 **Security Note**: All sensitive data (tokens, keys, fingerprints) is automatically sanitized before being sent to your instrumentation callback.
 
@@ -741,6 +803,13 @@ See inline code documentation for complete API reference.
 **"JWT signature verification failed"**
 - Provider may have rotated keys (auto-handled with `rotate_on_errors: true`)
 - Clear cache: `Rails.cache.delete_matched("openid_federation_jwks_*")`
+
+**"Attack prevented by OmniAuth::AuthenticityTokenProtection" or "OmniAuth::AuthenticityError"**
+- **Request phase (initiating OAuth)**: Ensure forms include Rails CSRF tokens using `button_to` or `form_with` helpers
+- **Callback phase (external provider redirect)**: Ensure CSRF protection is configured correctly (see [Step 7: Configure CSRF Protection](#step-7-configure-csrf-protection))
+- Verify `OmniAuth.config.request_validation_phase` is configured to skip CSRF validation for callback paths
+- Ensure `skip_before_action :verify_authenticity_token` is present in the callback controller for callback actions
+- Check that OAuth state parameter validation is working (handled automatically by the strategy)
 
 ## Security
 

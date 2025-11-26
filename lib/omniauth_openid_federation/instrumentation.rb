@@ -46,6 +46,7 @@ module OmniauthOpenidFederation
     EVENT_ISSUER_MISMATCH = "issuer_mismatch"
     EVENT_EXPIRED_TOKEN = "expired_token"
     EVENT_INVALID_NONCE = "invalid_nonce"
+    EVENT_AUTHENTICITY_ERROR = "authenticity_error"
 
     class << self
       # Notify about a security event
@@ -342,6 +343,21 @@ module OmniauthOpenidFederation
           EVENT_INVALID_NONCE,
           data: {
             reason: "Nonce mismatch - possible replay attack",
+            **data
+          },
+          severity: :error
+        )
+      end
+
+      # Notify about authenticity token error (OmniAuth CSRF protection)
+      #
+      # @param data [Hash] Additional context (error_type, error_message, phase, request_info)
+      # @return [void]
+      def notify_authenticity_error(data = {})
+        notify(
+          EVENT_AUTHENTICITY_ERROR,
+          data: {
+            reason: "OmniAuth authenticity token validation failed - CSRF protection blocked request",
             **data
           },
           severity: :error
