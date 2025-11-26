@@ -83,6 +83,8 @@ module OmniauthOpenidFederation
       resolved = File.expand_path(path_str)
 
       # Validate it's within allowed directories if specified
+      # When allowed_dirs is nil, we trust the developer to pass appropriate paths
+      # Path traversal protection (.. and ~) is still enforced above
       if allowed_dirs && !allowed_dirs.empty?
         allowed = allowed_dirs.any? do |dir|
           expanded_dir = File.expand_path(dir)
