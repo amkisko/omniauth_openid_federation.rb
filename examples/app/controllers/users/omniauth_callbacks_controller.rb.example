@@ -1,0 +1,33 @@
+# Example OmniAuth callback controller for Devise
+# Copy this to app/controllers/users/omniauth_callbacks_controller.rb
+
+class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
+  skip_before_action :authenticate_user!, only: [:openid_federation, :failure]
+
+  def openid_federation
+    auth = request.env["omniauth.auth"]
+    
+    @user = User.find_or_create_from_omniauth(auth)
+    
+    if @user&.persisted?
+      sign_in_and_redirect @user, event: :authentication
+    else
+      redirect_to root_path, alert: "Authentication failed"
+    end
+  end
+
+  def failure
+    error_type = request.env["omniauth.error.type"] || :unknown
+    error_message = request.env["omniauth.error"]&.message || "Authentication failed"
+    
+    Rails.logger.error({
+      message: "OmniAuth authentication failure",
+      error_type: error_type,
+      error_message: error_message,
+      strategy: request.env["omniauth.strategy"]&.name
+    })
+    
+    redirect_to root_path, alert: "Authentication failed: #{error_type}"
+  end
+end
+

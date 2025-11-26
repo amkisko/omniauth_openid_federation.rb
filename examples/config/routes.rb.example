@@ -1,0 +1,12 @@
+# Example routes.rb showing how to mount the federation endpoint
+Rails.application.routes.draw do
+  # Mount the federation endpoint (required for serving entity statements)
+  # This enables the /.well-known/openid-federation endpoint
+  OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
+
+  # Or mount manually:
+  # get "/.well-known/openid-federation", to: "omniauth_openid_federation/federation#show", as: :openid_federation
+
+  # Your other routes...
+end
+

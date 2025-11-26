@@ -1,0 +1,63 @@
+module OmniauthOpenidFederation
+  module Jwks
+    module Fetch
+      def self.run: (
+        String jwks_uri,
+        ?entity_statement_keys: untyped,
+        ?cache_ttl: Integer?,
+        ?force_refresh: bool
+      ) -> Hash[String, untyped]
+
+      def self.fetch_jwks: (
+        String jwks_uri,
+        ?entity_statement_keys: untyped
+      ) -> Hash[String, untyped]
+    end
+
+    class Normalizer
+      def self.to_jwks_hash: (untyped jwks) -> Hash[String, Array[Hash[String, untyped]]]
+      def self.normalize_keys_array: (untyped keys) -> Hash[String, Array[Hash[String, untyped]]]
+    end
+
+    module Decode
+      def self.run: (
+        String encoded_jwt,
+        String jwks_uri,
+        ?retried: bool,
+        ?entity_statement_keys: untyped,
+        &Proc[Hash[String, untyped], untyped]
+      ) -> untyped
+
+      def self.jwt: (
+        String encoded_jwt,
+        String jwks_uri,
+        ?retried: bool,
+        ?entity_statement_keys: untyped
+      ) -> Array[Hash[String, untyped]]
+
+      def self.json_jwt: (
+        String encoded_jwt,
+        String jwks_uri,
+        ?retried: bool,
+        ?entity_statement_keys: untyped
+      ) -> untyped
+    end
+
+    class Selector
+      def self.current_keys: (untyped jwks) -> Hash[String, Array[Hash[String, untyped]]]
+      def self.all_keys: (untyped jwks) -> Hash[String, Array[Hash[String, untyped]]]
+      def self.signing_keys: (untyped jwks) -> Array[Hash[String, untyped]]
+      def self.encryption_keys: (untyped jwks) -> Array[Hash[String, untyped]]
+      def self.key_by_kid: (untyped jwks, String kid) -> Hash[String, untyped]?
+      def self.extract_keys_array: (untyped jwks) -> Array[Hash[String, untyped]]
+    end
+
+    class Rotate
+      def self.run: (
+        String jwks_uri,
+        ?entity_statement_path: String?
+      ) -> Hash[String, untyped]
+    end
+  end
+end
+

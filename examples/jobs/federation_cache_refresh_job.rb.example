@@ -1,0 +1,78 @@
+# Background Job Example: Federation Cache Refresh
+#
+# This job refreshes cached federation data (entity statements, JWKS) without generating files.
+# Useful for periodic cache refresh or after key rotation.
+#
+# Usage:
+#   # Schedule in config/schedule.rb (whenever gem)
+#   every 1.hour do
+#     runner 'FederationCacheRefreshJob.perform_later'
+#   end
+#
+#   # Or call manually after key rotation
+#   FederationCacheRefreshJob.perform_later
+#
+# Requirements:
+#   - Rails application with ActiveJob configured
+#   - OmniauthOpenidFederation::FederationEndpoint configured
+#   - Rails.cache available
+#
+class FederationCacheRefreshJob < ApplicationJob
+  queue_as :default
+
+  # Refresh federation caches
+  #
+  # Clears all federation-related caches to force fresh data on next request.
+  # This is useful for:
+  #   - Periodic cache refresh
+  #   - After key rotation
+  #   - When configuration changes
+  def perform
+    require "omniauth_openid_federation"
+
+    Rails.logger.info "[FederationCacheRefreshJob] Starting cache refresh..."
+
+    # Clear all federation caches
+    if Rails.cache.respond_to?(:delete_matched)
+      Rails.cache.delete_matched("federation:*")
+      Rails.logger.info "[FederationCacheRefreshJob] Cleared federation caches"
+    else
+      # Fallback: clear known cache keys
+      Rails.cache.delete("federation:jwks")
+      Rails.cache.delete("federation:signed_jwks")
+      Rails.cache.delete("federation:entity_statement")
+      Rails.logger.info "[FederationCacheRefreshJob] Cleared federation caches (fallback)"
+    end
+
+    # Optionally: Pre-warm caches by generating data
+    # This ensures data is ready immediately after cache clear
+    begin
+      config = OmniauthOpenidFederation::FederationEndpoint.configuration
+      
+      # Pre-warm JWKS cache
+      if config.current_jwks || config.current_jwks_proc
+        jwks = OmniauthOpenidFederation::FederationEndpoint.current_jwks
+        cache_key = "federation:jwks:#{Digest::SHA256.hexdigest(jwks.to_json)}"
+        Rails.cache.write(cache_key, jwks.to_json, expires_in: config.jwks_cache_ttl || 3600)
+        Rails.logger.info "[FederationCacheRefreshJob] Pre-warmed JWKS cache"
+      end
+
+      # Pre-warm signed JWKS cache
+      signed_jwks = OmniauthOpenidFederation::FederationEndpoint.generate_signed_jwks
+      cache_key = "federation:signed_jwks:#{Digest::SHA256.hexdigest(signed_jwks)}"
+      config = OmniauthOpenidFederation::FederationEndpoint.configuration
+      Rails.cache.write(cache_key, signed_jwks, expires_in: config.jwks_cache_ttl || 3600)
+      Rails.logger.info "[FederationCacheRefreshJob] Pre-warmed signed JWKS cache"
+    rescue => e
+      Rails.logger.warn "[FederationCacheRefreshJob] Failed to pre-warm caches: #{e.message}"
+      # Don't fail the job if pre-warming fails - cache will be generated on-demand
+    end
+
+    Rails.logger.info "[FederationCacheRefreshJob] Completed successfully"
+  rescue => e
+    Rails.logger.error "[FederationCacheRefreshJob] Error: #{e.class} - #{e.message}"
+    Rails.logger.error "[FederationCacheRefreshJob] Backtrace: #{e.backtrace.first(5).join("\n")}"
+    raise
+  end
+end
+

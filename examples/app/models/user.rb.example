@@ -1,0 +1,39 @@
+# Example User model with OmniAuth integration
+# Add these methods to your existing User model
+
+class User < ApplicationRecord
+  # Required columns (add via migration):
+  # - provider (string)
+  # - uid (string)
+  # - email (string)
+  # - name (string)
+  # - first_name (string, optional)
+  # - last_name (string, optional)
+
+  def self.find_or_create_from_omniauth(auth)
+    user = find_by(provider: auth.provider, uid: auth.uid)
+    
+    if user
+      # Update existing user info
+      user.update(
+        email: auth.info.email,
+        name: auth.info.name,
+        first_name: auth.info.first_name,
+        last_name: auth.info.last_name
+      )
+    else
+      # Create new user
+      user = create(
+        provider: auth.provider,
+        uid: auth.uid,
+        email: auth.info.email,
+        name: auth.info.name,
+        first_name: auth.info.first_name,
+        last_name: auth.info.last_name
+      )
+    end
+    
+    user
+  end
+end
+

@@ -1,0 +1,87 @@
+# Background Job Example: Federation Files Generation
+#
+# This job generates and caches federation files (entity statement, JWKS) for better performance.
+# Schedule this job to run periodically (e.g., daily or when keys rotate).
+#
+# Usage:
+#   # Schedule in config/schedule.rb (whenever gem)
+#   every 1.day, at: '2:00 am' do
+#     runner 'FederationFilesGenerationJob.perform_later'
+#   end
+#
+#   # Or call manually
+#   FederationFilesGenerationJob.perform_later
+#
+#   # Or perform synchronously
+#   FederationFilesGenerationJob.perform_now
+#
+# Requirements:
+#   - Rails application with ActiveJob configured
+#   - OmniauthOpenidFederation::FederationEndpoint configured
+#   - Write access to config/ directory
+#
+class FederationFilesGenerationJob < ApplicationJob
+  queue_as :default
+
+  # Generate and cache federation files
+  #
+  # Generates:
+  #   - config/federation-entity-statement.jwt - Entity statement JWT file
+  #   - config/federation-jwks.json - Current JWKS JSON file
+  #
+  # Also clears Rails cache for federation endpoints to ensure fresh data.
+  def perform
+    require "omniauth_openid_federation"
+    require "json"
+
+    config = OmniauthOpenidFederation::FederationEndpoint.configuration
+
+    # Validate configuration
+    unless config.issuer && config.private_key && config.jwks && config.metadata
+      Rails.logger.error "[FederationFilesGenerationJob] Federation endpoint not configured"
+      return
+    end
+
+    Rails.logger.info "[FederationFilesGenerationJob] Starting federation files generation..."
+
+    # Generate entity statement file
+    begin
+      entity_statement = OmniauthOpenidFederation::FederationEndpoint.generate_entity_statement
+      entity_statement_path = Rails.root.join("config", ".federation-entity-statement.jwt")
+      File.write(entity_statement_path, entity_statement)
+      Rails.logger.info "[FederationFilesGenerationJob] Generated entity statement: #{entity_statement_path}"
+    rescue => e
+      Rails.logger.error "[FederationFilesGenerationJob] Failed to generate entity statement: #{e.message}"
+      raise
+    end
+
+    # Generate JWKS file
+    begin
+      jwks = OmniauthOpenidFederation::FederationEndpoint.current_jwks
+      jwks_path = Rails.root.join("config", ".federation-jwks.json")
+      File.write(jwks_path, JSON.pretty_generate(jwks))
+      Rails.logger.info "[FederationFilesGenerationJob] Generated JWKS: #{jwks_path}"
+    rescue => e
+      Rails.logger.error "[FederationFilesGenerationJob] Failed to generate JWKS: #{e.message}"
+      raise
+    end
+
+    # Clear federation caches to ensure fresh data on next request
+    if Rails.cache.respond_to?(:delete_matched)
+      Rails.cache.delete_matched("federation:*")
+      Rails.logger.info "[FederationFilesGenerationJob] Cleared federation caches"
+    else
+      # Fallback: clear known cache keys
+      Rails.cache.delete("federation:jwks")
+      Rails.cache.delete("federation:signed_jwks")
+      Rails.logger.info "[FederationFilesGenerationJob] Cleared federation caches (fallback)"
+    end
+
+    Rails.logger.info "[FederationFilesGenerationJob] Completed successfully"
+  rescue => e
+    Rails.logger.error "[FederationFilesGenerationJob] Error: #{e.class} - #{e.message}"
+    Rails.logger.error "[FederationFilesGenerationJob] Backtrace: #{e.backtrace.first(5).join("\n")}"
+    raise
+  end
+end
+

@@ -1,0 +1,60 @@
+module OmniAuth
+  module Strategies
+    class OpenIDFederation < OmniAuth::Strategies::OAuth2
+      def client: () -> untyped
+      def oidc_client: () -> untyped
+      def request_phase: () -> untyped
+      def callback_phase: () -> untyped
+      def auth_hash: () -> OmniAuth::AuthHash
+      def authorize_uri: () -> String
+      def raw_info: () -> Hash[String, untyped]
+      def client_jwk_signing_key: () -> untyped
+      def options: () -> untyped
+      def exchange_authorization_code: (String authorization_code) -> untyped
+      def new_state: () -> String
+      def new_nonce: () -> String
+      def resolve_endpoints_from_metadata: (Hash[Symbol, untyped] client_options_hash) -> Hash[Symbol, String?]
+      def resolve_issuer_from_metadata: () -> String?
+      def resolve_audience: (Hash[Symbol, untyped] client_options_hash, String? resolved_issuer) -> String
+      def resolve_jwks_for_validation: (Hash[Symbol, untyped] normalized_options) -> Hash[String, untyped]
+      def resolve_jwks_for_validation_with_kid: (Hash[Symbol, untyped] normalized_options, String kid) -> Hash[String, untyped]
+      def resolve_jwks_uri: (Hash[Symbol, untyped] normalized_options) -> String?
+      def build_base_url: (Hash[Symbol, untyped] client_options_hash) -> String
+      def build_endpoint: (String base_url, String path) -> String
+      def decode_id_token: (String id_token) -> Hash[String, untyped]
+      def encrypted_token?: (String token) -> bool
+      def decode_userinfo: (untyped userinfo) -> Hash[String, untyped]
+      def load_provider_entity_statement: () -> Hash[Symbol, untyped]?
+      def fetch_and_cache_entity_statement: (String url, ?fingerprint: String?) -> Hash[Symbol, untyped]?
+      def resolve_endpoints_from_trust_chain: (String issuer_entity_id, Hash[Symbol, untyped] client_options_hash) -> Hash[Symbol, String?]
+      def extract_metadata_from_parsed: (Hash[Symbol, untyped] parsed) -> Hash[Symbol, untyped]?
+      def normalize_trust_anchors: (untyped trust_anchors) -> Array[Hash[Symbol, untyped]]
+      def is_entity_id?: (String str) -> bool
+      def resolve_entity_statement_path: (String path) -> String
+      def load_metadata_for_key_extraction: () -> Hash[Symbol, untyped]?
+      def load_client_entity_statement: (?entity_statement_path: String?, ?entity_statement_url: String?) -> Hash[Symbol, untyped]?
+      def load_client_entity_statement_from_file: (String entity_statement_path) -> Hash[Symbol, untyped]?
+      def load_client_entity_statement_from_url: (String entity_statement_url) -> Hash[Symbol, untyped]?
+      def extract_client_jwk_signing_key: () -> untyped
+      def extract_entity_identifier_from_statement: (Hash[Symbol, untyped] entity_statement, String? configured_identifier) -> String?
+      def load_provider_metadata_for_encryption: () -> Hash[String, untyped]?
+      def combine_acr_values: (?configured_acr: String?, ?request_acr: String?) -> String?
+      def normalize_acr_values: (untyped acr_values) -> String?
+      def fetch_jwks: (String jwks_uri) -> Hash[String, untyped]
+    end
+
+    OpenidFederation: singleton(OpenIDFederation)
+  end
+end
+
+module OpenIDConnect
+  class AccessToken
+    def resource_request: () { () -> untyped } -> untyped
+    def get_strategy_options: () -> Hash[Symbol, untyped]
+    def extract_encryption_key_for_decryption: () -> untyped
+    def fetch_signed_jwks: (Hash[Symbol, untyped] strategy_options) -> Hash[String, untyped]?
+    def load_entity_statement_keys_for_jwks_validation: (Hash[Symbol, untyped] strategy_options) -> Array[untyped]
+    def resolve_jwks_uri_from_entity_statement: (Hash[Symbol, untyped] strategy_options) -> String?
+  end
+end
+
