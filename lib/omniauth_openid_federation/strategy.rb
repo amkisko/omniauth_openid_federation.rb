@@ -202,10 +202,10 @@ module OmniAuth
           # Extract error information
           error_message = exception&.message || error_type.to_s
           error_class = exception&.class&.name || "UnknownError"
-          
+
           # Determine the phase (request or callback)
           phase = request.path.end_with?("/callback") ? "callback_phase" : "request_phase"
-          
+
           # Build request info
           request_info = {
             remote_ip: request.env["REMOTE_ADDR"],
@@ -502,8 +502,9 @@ module OmniAuth
 
         # Add provider-specific extension parameters if configured
         # Note: Some providers may require additional parameters outside the JWT
-        # The deprecated ftn_spname option is supported for backward compatibility
+        # @deprecated ftn_spname option - Use allow_authorize_params instead for adding query parameters
         if options.ftn_spname && !options.ftn_spname.to_s.empty?
+          OmniauthOpenidFederation::Logger.warn("[Strategy] ftn_spname option is deprecated. Use allow_authorize_params: ['ftn_spname'] instead.")
           jws_builder.ftn_spname = options.ftn_spname
         end
 
@@ -553,7 +554,7 @@ module OmniAuth
 
         # Add provider-specific extension parameters outside JWT if configured
         # These are allowed per provider requirements (some providers require additional parameters)
-        # The deprecated ftn_spname option is supported for backward compatibility
+        # @deprecated ftn_spname option - Use allow_authorize_params instead for adding query parameters
         if options.ftn_spname && !options.ftn_spname.to_s.empty?
           query_params[:ftn_spname] = options.ftn_spname
         end

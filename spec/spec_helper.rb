@@ -4,6 +4,7 @@ require "simplecov-cobertura"
 SimpleCov.start do
   track_files "{lib,app}/**/*.rb"
   add_filter "/lib/tasks/"
+  add_filter "/lib/omniauth_openid_federation/version.rb"
   formatter SimpleCov::Formatter::MultiFormatter.new([
     SimpleCov::Formatter::HTMLFormatter,
     SimpleCov::Formatter::CoberturaFormatter
