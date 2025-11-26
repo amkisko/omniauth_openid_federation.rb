@@ -115,7 +115,7 @@ module OmniauthOpenidFederation
           # Log security error but return nil to maintain backward compatibility
           Logger.warn("[EntityStatementReader] Security error: #{e.message}")
           nil
-        rescue Errno::EACCES, Errno::EISDIR, Errno::ENOENT => e
+        rescue Errno::EACCES, Errno::EISDIR, Errno::ENOENT
           # Handle file system errors gracefully to avoid exposing file system structure
           # EACCES: Permission denied
           # EISDIR: Is a directory
