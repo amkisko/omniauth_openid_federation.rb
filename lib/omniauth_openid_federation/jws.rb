@@ -65,7 +65,7 @@ module OmniauthOpenidFederation
     attr_accessor :private_key, :state, :nonce
     # Provider-specific extension parameters (outside JWT)
     # Some providers may require additional parameters that are not part of the JWT
-    # @deprecated Use provider_extension_params hash instead
+    # @deprecated Use allow_authorize_params option in strategy instead (adds params to query string)
     attr_accessor :ftn_spname
 
     # Initialize JWT request object builder
@@ -254,12 +254,6 @@ module OmniauthOpenidFederation
 
       # Encode JWT using jwt gem
       JWT.encode(claim, @private_key, "RS256", header)
-    end
-
-    def load_signing_key
-      # Deprecated: Use KeyExtractor.extract_signing_key instead
-      # This method is kept for backward compatibility but should not be used
-      nil
     end
 
     def signing_key_kid

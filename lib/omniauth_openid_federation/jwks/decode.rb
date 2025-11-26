@@ -165,8 +165,9 @@ module OmniauthOpenidFederation
       # @return [Array<Hash>] Array with [payload, header]
       # @raise [ValidationError] If JWT validation fails
       # @raise [SignatureError] If signature verification fails
-      # @deprecated Use jwt() method instead
+      # @deprecated Use jwt() method instead. This method will be removed in a future version.
       def self.json_jwt(encoded_jwt, jwks_uri, retried: false, entity_statement_keys: nil)
+        OmniauthOpenidFederation::Logger.warn("[Jwks::Decode] json_jwt is deprecated. Use jwt() method instead.")
         jwt(encoded_jwt, jwks_uri, retried: retried, entity_statement_keys: entity_statement_keys)
       end
     end
