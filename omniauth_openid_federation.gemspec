@@ -31,7 +31,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency "jwt", "~> 3.1"
   spec.add_runtime_dependency "jwe", "~> 1.1"
   spec.add_runtime_dependency "http", "~> 5.3"
-  spec.add_runtime_dependency "rack", "~> 3.2"
+  spec.add_runtime_dependency "rack", ">= 2.0", "< 4"
 
   spec.add_development_dependency "rspec", "~> 3.13"
   spec.add_development_dependency "webmock", "~> 3.26"
