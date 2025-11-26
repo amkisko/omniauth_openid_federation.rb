@@ -1,6 +1,6 @@
 # omniauth_openid_federation
 
-[![Gem Version](https://badge.fury.io/rb/omniauth_openid_federation.svg?v=1.0.0)](https://badge.fury.io/rb/omniauth_openid_federation) [![Test Status](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/omniauth_openid_federation.rb/graph/badge.svg?token=CX3O9M1GIT)](https://codecov.io/gh/amkisko/omniauth_openid_federation.rb)
+[![Gem Version](https://badge.fury.io/rb/omniauth_openid_federation.svg?v=1.1.0)](https://badge.fury.io/rb/omniauth_openid_federation) [![Test Status](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/omniauth_openid_federation.rb/graph/badge.svg?token=CX3O9M1GIT)](https://codecov.io/gh/amkisko/omniauth_openid_federation.rb)
 
 OmniAuth strategy for OpenID Federation providers with comprehensive security features, supporting signed request objects, ID token encryption, and full OpenID Federation 1.0 compliance.
 
