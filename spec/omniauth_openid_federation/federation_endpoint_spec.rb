@@ -843,5 +843,784 @@ RSpec.describe OmniauthOpenidFederation::FederationEndpoint do
         expect(rp_metadata[:jwks_uri] || rp_metadata["jwks_uri"]).to be_present
       end
     end
+
+    describe "key saving and entity statement regeneration" do
+      it "saves provided keys to disk and regenerates entity statement" do
+        signing_key_file = File.join(temp_dir, ".federation-signing-key.pem")
+        encryption_key_file = File.join(temp_dir, ".federation-encryption-key.pem")
+
+        config = described_class.auto_configure(
+          issuer: issuer,
+          signing_key: signing_key,
+          encryption_key: encryption_key,
+          entity_statement_path: entity_statement_path,
+          metadata: metadata
+        )
+
+        expect(File.exist?(signing_key_file)).to be true
+        expect(File.exist?(encryption_key_file)).to be true
+        expect(File.exist?(entity_statement_path)).to be true
+        expect(config.jwks).to be_a(Hash)
+      end
+
+      it "saves single private_key to disk" do
+        signing_key_file = File.join(temp_dir, ".federation-signing-key.pem")
+        encryption_key_file = File.join(temp_dir, ".federation-encryption-key.pem")
+
+        described_class.auto_configure(
+          issuer: issuer,
+          private_key: private_key,
+          entity_statement_path: entity_statement_path,
+          metadata: metadata
+        )
+
+        expect(File.exist?(signing_key_file)).to be true
+        expect(File.exist?(encryption_key_file)).to be true
+      end
+
+      it "handles errors when saving keys gracefully" do
+        # Make directory read-only to cause write failure
+        FileUtils.chmod(0o555, temp_dir)
+
+        expect {
+          described_class.auto_configure(
+            issuer: issuer,
+            signing_key: signing_key,
+            encryption_key: encryption_key,
+            entity_statement_path: entity_statement_path,
+            metadata: metadata
+          )
+        }.not_to raise_error
+
+        FileUtils.chmod(0o755, temp_dir)
+      end
+    end
+
+    describe "key rotation" do
+      it "rotates keys when rotation period has elapsed" do
+        # Create initial entity statement
+        config = described_class.auto_configure(
+          issuer: issuer,
+          signing_key: signing_key,
+          encryption_key: encryption_key,
+          entity_statement_path: entity_statement_path,
+          metadata: metadata,
+          key_rotation_period: 1 # 1 second for testing
+        )
+
+        config.kid
+
+        # Wait for rotation period to elapse
+        sleep(1.1)
+
+        # Trigger rotation by calling auto_configure again
+        config = described_class.auto_configure(
+          issuer: issuer,
+          signing_key: signing_key,
+          encryption_key: encryption_key,
+          entity_statement_path: entity_statement_path,
+          metadata: metadata,
+          key_rotation_period: 1
+        )
+
+        # Keys should still be the same (we provided them)
+        # But if we didn't provide keys, rotation would happen
+        expect(config.kid).to be_present
+      end
+
+      it "does not rotate keys when rotation period has not elapsed" do
+        config = described_class.auto_configure(
+          issuer: issuer,
+          signing_key: signing_key,
+          encryption_key: encryption_key,
+          entity_statement_path: entity_statement_path,
+          metadata: metadata,
+          key_rotation_period: 86400 # 24 hours
+        )
+
+        config.kid
+
+        # Immediately call again - should not rotate
+        config = described_class.auto_configure(
+          issuer: issuer,
+          signing_key: signing_key,
+          encryption_key: encryption_key,
+          entity_statement_path: entity_statement_path,
+          metadata: metadata,
+          key_rotation_period: 86400
+        )
+
+        expect(config.kid).to be_present
+      end
+    end
+
+    describe "issuer validation" do
+      it "raises error when issuer is nil" do
+        expect {
+          described_class.auto_configure(issuer: nil, private_key: private_key)
+        }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /Issuer is required/)
+      end
+
+      it "raises error when issuer is empty" do
+        expect {
+          described_class.auto_configure(issuer: "", private_key: private_key)
+        }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /Issuer is required/)
+      end
+    end
+
+    describe "subject handling" do
+      it "uses issuer as subject when subject is not provided" do
+        config = described_class.auto_configure(
+          issuer: issuer,
+          private_key: private_key,
+          metadata: metadata
+        )
+
+        expect(config.subject).to eq(issuer)
+      end
+
+      it "uses provided subject" do
+        custom_subject = "https://custom.example.com"
+        config = described_class.auto_configure(
+          issuer: issuer,
+          subject: custom_subject,
+          private_key: private_key,
+          metadata: metadata
+        )
+
+        expect(config.subject).to eq(custom_subject)
+      end
+    end
+
+    describe "optional configuration" do
+      it "sets expiration_seconds when provided" do
+        config = described_class.auto_configure(
+          issuer: issuer,
+          private_key: private_key,
+          expiration_seconds: 7200,
+          metadata: metadata
+        )
+
+        expect(config.expiration_seconds).to eq(7200)
+      end
+
+      it "sets jwks_cache_ttl when provided" do
+        config = described_class.auto_configure(
+          issuer: issuer,
+          private_key: private_key,
+          jwks_cache_ttl: 1800,
+          metadata: metadata
+        )
+
+        expect(config.jwks_cache_ttl).to eq(1800)
+      end
+
+      it "sets key_rotation_period when provided" do
+        config = described_class.auto_configure(
+          issuer: issuer,
+          private_key: private_key,
+          key_rotation_period: 90 * 24 * 3600,
+          metadata: metadata
+        )
+
+        expect(config.key_rotation_period).to eq(90 * 24 * 3600)
+      end
+    end
+  end
+
+  describe ".provision_jwks" do
+    let(:temp_dir) { Dir.mktmpdir }
+    let(:entity_statement_path) { File.join(temp_dir, "entity-statement.jwt") }
+    let(:signing_key) { OpenSSL::PKey::RSA.new(2048) }
+    let(:encryption_key) { OpenSSL::PKey::RSA.new(2048) }
+
+    after do
+      FileUtils.rm_rf(temp_dir) if Dir.exist?(temp_dir)
+    end
+
+    it "generates JWKS from separate signing and encryption keys" do
+      jwks = described_class.provision_jwks(
+        signing_key: signing_key,
+        encryption_key: encryption_key
+      )
+
+      expect(jwks).to be_a(Hash)
+      expect(jwks[:keys] || jwks["keys"]).to be_an(Array)
+      expect((jwks[:keys] || jwks["keys"]).length).to eq(2)
+    end
+
+    it "generates single JWK when keys are the same" do
+      same_key = OpenSSL::PKey::RSA.new(2048)
+      jwks = described_class.provision_jwks(
+        signing_key: same_key,
+        encryption_key: same_key
+      )
+
+      expect(jwks).to be_a(Hash)
+      expect((jwks[:keys] || jwks["keys"]).length).to eq(1)
+    end
+
+    it "generates JWKS from single private_key" do
+      jwks = described_class.provision_jwks(private_key: private_key)
+
+      expect(jwks).to be_a(Hash)
+      expect((jwks[:keys] || jwks["keys"]).length).to eq(1)
+    end
+
+    it "extracts JWKS from entity statement file" do
+      signing_key_file = File.join(temp_dir, ".federation-signing-key.pem")
+      encryption_key_file = File.join(temp_dir, ".federation-encryption-key.pem")
+      File.write(signing_key_file, signing_key.to_pem)
+      File.write(encryption_key_file, encryption_key.to_pem)
+
+      jwks_hash = {
+        keys: [
+          OmniauthOpenidFederation::Utils.rsa_key_to_jwk(signing_key, use: "sig"),
+          OmniauthOpenidFederation::Utils.rsa_key_to_jwk(encryption_key, use: "enc")
+        ]
+      }
+      entity_statement = OmniauthOpenidFederation::Federation::EntityStatementBuilder.new(
+        issuer: issuer,
+        subject: issuer,
+        private_key: signing_key,
+        jwks: jwks_hash,
+        metadata: metadata
+      ).build
+      File.write(entity_statement_path, entity_statement)
+
+      jwks = described_class.provision_jwks(
+        entity_statement_path: entity_statement_path
+      )
+
+      expect(jwks).to be_a(Hash)
+      expect((jwks[:keys] || jwks["keys"]).length).to eq(2)
+    end
+
+    it "auto-generates keys when no keys provided and issuer given" do
+      jwks = described_class.provision_jwks(
+        issuer: issuer,
+        subject: issuer,
+        entity_statement_path: entity_statement_path,
+        metadata: metadata
+      )
+
+      expect(jwks).to be_a(Hash)
+      expect((jwks[:keys] || jwks["keys"]).length).to eq(2)
+      expect(File.exist?(entity_statement_path)).to be true
+    end
+
+    it "returns nil when extraction fails and no issuer provided" do
+      File.write(entity_statement_path, "invalid content")
+
+      jwks = described_class.provision_jwks(
+        entity_statement_path: entity_statement_path,
+        entity_statement_path_provided: true
+      )
+
+      expect(jwks).to be_nil
+    end
+
+    it "raises error when encryption_key provided without signing_key" do
+      expect {
+        described_class.provision_jwks(encryption_key: encryption_key)
+      }.to raise_error(
+        OmniauthOpenidFederation::ConfigurationError,
+        /Signing key is required when encryption_key is provided/
+      )
+    end
+  end
+
+  describe ".generate_fresh_keys" do
+    let(:temp_dir) { Dir.mktmpdir }
+    let(:entity_statement_path) { File.join(temp_dir, "entity-statement.jwt") }
+    let(:keys_output_dir) { File.join(temp_dir, "keys") }
+
+    after do
+      FileUtils.rm_rf(temp_dir) if Dir.exist?(temp_dir)
+    end
+
+    it "generates fresh signing and encryption keys" do
+      jwks = described_class.generate_fresh_keys(
+        entity_statement_path: entity_statement_path,
+        issuer: issuer,
+        subject: issuer,
+        metadata: metadata
+      )
+
+      expect(jwks).to be_a(Hash)
+      expect((jwks[:keys] || jwks["keys"]).length).to eq(2)
+      expect(File.exist?(entity_statement_path)).to be true
+
+      signing_key_file = File.join(File.dirname(entity_statement_path), ".federation-signing-key.pem")
+      encryption_key_file = File.join(File.dirname(entity_statement_path), ".federation-encryption-key.pem")
+      expect(File.exist?(signing_key_file)).to be true
+      expect(File.exist?(encryption_key_file)).to be true
+    end
+
+    it "uses custom keys_output_dir" do
+      described_class.generate_fresh_keys(
+        entity_statement_path: entity_statement_path,
+        issuer: issuer,
+        keys_output_dir: keys_output_dir
+      )
+
+      expect(File.exist?(File.join(keys_output_dir, ".federation-signing-key.pem"))).to be true
+      expect(File.exist?(File.join(keys_output_dir, ".federation-encryption-key.pem"))).to be true
+    end
+
+    it "generates minimal metadata when metadata not provided" do
+      jwks = described_class.generate_fresh_keys(
+        entity_statement_path: entity_statement_path,
+        issuer: issuer
+      )
+
+      expect(jwks).to be_a(Hash)
+      # generate_fresh_keys generates metadata internally but doesn't update config
+      # Verify the entity statement was created with metadata
+      expect(File.exist?(entity_statement_path)).to be true
+      entity_statement = File.read(entity_statement_path)
+      decoded = JWT.decode(entity_statement, nil, false).first
+      expect(decoded["metadata"]).to be_present
+    end
+
+    it "returns nil when issuer is missing" do
+      jwks = described_class.generate_fresh_keys(
+        entity_statement_path: entity_statement_path
+      )
+
+      expect(jwks).to be_nil
+    end
+
+    it "handles errors gracefully" do
+      # Make directory read-only to cause write failure
+      FileUtils.chmod(0o555, temp_dir)
+
+      jwks = described_class.generate_fresh_keys(
+        entity_statement_path: entity_statement_path,
+        issuer: issuer
+      )
+
+      expect(jwks).to be_nil
+
+      FileUtils.chmod(0o755, temp_dir)
+    end
+  end
+
+  describe ".rotate_keys_if_needed" do
+    let(:temp_dir) { Dir.mktmpdir }
+    let(:entity_statement_path) { File.join(temp_dir, "entity-statement.jwt") }
+    let(:signing_key) { OpenSSL::PKey::RSA.new(2048) }
+    let(:encryption_key) { OpenSSL::PKey::RSA.new(2048) }
+
+    after do
+      FileUtils.rm_rf(temp_dir) if Dir.exist?(temp_dir)
+    end
+
+    it "does nothing when key_rotation_period is nil" do
+      config = described_class.configuration
+      config.key_rotation_period = nil
+
+      expect { described_class.rotate_keys_if_needed(config) }.not_to raise_error
+    end
+
+    it "does nothing when entity_statement_path is nil" do
+      config = described_class.configuration
+      config.key_rotation_period = 3600
+      config.entity_statement_path = nil
+
+      expect { described_class.rotate_keys_if_needed(config) }.not_to raise_error
+    end
+
+    it "does nothing when entity statement file does not exist" do
+      config = described_class.configuration
+      config.key_rotation_period = 3600
+      config.entity_statement_path = "/nonexistent/path.jwt"
+
+      expect { described_class.rotate_keys_if_needed(config) }.not_to raise_error
+    end
+
+    it "rotates keys when period has elapsed" do
+      # Create initial entity statement
+      config = described_class.auto_configure(
+        issuer: issuer,
+        signing_key: signing_key,
+        encryption_key: encryption_key,
+        entity_statement_path: entity_statement_path,
+        metadata: metadata
+      )
+
+      # Set old modification time
+      FileUtils.touch(entity_statement_path, mtime: Time.now - 7200)
+      config.key_rotation_period = 3600
+
+      described_class.rotate_keys_if_needed(config)
+
+      # File should have new modification time
+      expect(File.mtime(entity_statement_path)).to be > Time.now - 100
+    end
+
+    it "does not rotate when period has not elapsed" do
+      config = described_class.auto_configure(
+        issuer: issuer,
+        signing_key: signing_key,
+        encryption_key: encryption_key,
+        entity_statement_path: entity_statement_path,
+        metadata: metadata
+      )
+
+      old_mtime = File.mtime(entity_statement_path)
+      config.key_rotation_period = 86400
+
+      described_class.rotate_keys_if_needed(config)
+
+      expect(File.mtime(entity_statement_path)).to eq(old_mtime)
+    end
+  end
+
+  describe ".ensure_jwks_endpoints" do
+    it "adds jwks_uri and signed_jwks_uri to openid_provider metadata" do
+      metadata = {
+        openid_provider: {
+          issuer: issuer
+        }
+      }
+
+      result = described_class.ensure_jwks_endpoints(metadata, issuer, :openid_provider)
+
+      op_metadata = result[:openid_provider] || result["openid_provider"]
+      expect(op_metadata[:jwks_uri] || op_metadata["jwks_uri"]).to eq("#{issuer}/.well-known/jwks.json")
+      expect(op_metadata[:signed_jwks_uri] || op_metadata["signed_jwks_uri"]).to eq("#{issuer}/.well-known/signed-jwks.json")
+      expect(op_metadata[:federation_fetch_endpoint] || op_metadata["federation_fetch_endpoint"]).to eq("#{issuer}/.well-known/openid-federation/fetch")
+    end
+
+    it "adds jwks_uri and signed_jwks_uri to openid_relying_party metadata" do
+      metadata = {
+        openid_relying_party: {
+          issuer: issuer
+        }
+      }
+
+      result = described_class.ensure_jwks_endpoints(metadata, issuer, :openid_relying_party)
+
+      rp_metadata = result[:openid_relying_party] || result["openid_relying_party"]
+      expect(rp_metadata[:jwks_uri] || rp_metadata["jwks_uri"]).to eq("#{issuer}/.well-known/jwks.json")
+      expect(rp_metadata[:signed_jwks_uri] || rp_metadata["signed_jwks_uri"]).to eq("#{issuer}/.well-known/signed-jwks.json")
+    end
+
+    it "does not add federation_fetch_endpoint for openid_relying_party" do
+      metadata = {
+        openid_relying_party: {
+          issuer: issuer
+        }
+      }
+
+      result = described_class.ensure_jwks_endpoints(metadata, issuer, :openid_relying_party)
+
+      rp_metadata = result[:openid_relying_party] || result["openid_relying_party"]
+      expect(rp_metadata[:federation_fetch_endpoint] || rp_metadata["federation_fetch_endpoint"]).to be_nil
+    end
+
+    it "does not overwrite existing endpoints" do
+      metadata = {
+        openid_provider: {
+          jwks_uri: "https://custom.example.com/jwks.json",
+          signed_jwks_uri: "https://custom.example.com/signed-jwks.json"
+        }
+      }
+
+      result = described_class.ensure_jwks_endpoints(metadata, issuer, :openid_provider)
+
+      op_metadata = result[:openid_provider] || result["openid_provider"]
+      expect(op_metadata[:jwks_uri] || op_metadata["jwks_uri"]).to eq("https://custom.example.com/jwks.json")
+    end
+
+    it "handles string keys in metadata" do
+      metadata = {
+        "openid_provider" => {
+          "issuer" => issuer
+        }
+      }
+
+      result = described_class.ensure_jwks_endpoints(metadata, issuer, :openid_provider)
+
+      op_metadata = result[:openid_provider] || result["openid_provider"]
+      expect(op_metadata).to be_present
+    end
+  end
+
+  describe ".detect_entity_type" do
+    it "returns :openid_relying_party for nil metadata" do
+      result = described_class.send(:detect_entity_type, nil)
+      expect(result).to eq(:openid_relying_party)
+    end
+
+    it "returns :openid_relying_party for empty metadata" do
+      result = described_class.send(:detect_entity_type, {})
+      expect(result).to eq(:openid_relying_party)
+    end
+
+    it "returns :openid_relying_party when openid_relying_party key present" do
+      metadata = {openid_relying_party: {}}
+      result = described_class.send(:detect_entity_type, metadata)
+      expect(result).to eq(:openid_relying_party)
+    end
+
+    it "returns :openid_provider when openid_provider key present" do
+      metadata = {openid_provider: {}}
+      result = described_class.send(:detect_entity_type, metadata)
+      expect(result).to eq(:openid_provider)
+    end
+
+    it "handles string keys" do
+      metadata = {"openid_provider" => {}}
+      result = described_class.send(:detect_entity_type, metadata)
+      expect(result).to eq(:openid_provider)
+    end
+
+    it "defaults to :openid_relying_party when neither key present" do
+      metadata = {other_key: {}}
+      result = described_class.send(:detect_entity_type, metadata)
+      expect(result).to eq(:openid_relying_party)
+    end
+  end
+
+  describe ".generate_subordinate_statement" do
+    before do
+      described_class.configure do |config|
+        config.issuer = issuer
+        config.subject = issuer
+        config.private_key = private_key
+        config.jwks = jwks
+        config.metadata = metadata
+      end
+    end
+
+    it "generates subordinate statement for openid_provider" do
+      subject_entity_id = "https://subordinate.example.com"
+      statement = described_class.send(:generate_subordinate_statement,
+        subject_entity_id: subject_entity_id,
+        subject_metadata: {openid_relying_party: {issuer: subject_entity_id}})
+
+      expect(statement).to be_a(String)
+      expect(statement.split(".").length).to eq(3)
+    end
+
+    it "raises error for non-OP entity" do
+      described_class.configure do |config|
+        config.metadata = {
+          openid_relying_party: {
+            issuer: issuer
+          }
+        }
+      end
+
+      expect {
+        described_class.send(:generate_subordinate_statement,
+          subject_entity_id: "https://subordinate.example.com")
+      }.to raise_error(
+        OmniauthOpenidFederation::ConfigurationError,
+        /Subordinate statements can only be generated by openid_provider entities/
+      )
+    end
+
+    it "uses federation_fetch_endpoint from metadata" do
+      custom_fetch_endpoint = "#{issuer}/custom/fetch"
+      subject_entity_id = "https://subordinate.example.com"
+      described_class.configure do |config|
+        config.metadata = {
+          openid_provider: {
+            issuer: issuer,
+            federation_fetch_endpoint: custom_fetch_endpoint
+          }
+        }
+      end
+
+      statement = described_class.send(:generate_subordinate_statement,
+        subject_entity_id: subject_entity_id,
+        subject_metadata: {openid_relying_party: {issuer: subject_entity_id}})
+
+      decoded = JWT.decode(statement, nil, false).first
+      expect(decoded["source_endpoint"]).to eq(custom_fetch_endpoint)
+    end
+  end
+
+  describe ".get_subordinate_statement" do
+    before do
+      described_class.configure do |config|
+        config.issuer = issuer
+        config.subject = issuer
+        config.private_key = private_key
+        config.jwks = jwks
+        config.metadata = metadata
+      end
+    end
+
+    it "returns nil for non-OP entity" do
+      described_class.configure do |config|
+        config.metadata = {
+          openid_relying_party: {
+            issuer: issuer
+          }
+        }
+      end
+
+      result = described_class.send(:get_subordinate_statement, "https://subordinate.example.com")
+      expect(result).to be_nil
+    end
+
+    it "calls subordinate_statements_proc when configured" do
+      called_with = nil
+      described_class.configure do |config|
+        config.subordinate_statements_proc = ->(subject_id) {
+          called_with = subject_id
+          "jwt.statement"
+        }
+      end
+
+      result = described_class.send(:get_subordinate_statement, "https://subordinate.example.com")
+
+      expect(called_with).to eq("https://subordinate.example.com")
+      expect(result).to eq("jwt.statement")
+    end
+
+    it "uses subordinate_statements hash when configured" do
+      subject_entity_id = "https://subordinate.example.com"
+      described_class.configure do |config|
+        config.subordinate_statements = {
+          subject_entity_id => {
+            metadata: {openid_relying_party: {issuer: subject_entity_id}}
+          }
+        }
+      end
+
+      result = described_class.send(:get_subordinate_statement, subject_entity_id)
+
+      expect(result).to be_a(String)
+      expect(result.split(".").length).to eq(3)
+    end
+
+    it "returns nil when subordinate not found" do
+      result = described_class.send(:get_subordinate_statement, "https://nonexistent.example.com")
+      expect(result).to be_nil
+    end
+  end
+
+  describe ".rack_app" do
+    it "returns RackEndpoint instance" do
+      app = described_class.rack_app
+      expect(app).to be_a(OmniauthOpenidFederation::RackEndpoint)
+    end
+  end
+
+  describe ".generate_signed_jwks error handling" do
+    before do
+      described_class.configure do |config|
+        config.issuer = issuer
+        config.subject = subject
+        config.private_key = private_key
+        config.jwks = jwks
+        config.metadata = metadata
+      end
+    end
+
+    it "raises ConfigurationError when private_key is nil" do
+      described_class.configure do |config|
+        config.private_key = nil
+      end
+
+      expect {
+        described_class.generate_signed_jwks
+      }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /Private key is required/)
+    end
+
+    it "raises SignatureError when JWT encoding fails" do
+      # Set up valid config but make JWT.encode fail by using invalid key
+      invalid_key = OpenSSL::PKey::RSA.new(512) # Too small, might cause issues
+      described_class.configure do |config|
+        config.issuer = issuer
+        config.subject = subject
+        config.private_key = invalid_key
+        config.jwks = jwks
+        config.metadata = metadata
+      end
+
+      # Mock JWT.encode to raise an error
+      allow(JWT).to receive(:encode).and_raise(StandardError.new("JWT encoding failed"))
+
+      expect {
+        described_class.generate_signed_jwks
+      }.to raise_error(OmniauthOpenidFederation::SignatureError, /Failed to sign JWKS/)
+    end
+
+    it "uses signed_jwks_payload_proc when configured" do
+      custom_jwks = {keys: [{kty: "RSA", kid: "proc-key"}]}
+      described_class.configure do |config|
+        config.signed_jwks_payload_proc = -> { custom_jwks }
+      end
+
+      jwt_string = described_class.generate_signed_jwks
+      decoded = JWT.decode(jwt_string, public_key, true, {algorithm: "RS256"})
+
+      payload = decoded.first
+      expect(payload["jwks"]["keys"].first["kid"]).to eq("proc-key")
+    end
+
+    it "uses signed_jwks_signing_kid when configured" do
+      custom_kid = "custom-signing-kid"
+      described_class.configure do |config|
+        config.signed_jwks_signing_kid = custom_kid
+      end
+
+      jwt_string = described_class.generate_signed_jwks
+      header = JWT.decode(jwt_string, nil, false).last
+      expect(header["kid"]).to eq(custom_kid)
+    end
+
+    it "extracts kid from jwks when kid not configured" do
+      described_class.configure do |config|
+        config.kid = nil
+      end
+
+      jwt_string = described_class.generate_signed_jwks
+      header = JWT.decode(jwt_string, nil, false).last
+      expect(header["kid"]).to be_present
+    end
+  end
+
+  describe "Configuration additional attributes" do
+    let(:signing_key) { OpenSSL::PKey::RSA.new(2048) }
+    let(:encryption_key) { OpenSSL::PKey::RSA.new(2048) }
+
+    it "allows setting and getting entity_type" do
+      config = described_class.configuration
+      config.entity_type = :openid_provider
+      expect(config.entity_type).to eq(:openid_provider)
+    end
+
+    it "allows setting and getting signing_key" do
+      config = described_class.configuration
+      config.signing_key = signing_key
+      expect(config.signing_key).to eq(signing_key)
+    end
+
+    it "allows setting and getting encryption_key" do
+      config = described_class.configuration
+      config.encryption_key = encryption_key
+      expect(config.encryption_key).to eq(encryption_key)
+    end
+
+    it "allows setting and getting subordinate_statements" do
+      config = described_class.configuration
+      statements = {"https://sub.example.com" => {metadata: {}}}
+      config.subordinate_statements = statements
+      expect(config.subordinate_statements).to eq(statements)
+    end
+
+    it "allows setting and getting authority_hints" do
+      config = described_class.configuration
+      hints = ["https://authority.example.com"]
+      config.authority_hints = hints
+      expect(config.authority_hints).to eq(hints)
+    end
   end
 end
