@@ -196,10 +196,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(uri).to include("ftn_spname")
     end
 
-    it "handles allow_authorize_params" do
+    it "handles request_object_params" do
       strategy = described_class.new(
         nil,
-        allow_authorize_params: ["custom_param"],
+        request_object_params: ["custom_param"],
         audience: provider_issuer,
         client_options: {
           identifier: client_id,
@@ -218,10 +218,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(uri).to be_present
     end
 
-    it "handles allow_authorize_params with empty value" do
+    it "handles request_object_params with empty value" do
       strategy = described_class.new(
         nil,
-        allow_authorize_params: ["custom_param"],
+        request_object_params: ["custom_param"],
         audience: provider_issuer,
         client_options: {
           identifier: client_id,

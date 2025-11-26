@@ -502,14 +502,15 @@ module OmniAuth
 
         # Add provider-specific extension parameters if configured
         # Note: Some providers may require additional parameters outside the JWT
-        # @deprecated ftn_spname option - Use allow_authorize_params instead for adding query parameters
+        # @deprecated ftn_spname option - Use request_object_params instead for adding params to the JWT request object
         if options.ftn_spname && !options.ftn_spname.to_s.empty?
-          OmniauthOpenidFederation::Logger.warn("[Strategy] ftn_spname option is deprecated. Use allow_authorize_params: ['ftn_spname'] instead.")
+          OmniauthOpenidFederation::Logger.warn("[Strategy] ftn_spname option is deprecated. Use request_object_params: ['ftn_spname'] instead.")
           jws_builder.ftn_spname = options.ftn_spname
         end
 
-        # Allow dynamic authorize params if configured
-        options.allow_authorize_params&.each do |key|
+        # Allow dynamic request object params from HTTP request if configured
+        # These parameters are added as claims to the JWT request object (RFC 9101)
+        options.request_object_params&.each do |key|
           value = request_params[key.to_s]
           jws_builder.add_claim(key.to_sym, value) if value && !value.to_s.empty?
         end
@@ -554,7 +555,7 @@ module OmniAuth
 
         # Add provider-specific extension parameters outside JWT if configured
         # These are allowed per provider requirements (some providers require additional parameters)
-        # @deprecated ftn_spname option - Use allow_authorize_params instead for adding query parameters
+        # @deprecated ftn_spname option - Use request_object_params instead for adding params to the JWT request object
         if options.ftn_spname && !options.ftn_spname.to_s.empty?
           query_params[:ftn_spname] = options.ftn_spname
         end
