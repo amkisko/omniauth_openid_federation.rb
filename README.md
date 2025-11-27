@@ -178,7 +178,11 @@ OmniauthOpenidFederation::FederationEndpoint.auto_configure(
 
 ```ruby
 # config/routes.rb
-OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
+# RECOMMENDED: Mount the Engine (Rails-idiomatic way)
+mount OmniauthOpenidFederation::Engine => "/"
+
+# ALTERNATIVE: Use mount_routes helper (for backward compatibility)
+# OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
 ```
 
 **Key Points**:
@@ -188,24 +192,47 @@ OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
 
 ### Step 6: Add Routes
 
-#### For Devise
+#### Mount the Engine (Required for Federation Endpoints)
+
+The gem provides a Rails Engine that serves the well-known OpenID Federation endpoints. Mount it in your routes:
 
 ```ruby
 # config/routes.rb
 Rails.application.routes.draw do
+  # Mount the Engine to enable /.well-known/openid-federation endpoint
+  mount OmniauthOpenidFederation::Engine => "/"
+  
+  # Your other routes...
   devise_for :users, controllers: {
     omniauth_callbacks: "users/omniauth_callbacks"
   }
 end
 ```
 
-#### For OmniAuth
+**Note**: The Engine is mounted at root (`"/"`) because OpenID Federation requires endpoints at specific well-known paths (e.g., `/.well-known/openid-federation`). The Engine's routes are defined in the gem and automatically available when mounted.
+
+#### For OmniAuth (Non-Devise)
 
 ```ruby
 # config/routes.rb
 Rails.application.routes.draw do
+  mount OmniauthOpenidFederation::Engine => "/"
+  
   get "/auth/:provider/callback", to: "sessions#create"
   get "/auth/failure", to: "sessions#failure"
+end
+```
+
+#### Alternative: Manual Route Mounting (Backward Compatibility)
+
+If you need custom paths or prefer manual route definition, you can use the `mount_routes` helper (deprecated):
+
+```ruby
+# config/routes.rb
+Rails.application.routes.draw do
+  # Use mount_routes helper for custom paths (deprecated - prefer Engine mounting)
+  OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
+  # ... your other routes
 end
 ```
 
@@ -583,7 +610,11 @@ OmniauthOpenidFederation::FederationEndpoint.auto_configure(
 
 ```ruby
 # config/routes.rb
-OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
+# RECOMMENDED: Mount the Engine (Rails-idiomatic way)
+mount OmniauthOpenidFederation::Engine => "/"
+
+# ALTERNATIVE: Use mount_routes helper (for backward compatibility)
+# OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
 ```
 
 **What `auto_configure` does automatically**:

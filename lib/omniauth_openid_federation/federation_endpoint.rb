@@ -547,22 +547,21 @@ module OmniauthOpenidFederation
 
       # Mount the federation endpoint routes in Rails routes
       #
-      # Add this to your config/routes.rb:
+      # RECOMMENDED: Use the Engine (Rails-idiomatic way):
       #   Rails.application.routes.draw do
-      #     OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
+      #     mount OmniauthOpenidFederation::Engine => "/"
       #   end
       #
-      # This mounts all four endpoints:
+      # This mounts all four endpoints at the root level:
       #   - GET /.well-known/openid-federation (entity statement)
       #   - GET /.well-known/openid-federation/fetch (fetch endpoint for Subordinate Statements)
       #   - GET /.well-known/jwks.json (standard JWKS)
       #   - GET /.well-known/signed-jwks.json (signed JWKS)
       #
-      # Or manually:
-      #   get "/.well-known/openid-federation", to: "omniauth_openid_federation/federation#show"
-      #   get "/.well-known/openid-federation/fetch", to: "omniauth_openid_federation/federation#fetch"
-      #   get "/.well-known/jwks.json", to: "omniauth_openid_federation/federation#jwks"
-      #   get "/.well-known/signed-jwks.json", to: "omniauth_openid_federation/federation#signed_jwks"
+      # ALTERNATIVE: Use mount_routes helper (for backward compatibility or custom paths):
+      #   Rails.application.routes.draw do
+      #     OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
+      #   end
       #
       # @param router [ActionDispatch::Routing::Mapper] The routes mapper (pass `self` from routes.rb)
       # @param entity_statement_path [String] Path for entity statement endpoint (default: "/.well-known/openid-federation")
@@ -570,6 +569,7 @@ module OmniauthOpenidFederation
       # @param jwks_path [String] Path for standard JWKS endpoint (default: "/.well-known/jwks.json")
       # @param signed_jwks_path [String] Path for signed JWKS endpoint (default: "/.well-known/signed-jwks.json")
       # @param as [String, Symbol] Route name prefix (default: :openid_federation)
+      # @deprecated Use `mount OmniauthOpenidFederation::Engine => "/"` instead (Rails-idiomatic way)
       def mount_routes(router, entity_statement_path: "/.well-known/openid-federation", fetch_path: "/.well-known/openid-federation/fetch", jwks_path: "/.well-known/jwks.json", signed_jwks_path: "/.well-known/signed-jwks.json", as: :openid_federation)
         # Controller uses Rails-conventional naming (OmniauthOpenidFederation)
         # which matches natural inflection from omniauth_openid_federation

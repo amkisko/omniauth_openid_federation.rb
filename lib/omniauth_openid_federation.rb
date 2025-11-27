@@ -82,8 +82,9 @@ module OmniauthOpenidFederation
   end
 end
 
-# Load Railtie for Rails integration (rake tasks, etc.)
+# Load Engine for Rails integration (controllers, routes, etc.)
 if defined?(Rails)
+  require_relative "omniauth_openid_federation/engine"
   require_relative "omniauth_openid_federation/railtie"
 end
 
