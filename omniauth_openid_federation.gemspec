@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.license = "MIT"
 
   spec.files = Dir.chdir(File.expand_path(__dir__)) do
-    Dir["lib/**/*", "sig/**/*", "README.md", "LICENSE*", "CHANGELOG.md", "SECURITY.md", "examples/**/*"].select { |f| File.file?(f) }
+    Dir["lib/**/*", "app/**/*", "config/**/*", "sig/**/*", "README.md", "LICENSE*", "CHANGELOG.md", "SECURITY.md", "examples/**/*"].select { |f| File.file?(f) }
   end
   spec.require_paths = ["lib"]
   spec.required_ruby_version = ">= 3.0"

@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 1.2.2 (2025-11-27)
+
+- Fix gemfile to include app and config directories
+
 ## 1.2.1 (2025-11-27)
 
 - Clean up Railtie loading patches to fully rely on Zeitwerk and autoloading
