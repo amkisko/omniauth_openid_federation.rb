@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 1.2.0 (2025-11-27)
+
+- Created `OmniauthOpenidFederation::Engine` class inheriting from `Rails::Engine`
+- Engine provides controllers via standard Rails autoloading mechanisms
+- Routes are now defined in Engine's `config/routes.rb` file
+- Routes must now be mounted using `mount OmniauthOpenidFederation::Engine => "/"` in `config/routes.rb`
+- `FederationEndpoint.mount_routes` is still available for backward compatibility
+
 ## 1.1.0 (2025-11-26)
 
 - Enhanced instrumentation: All blocking exceptions automatically reported through instrumentation system, including OmniAuth middleware errors (like AuthenticityTokenProtection)
