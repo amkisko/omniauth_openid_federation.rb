@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    omniauth_openid_federation (1.2.0)
+    omniauth_openid_federation (1.2.1)
       http (~> 5.3)
       jwe (~> 1.1)
       jwt (~> 3.1)

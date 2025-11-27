@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 1.2.1 (2025-11-27)
+
+- Clean up Railtie loading patches to fully rely on Zeitwerk and autoloading
+
 ## 1.2.0 (2025-11-27)
 
 - Created `OmniauthOpenidFederation::Engine` class inheriting from `Rails::Engine`
