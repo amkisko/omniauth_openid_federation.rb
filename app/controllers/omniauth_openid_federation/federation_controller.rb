@@ -50,6 +50,27 @@ module OmniauthOpenidFederation
         return
       end
 
+      # Security: Validate entity identifier per OpenID Federation 1.0 spec
+      # Entity identifiers must be valid HTTP/HTTPS URIs
+      begin
+        # Trim and validate entity identifier
+        trimmed_id = subject_entity_id.to_s.strip
+        if trimmed_id.empty?
+          render json: {error: "invalid_request", error_description: "Subject entity ID cannot be empty"}, status: :bad_request
+          return
+        end
+
+        # Use secure validation (includes length, allowed characters, and URI format checks)
+        OmniauthOpenidFederation::Validators.validate_entity_identifier!(trimmed_id, max_length: 2048)
+        subject_entity_id = trimmed_id
+      rescue SecurityError => e
+        render json: {error: "invalid_request", error_description: "Invalid subject entity ID: #{e.message}"}, status: :bad_request
+        return
+      rescue => e
+        render json: {error: "invalid_request", error_description: "Subject entity ID validation failed: #{e.message}"}, status: :bad_request
+        return
+      end
+
       # Validate that subject is not the issuer (invalid request per spec)
       config = OmniauthOpenidFederation::FederationEndpoint.configuration
       if subject_entity_id == config.issuer
