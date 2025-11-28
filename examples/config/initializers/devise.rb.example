@@ -1,10 +1,23 @@
 # Example Devise configuration for OmniAuth OpenID Federation
 # Copy this to config/initializers/devise.rb and customize for your provider
+#
+# This example uses a configuration class pattern (OpenIdConnectConfig)
+# See examples/config/open_id_connect_config.rb.example for the config class
 
 require "omniauth_openid_federation"
 
 # Configure global settings (optional but recommended)
 OmniauthOpenidFederation.configure do |config|
+  if Rails.env.development?
+    config.http_options = { ssl: { verify_mode: OpenSSL::SSL::VERIFY_PEER, ca_file: (OpenSSL::X509::DEFAULT_CERT_FILE if File.exist?(OpenSSL::X509::DEFAULT_CERT_FILE)) } }
+  end
+
+  config.cache_ttl = 24 * 60 * 60
+  config.rotate_on_errors = true
+  config.http_timeout = 10
+  config.max_retries = 3
+  config.verify_ssl = true
+
   # Security instrumentation - get notified about security events, MITM attacks, etc.
   # Example with Sentry:
   # config.instrumentation = ->(event, data) do
@@ -24,108 +37,68 @@ OmniauthOpenidFederation.configure do |config|
   # config.instrumentation = ->(event, data) do
   #   Rails.logger.warn("[Security] #{event}: #{data.inspect}")
   # end
-  
-  # Cache configuration (optional)
-  # config.cache_ttl = 3600  # Refresh provider keys every hour
-  # config.rotate_on_errors = true  # Auto-handle provider key rotation
 end
 
-# Provider configuration
-provider_issuer = ENV["OPENID_PROVIDER_ISSUER"] || "https://provider.example.com"
-client_id = ENV["OPENID_CLIENT_ID"] || "your-client-id"
-redirect_uri = "#{ENV["APP_URL"] || "https://your-app.com"}/users/auth/openid_federation/callback"
+# Load configuration from config class
+open_id_config = OpenIdConnectConfig.new
 
-# File paths
-private_key_path = Rails.root.join("config", "client-private-key.pem")
-entity_statement_path = Rails.root.join("config", "provider-entity-statement.jwt")
+if open_id_config.enabled?
+  Devise.setup do |config|
+    # ... your other Devise configuration ...
 
-# Load private key
-unless File.exist?(private_key_path)
-  raise "Private key not found at #{private_key_path}. Generate it first using the example in README."
-end
-private_key = OpenSSL::PKey::RSA.new(File.read(private_key_path))
+    # OmniAuth 2.0+ defaults to POST only for CSRF protection (CVE-2015-9284)
+    # Always use POST for security - forms must include CSRF token
+    if defined?(OmniAuth)
+      OmniAuth.config.allowed_request_methods = [:post]
+      OmniAuth.config.silence_get_warning = false
 
-# Resolve endpoints from entity statement or manual configuration
-endpoints = if File.exist?(entity_statement_path)
-  # Use entity statement if available (recommended for OpenID Federation)
-  OmniauthOpenidFederation::EndpointResolver.resolve(
-    entity_statement_path: entity_statement_path.to_s,
-    config: {}
-  )
-else
-  # Fallback to manual configuration
-  {
-    authorization_endpoint: ENV["OPENID_AUTHORIZATION_ENDPOINT"] || "/oauth2/authorize",
-    token_endpoint: ENV["OPENID_TOKEN_ENDPOINT"] || "/oauth2/token",
-    userinfo_endpoint: ENV["OPENID_USERINFO_ENDPOINT"] || "/oauth2/userinfo",
-    jwks_uri: ENV["OPENID_JWKS_URI"] || "/.well-known/jwks.json",
-    audience: provider_issuer
-  }
-end
+      # Configure CSRF validation to check tokens only for request phase (initiating OAuth)
+      # Callback phase uses OAuth state parameter for CSRF protection (validated in strategy)
+      # This ensures:
+      # - Request phase: Forms must include Rails CSRF tokens (standard Rails protection)
+      # - Callback phase: OAuth state parameter provides CSRF protection (external providers can't include Rails tokens)
+      OmniAuth.config.request_validation_phase = lambda do |env|
+        request = Rack::Request.new(env)
+        path = request.path
 
-# Validate endpoints
-OmniauthOpenidFederation::EndpointResolver.validate_and_build_audience(
-  endpoints,
-  issuer_uri: URI.parse(provider_issuer)
-)
+        # Skip CSRF validation for callback paths (external providers can't include Rails CSRF tokens)
+        # OAuth state parameter provides CSRF protection for callbacks (validated in OpenIDFederation strategy)
+        return true if path.end_with?("/callback")
 
-Devise.setup do |config|
-  # ... your other Devise configuration ...
+        # For request phase, use Rails' standard CSRF token validation
+        # This ensures forms must include valid CSRF tokens when initiating OAuth
+        session = env["rack.session"] || {}
+        token = request.params["authenticity_token"] || request.get_header("X-CSRF-Token")
+        expected_token = session[:_csrf_token] || session["_csrf_token"]
 
-  # OmniAuth 2.0+ defaults to POST only for CSRF protection (CVE-2015-9284)
-  # Always use POST for security - forms must include CSRF token
-  if defined?(OmniAuth)
-    OmniAuth.config.allowed_request_methods = [:post]
-    OmniAuth.config.silence_get_warning = false
-
-    # Configure CSRF validation to check tokens only for request phase (initiating OAuth)
-    # Callback phase uses OAuth state parameter for CSRF protection (validated in strategy)
-    # This ensures:
-    # - Request phase: Forms must include Rails CSRF tokens (standard Rails protection)
-    # - Callback phase: OAuth state parameter provides CSRF protection (external providers can't include Rails tokens)
-    OmniAuth.config.request_validation_phase = lambda do |env|
-      request = Rack::Request.new(env)
-      path = request.path
-
-      # Skip CSRF validation for callback paths (external providers can't include Rails CSRF tokens)
-      # OAuth state parameter provides CSRF protection for callbacks (validated in OpenIDFederation strategy)
-      return true if path.end_with?("/callback")
-
-      # For request phase, use Rails' standard CSRF token validation
-      # This ensures forms must include valid CSRF tokens when initiating OAuth
-      session = env["rack.session"] || {}
-      token = request.params["authenticity_token"] || request.get_header("X-CSRF-Token")
-      expected_token = session[:_csrf_token] || session["_csrf_token"]
-
-      # Validate CSRF token using constant-time comparison
-      if token.present? && expected_token.present?
-        ActiveSupport::SecurityUtils.secure_compare(token.to_s, expected_token.to_s)
-      else
-        false
+        # Validate CSRF token using constant-time comparison
+        if token.present? && expected_token.present?
+          ActiveSupport::SecurityUtils.secure_compare(token.to_s, expected_token.to_s)
+        else
+          false
+        end
       end
     end
+
+    config.omniauth :openid_federation,
+      strategy_class: OmniAuth::Strategies::OpenIDFederation,
+      name: :openid_federation,
+      scope: [:openid],
+      response_type: "code",
+      discovery: true,
+      client_auth_method: :jwt_bearer,
+      client_signing_alg: :RS256,
+      entity_statement_path: open_id_config.entity_statement_absolute_path,
+      # Note: acr_values should be passed via request parameters
+      # It will be automatically included in the JWT request object if present
+      # Pass custom parameters from HTTP request to JWT request object
+      # These parameters are extracted from the form/request and added as claims to the signed JWT
+      # Example: request_object_params: ["custom_param", "another_param"]
+      always_encrypt_request_object: true,
+      client_options: {
+        identifier: open_id_config.client_id,
+        redirect_uri: open_id_config.redirect_uri,
+        private_key: open_id_config.private_key
+      }
   end
-
-  config.omniauth :openid_federation,
-    name: :openid_federation,
-    scope: [:openid],
-    response_type: "code",
-    discovery: true,
-    issuer: provider_issuer,
-    client_auth_method: :jwt_bearer,
-    client_signing_alg: :RS256,
-    audience: endpoints[:audience],
-    entity_statement_path: entity_statement_path.to_s,
-    client_options: {
-      identifier: client_id,
-      redirect_uri: redirect_uri,
-      private_key: private_key,
-      scheme: URI.parse(provider_issuer).scheme,
-      host: URI.parse(provider_issuer).host,
-      authorization_endpoint: endpoints[:authorization_endpoint],
-      token_endpoint: endpoints[:token_endpoint],
-      userinfo_endpoint: endpoints[:userinfo_endpoint],
-      jwks_uri: endpoints[:jwks_uri]
-    }
 end
-

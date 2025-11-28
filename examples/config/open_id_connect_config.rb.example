@@ -62,8 +62,6 @@ class OpenIdConnectConfig < ApplicationConfig
     :client_entity_statement_path,
     :client_entity_statement_url,
     :client_entity_identifier,
-    :ftn_spname,
-    :acr_values,
     :organization_name
 
   # Load private key from file or base64 encoded string
@@ -128,8 +126,8 @@ class OpenIdConnectConfig < ApplicationConfig
   # Entity statements MUST be available at /.well-known/openid-federation
   # URL is the source of truth per OpenID Federation spec
   def entity_statement_absolute_path
-    return nil if entity_statement_path.blank?
-    @entity_statement_absolute_path ||= Rails.root.join(entity_statement_path)
+    return Rails.root.join("config", ".federation-entity-statement.jwt").to_s if entity_statement_path.blank?
+    @entity_statement_absolute_path ||= Rails.root.join(entity_statement_path).to_s
   end
 
   # Get provider entity statement URL
@@ -143,7 +141,7 @@ class OpenIdConnectConfig < ApplicationConfig
   # Get client entity statement absolute path
   def client_entity_statement_absolute_path
     return nil if client_entity_statement_path.blank?
-    @client_entity_statement_absolute_path ||= Rails.root.join(client_entity_statement_path)
+    @client_entity_statement_absolute_path ||= Rails.root.join(client_entity_statement_path).to_s
   end
 
   # Get client entity statement path for strategy configuration
@@ -165,7 +163,6 @@ class OpenIdConnectConfig < ApplicationConfig
   # Uses standard path /.well-known/openid-federation (mounted by library)
   def client_entity_statement_url
     return values[:client_entity_statement_url] if values[:client_entity_statement_url].present?
-    # Default to standard federation endpoint if not explicitly configured
     app_url = ENV["APP_URL"] || "https://your-app.example.com"
     "#{app_url}/.well-known/openid-federation"
   end
@@ -174,16 +171,15 @@ end
 # Usage in initializer (config/initializers/omniauth_openid_federation.rb):
 #
 # open_id_config = OpenIdConnectConfig.new
-# if open_id_config.enabled? && open_id_config.private_key.present?
+# if open_id_config.enabled?
 #   app_url = ENV["APP_URL"] || "https://your-app.example.com"
 #
 #   OmniauthOpenidFederation::FederationEndpoint.auto_configure(
 #     issuer: app_url,
-#     # Production (RECOMMENDED): Use separate keys
-#     signing_key: open_id_config.signing_key,
-#     encryption_key: open_id_config.encryption_key,
-#     # Development/Testing (NOT RECOMMENDED FOR PRODUCTION): Single key
-#     # private_key: open_id_config.private_key,
+#     # RECOMMENDED: Use separate signing_key and encryption_key for production
+#     # signing_key: open_id_config.signing_key,
+#     # encryption_key: open_id_config.encryption_key,
+#     private_key: open_id_config.private_key, # DEV/TESTING ONLY - not recommended for production
 #     entity_statement_path: open_id_config.client_entity_statement_absolute_path,
 #     metadata: {
 #       openid_relying_party: {
@@ -202,9 +198,10 @@ end
 #         organization_name: open_id_config.organization_name
 #       }
 #     },
-#     expiration_seconds: (ENV["FEDERATION_EXPIRATION_SECONDS"] || 86400).to_i,
-#     jwks_cache_ttl: (ENV["FEDERATION_JWKS_CACHE_TTL"] || 3600).to_i,
-#     auto_provision_keys: true
+#     expiration_seconds: 86400,
+#     jwks_cache_ttl: 3600,
+#     auto_provision_keys: true,
+#     key_rotation_period: 90.days.to_i
 #   )
 # end
 
