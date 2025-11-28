@@ -339,92 +339,9 @@ RSpec.describe OmniauthOpenidFederation::FederationEndpoint do
     end
   end
 
-  describe ".mount_routes" do
-    it "mounts all four endpoints with default paths" do
-      router = double("router")
-      expect(router).to receive(:get).with(
-        "/.well-known/openid-federation",
-        to: "omniauth_openid_federation/federation#show",
-        as: :openid_federation
-      )
-      expect(router).to receive(:get).with(
-        "/.well-known/openid-federation/fetch",
-        to: "omniauth_openid_federation/federation#fetch",
-        as: :openid_federation_fetch
-      )
-      expect(router).to receive(:get).with(
-        "/.well-known/jwks.json",
-        to: "omniauth_openid_federation/federation#jwks",
-        as: :openid_federation_jwks
-      )
-      expect(router).to receive(:get).with(
-        "/.well-known/signed-jwks.json",
-        to: "omniauth_openid_federation/federation#signed_jwks",
-        as: :openid_federation_signed_jwks
-      )
-
-      described_class.mount_routes(router)
-    end
-
-    it "mounts endpoints with custom paths" do
-      router = double("router")
-      expect(router).to receive(:get).with(
-        "/custom/federation",
-        to: "omniauth_openid_federation/federation#show",
-        as: :openid_federation
-      )
-      expect(router).to receive(:get).with(
-        "/custom/fetch",
-        to: "omniauth_openid_federation/federation#fetch",
-        as: :openid_federation_fetch
-      )
-      expect(router).to receive(:get).with(
-        "/custom/jwks.json",
-        to: "omniauth_openid_federation/federation#jwks",
-        as: :openid_federation_jwks
-      )
-      expect(router).to receive(:get).with(
-        "/custom/signed-jwks.json",
-        to: "omniauth_openid_federation/federation#signed_jwks",
-        as: :openid_federation_signed_jwks
-      )
-
-      described_class.mount_routes(
-        router,
-        entity_statement_path: "/custom/federation",
-        fetch_path: "/custom/fetch",
-        jwks_path: "/custom/jwks.json",
-        signed_jwks_path: "/custom/signed-jwks.json"
-      )
-    end
-
-    it "mounts endpoints with custom route name prefix" do
-      router = double("router")
-      custom_name = :custom_federation
-      expect(router).to receive(:get).with(
-        "/.well-known/openid-federation",
-        to: "omniauth_openid_federation/federation#show",
-        as: custom_name
-      )
-      expect(router).to receive(:get).with(
-        "/.well-known/openid-federation/fetch",
-        to: "omniauth_openid_federation/federation#fetch",
-        as: :"#{custom_name}_fetch"
-      )
-      expect(router).to receive(:get).with(
-        "/.well-known/jwks.json",
-        to: "omniauth_openid_federation/federation#jwks",
-        as: :"#{custom_name}_jwks"
-      )
-      expect(router).to receive(:get).with(
-        "/.well-known/signed-jwks.json",
-        to: "omniauth_openid_federation/federation#signed_jwks",
-        as: :"#{custom_name}_signed_jwks"
-      )
-
-      described_class.mount_routes(router, as: custom_name)
-    end
-  end
+  # Note: mount_routes was deprecated and removed
+  # Use OmniauthOpenidFederation::Engine mounting instead
+  # See examples/config/routes.rb.example
 
   describe "Configuration" do
     describe "#initialize" do

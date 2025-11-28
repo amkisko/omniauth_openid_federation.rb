@@ -9,5 +9,10 @@ module OmniauthOpenidFederation
 
     # Maximum retry delay in seconds (prevents unbounded retry delays)
     MAX_RETRY_DELAY_SECONDS = 60
+
+    # Maximum string length for request parameters (8KB)
+    # Prevents DoS attacks while allowing legitimate use cases (e.g., encrypted JWT authorization codes)
+    # Use Configuration.config.max_string_length for runtime configuration instead of patching this constant
+    MAX_STRING_LENGTH = 8192
   end
 end

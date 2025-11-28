@@ -146,7 +146,7 @@ RSpec.describe OmniauthOpenidFederation::Validators do
       options[:redirect_uri] = "not a uri"
 
       expect { described_class.validate_client_options!(options) }
-        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /Invalid URI format/)
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /Invalid redirect URI format/)
     end
 
     it "validates endpoint formats when provided" do

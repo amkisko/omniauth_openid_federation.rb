@@ -63,10 +63,6 @@ module OmniauthOpenidFederation
     STATE_BYTES = 16 # Number of hex bytes for state parameter
 
     attr_accessor :private_key, :state, :nonce
-    # Provider-specific extension parameters (outside JWT)
-    # Some providers may require additional parameters that are not part of the JWT
-    # @deprecated Use request_object_params option in strategy instead (adds params to the JWT request object)
-    attr_accessor :ftn_spname
 
     # Initialize JWT request object builder
     #
@@ -114,21 +110,27 @@ module OmniauthOpenidFederation
       key_source: :local,
       client_entity_statement: nil
     )
-      @client_id = client_id
-      @redirect_uri = redirect_uri
-      @scope = scope
-      @issuer = issuer
-      @audience = audience
-      @state = state || SecureRandom.hex(STATE_BYTES)
-      @nonce = nonce
-      @response_type = response_type
-      @response_mode = response_mode
-      @login_hint = login_hint
-      @ui_locales = ui_locales
-      @claims_locales = claims_locales
-      @prompt = prompt
-      @hd = hd
-      @acr_values = acr_values
+      # Security: User input parameters are validated and sanitized before reaching here
+      # Configuration parameters are trusted and only trimmed for consistency
+      # Store trimmed values to ensure consistency
+      @client_id = client_id.to_s.strip
+      @redirect_uri = redirect_uri.to_s.strip
+      @scope = scope.to_s.strip
+      @issuer = issuer&.to_s&.strip
+      @audience = audience&.to_s&.strip
+      @state = state&.to_s&.strip || SecureRandom.hex(STATE_BYTES)
+      @nonce = nonce&.to_s&.strip
+      @response_type = response_type.to_s.strip
+      @response_mode = response_mode&.to_s&.strip
+      # User input parameters (already sanitized)
+      @login_hint = login_hint&.to_s&.strip
+      @ui_locales = ui_locales&.to_s&.strip
+      @claims_locales = claims_locales&.to_s&.strip
+      # Configuration parameters (trusted, only trimmed)
+      @prompt = prompt&.to_s&.strip
+      @hd = hd&.to_s&.strip
+      # User input parameter (already sanitized)
+      @acr_values = acr_values&.to_s&.strip
       @extra_params = extra_params
       @jwks = jwks
       @entity_statement_path = entity_statement_path

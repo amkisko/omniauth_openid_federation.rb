@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 1.3.0 (2025-11-28)
+
+- Added `prepare_request_object_params` proc option to customize request parameters before signing
+- Enhanced security validation for all user-provided parameters
+- Improved `acr_values` handling per OpenID Connect Core 1.0 specification
+
 ## 1.2.2 (2025-11-27)
 
 - Fix gemfile to include app and config directories
@@ -38,7 +44,7 @@
 - Automatic provider key rotation handling for seamless key updates
 - Built-in security features: rate limiting, path traversal protection, and error sanitization
 - Production-ready with thread-safe configuration and intelligent retry logic
-- Works with any OpenID Federation provider, supporting provider-specific extensions
+- Works with any OpenID Federation provider, supporting custom extension parameters
 - Framework-agnostic: compatible with Rails, Sinatra, Rack, and other Rack-compatible frameworks
 - Comprehensive management tools for entity statements and key management
 - Enhanced developer experience with type signatures for better IDE support

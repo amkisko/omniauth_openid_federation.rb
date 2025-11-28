@@ -152,14 +152,6 @@ module OmniauthOpenidFederation
     def self.generate_signed_jwks: () -> String
     def self.current_jwks: () -> Hash[String, untyped]
     def self.rack_app: () -> RackEndpoint
-    def self.mount_routes: (
-      untyped router,
-      ?entity_statement_path: String,
-      ?fetch_path: String,
-      ?jwks_path: String,
-      ?signed_jwks_path: String,
-      ?as: Symbol
-    ) -> void
 
     def self.generate_fresh_keys: (
       entity_statement_path: String,

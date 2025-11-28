@@ -967,8 +967,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
   end
 
-  describe "combine_acr_values and normalize_acr_values" do
-    it "combines ACR values from config and request" do
+  describe "normalize_acr_values" do
+    it "normalizes ACR values from request parameters" do
       strategy = described_class.new(
         nil,
         client_options: {
@@ -980,13 +980,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           private_key: private_key
         }
       )
-      strategy.options.acr_values = "level1 level2"
 
-      # Test through public API: authorize_uri uses combine_acr_values and normalize_acr_values
-      allow(strategy).to receive(:request).and_return(double(params: {"acr_values" => "level3"}))
+      # Test through public API: authorize_uri uses normalize_acr_values from request params
+      allow(strategy).to receive(:request).and_return(double(params: {"acr_values" => "level1 level3"}))
       allow(strategy).to receive(:session).and_return({})
 
-      # Behavior: Should combine configured and request ACR values
+      # Behavior: Should normalize ACR values from request parameters
       uri = strategy.authorize_uri
       expect(uri).to be_present
       # Verify ACR values are in the JWT payload
@@ -995,8 +994,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["acr_values"]).to include("level1")
-      expect(payload["acr_values"]).to include("level3")
+      expect(payload["acr_values"]).to eq("level1 level3")
     end
 
     it "handles nil ACR values" do
@@ -1012,7 +1010,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      # Test through public API: authorize_uri uses combine_acr_values
+      # Test through public API: authorize_uri handles nil ACR values
       allow(strategy).to receive(:request).and_return(double(params: {}))
       allow(strategy).to receive(:session).and_return({})
 
@@ -1028,7 +1026,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(payload).not_to have_key("acr_values")
     end
 
-    it "normalizes array ACR values" do
+    it "normalizes array ACR values from request" do
       strategy = described_class.new(
         nil,
         client_options: {
@@ -1040,13 +1038,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           private_key: private_key
         }
       )
-      strategy.options.acr_values = ["level1", "level2"]
 
       # Test through public API: authorize_uri uses normalize_acr_values
-      allow(strategy).to receive(:request).and_return(double(params: {}))
+      allow(strategy).to receive(:request).and_return(double(params: {"acr_values" => ["level1", "level2"]}))
       allow(strategy).to receive(:session).and_return({})
 
-      # Behavior: Should normalize array ACR values
+      # Behavior: Should normalize array ACR values from request
       uri = strategy.authorize_uri
       expect(uri).to be_present
       # Verify ACR values are in the JWT payload
@@ -1055,11 +1052,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["acr_values"]).to include("level1")
-      expect(payload["acr_values"]).to include("level2")
+      expect(payload["acr_values"]).to eq("level1 level2")
     end
 
-    it "normalizes string ACR values" do
+    it "normalizes string ACR values from request" do
       strategy = described_class.new(
         nil,
         client_options: {
@@ -1071,13 +1067,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           private_key: private_key
         }
       )
-      strategy.options.acr_values = "level1 level2"
 
       # Test through public API: authorize_uri uses normalize_acr_values
-      allow(strategy).to receive(:request).and_return(double(params: {}))
+      allow(strategy).to receive(:request).and_return(double(params: {"acr_values" => "level1 level2"}))
       allow(strategy).to receive(:session).and_return({})
 
-      # Behavior: Should normalize string ACR values
+      # Behavior: Should normalize string ACR values from request
       uri = strategy.authorize_uri
       expect(uri).to be_present
       # Verify ACR values are in the JWT payload
@@ -1086,8 +1081,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["acr_values"]).to include("level1")
-      expect(payload["acr_values"]).to include("level2")
+      expect(payload["acr_values"]).to eq("level1 level2")
     end
   end
 

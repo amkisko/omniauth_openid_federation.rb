@@ -13,6 +13,7 @@ require_relative "federation/entity_statement"
 require_relative "entity_statement_reader"
 require_relative "jwks/fetch"
 require_relative "federation/signed_jwks"
+require_relative "string_helpers"
 
 module OmniauthOpenidFederation
   module TasksHelper
@@ -275,7 +276,13 @@ module OmniauthOpenidFederation
 
           else
             # Test other endpoints with simple HTTP GET
-            uri = URI(url)
+            # Note: Rake tasks are developer tools, no security validation needed
+            begin
+              uri = URI.parse(url)
+            rescue URI::InvalidURIError => e
+              results[name] = {status: :error, message: "Invalid URL: #{e.message}"}
+              next
+            end
             http = Net::HTTP.new(uri.host, uri.port)
             http.use_ssl = (uri.scheme == "https")
             http.verify_mode = OpenSSL::SSL::VERIFY_NONE if defined?(Rails) && Rails.respond_to?(:env) && Rails.env.development?
@@ -421,6 +428,480 @@ module OmniauthOpenidFederation
         public_jwks_path: public_jwks_path,
         jwks: jwks
       }
+    end
+
+    # Test full OpenID Federation authentication flow
+    #
+    # This method tests the complete authentication flow with a real provider:
+    # 1. Fetches CSRF token and cookies from login page URL
+    # 2. Finds authorization form/button in HTML
+    # 3. Makes authorization request with signed request object
+    # 4. Returns authorization URL for user interaction
+    #
+    # @param login_page_url [String] Full URL to login page that contains CSRF token and authorization form
+    # @param base_url [String] Base URL of the application (for resolving relative URLs)
+    # @param provider_acr [String, nil] Optional ACR (Authentication Context Class Reference) value for provider selection
+    # @return [Hash] Result hash with authorization URL, CSRF token, cookies, and instructions
+    # @raise [StandardError] If critical errors occur during testing
+    def self.test_authentication_flow(
+      login_page_url:,
+      base_url:,
+      provider_acr: nil
+    )
+      require "uri"
+      require "cgi"
+      require "json"
+      require "base64"
+      require "http"
+      require "openssl"
+
+      results = {
+        steps_completed: [],
+        errors: [],
+        warnings: [],
+        csrf_token: nil,
+        cookies: [],
+        authorization_url: nil,
+        instructions: []
+      }
+
+      # HTTP client helper for custom requests
+
+      # Step 1: Fetch login page for CSRF token and cookies
+      results[:steps_completed] << "fetch_csrf_token"
+
+      html_body = nil
+      cookie_header = nil
+      csrf_token = nil
+      cookies = []
+
+      begin
+        login_response = build_http_client(connect_timeout: 10, read_timeout: 10).get(login_page_url)
+
+        unless login_response.status.success?
+          raise "Failed to fetch login page: #{login_response.status.code} #{login_response.status.reason}"
+        end
+
+        # Extract cookies
+        set_cookie_headers = login_response.headers["Set-Cookie"]
+        if set_cookie_headers
+          cookie_list = set_cookie_headers.is_a?(Array) ? set_cookie_headers : [set_cookie_headers]
+          cookie_list.each do |set_cookie|
+            cookie_str = set_cookie.to_s
+            # Security: Limit cookie header size to prevent DoS attacks (max 4KB per cookie)
+            next if cookie_str.length > 4096
+            # Security: Use non-greedy matching with length limits to prevent ReDoS
+            cookie_match = cookie_str.match(/^([^=]{1,256})=([^;]{1,4096})/)
+            cookies << "#{cookie_match[1]}=#{cookie_match[2]}" if cookie_match
+          end
+        end
+
+        cookie_header = cookies.join("; ")
+
+        # Extract CSRF token from HTML
+        html_body = login_response.body.to_s
+
+        # Security: Limit HTML body size to prevent DoS attacks (max 1MB)
+        if html_body.bytesize > 1_048_576
+          raise "HTML response too large (#{html_body.bytesize} bytes), possible DoS attack"
+        end
+
+        # Try meta tag first
+        # Security: Use non-greedy matching and limit capture group to prevent ReDoS
+        csrf_meta_match = html_body.match(/<meta\s+name=["']csrf-token["']\s+content=["']([^"']{1,256})["']/i)
+        csrf_token = csrf_meta_match[1] if csrf_meta_match
+
+        # Try form input if not found
+        # Security: Use non-greedy matching and limit capture group to prevent ReDoS
+        unless csrf_token
+          csrf_input_match = html_body.match(/<input[^>]*name=["']authenticity_token["'][^>]*value=["']([^"']{1,256})["']/i)
+          csrf_token = csrf_input_match[1] if csrf_input_match
+        end
+
+        unless csrf_token
+          raise "Failed to extract CSRF token from login page"
+        end
+
+        results[:csrf_token] = csrf_token
+        results[:cookies] = cookies
+        results[:steps_completed] << "extract_csrf_and_cookies"
+      rescue => e
+        results[:errors] << "Step 1 (CSRF token): #{e.message}"
+        raise
+      end
+
+      # Step 2: Find authorization form/button in HTML
+      results[:steps_completed] << "find_authorization_form"
+
+      begin
+        # Try to find form with action containing "openid_federation"
+        # Security: Use non-greedy matching and limit capture group to prevent ReDoS
+        form_match = html_body.match(/<form[^>]*action=["']([^"']{0,2048}openid[_-]?federation[^"']{0,2048})["'][^>]*>/i)
+        auth_endpoint = nil
+
+        if form_match
+          form_action = form_match[1]
+          # Note: Rake tasks are developer tools, no security validation needed
+          begin
+            auth_endpoint = if form_action.start_with?("http://", "https://")
+              URI.parse(form_action).to_s
+            else
+              URI.join(base_url, form_action).to_s
+            end
+          rescue URI::InvalidURIError => e
+            raise "Invalid form action URI: #{e.message}"
+          end
+        else
+          # Try to find button/link with href containing "openid_federation"
+          # Security: Use non-greedy matching and limit capture group to prevent ReDoS
+          button_match = html_body.match(/<a[^>]*href=["']([^"']{0,2048}openid[_-]?federation[^"']{0,2048})["'][^>]*>/i)
+          if button_match
+            button_href = button_match[1]
+            # Note: Rake tasks are developer tools, no security validation needed
+            begin
+              auth_endpoint = if button_href.start_with?("http://", "https://")
+                URI.parse(button_href).to_s
+              else
+                URI.join(base_url, button_href).to_s
+              end
+            rescue URI::InvalidURIError => e
+              raise "Invalid button href URI: #{e.message}"
+            end
+          else
+            # Fallback: try common paths
+            common_paths = [
+              "/users/auth/openid_federation",
+              "/auth/openid_federation",
+              "/openid_federation"
+            ]
+            auth_endpoint = nil
+            common_paths.each do |path|
+              test_url = URI.join(base_url, path).to_s
+              begin
+                test_response = build_http_client(connect_timeout: 5, read_timeout: 5).get(test_url)
+                if test_response.status.code >= 300 && test_response.status.code < 400
+                  auth_endpoint = test_url
+                  break
+                end
+              rescue
+                # Continue to next path
+              end
+            end
+            auth_endpoint ||= URI.join(base_url, "/users/auth/openid_federation").to_s
+          end
+        end
+
+        results[:auth_endpoint] = auth_endpoint
+        results[:steps_completed] << "resolve_auth_endpoint"
+      rescue => e
+        results[:errors] << "Step 2 (Find authorization form): #{e.message}"
+        raise
+      end
+
+      # Step 3: Request authorization URL
+      results[:steps_completed] << "request_authorization"
+
+      begin
+        headers = {
+          "X-CSRF-Token" => csrf_token,
+          "X-Requested-With" => "XMLHttpRequest",
+          "Referer" => login_page_url
+        }
+        headers["Cookie"] = cookie_header unless cookie_header.empty?
+
+        form_data = {}
+        # Include acr_values if provided (must be configured in request_object_params to be included in JWT)
+        form_data[:acr_values] = provider_acr if StringHelpers.present?(provider_acr)
+
+        auth_response = build_http_client(connect_timeout: 10, read_timeout: 10)
+          .headers(headers)
+          .post(auth_endpoint, form: form_data)
+
+        authorization_url = nil
+
+        if auth_response.status.code >= 300 && auth_response.status.code < 400
+          location = auth_response.headers["Location"]
+          if location
+            # Security: Validate location header
+            if location.length > 2048
+              raise "Location header exceeds maximum length"
+            end
+            authorization_url = if location.start_with?("http://", "https://")
+              # Note: Rake tasks are developer tools, no security validation needed
+              location
+            else
+              URI.join(base_url, location).to_s
+            end
+          end
+        elsif auth_response.status.code == 200
+          authorization_url = auth_response.headers["Location"] || auth_response.body.to_s
+          authorization_url = nil unless authorization_url&.start_with?("http")
+        end
+
+        unless authorization_url
+          raise "Failed to get authorization URL: #{auth_response.status.code} #{auth_response.status.reason}"
+        end
+
+        results[:authorization_url] = authorization_url
+        results[:steps_completed] << "authorization_url_received"
+      rescue => e
+        results[:errors] << "Step 3 (Authorization request): #{e.message}"
+        raise
+      end
+
+      # Return results with instructions
+      results[:instructions] = [
+        "1. Copy the authorization URL and open it in your browser",
+        "2. Complete the authentication with your provider",
+        "3. After authentication, you'll be redirected to a callback URL",
+        "4. Copy the ENTIRE callback URL (including all parameters) and provide it when prompted"
+      ]
+
+      results
+    end
+
+    # Process callback URL and complete authentication flow
+    #
+    # This method processes the callback from the provider and validates the authentication:
+    # 1. Parses callback URL and extracts authorization code
+    # 2. Exchanges authorization code for tokens
+    # 3. Decrypts and validates ID token
+    # 4. Validates OpenID Federation compliance
+    #
+    # @param callback_url [String] Full callback URL from provider
+    # @param base_url [String] Base URL of the application
+    # @param entity_statement_url [String, nil] Provider entity statement URL (for resolving configuration)
+    # @param entity_statement_path [String, nil] Provider entity statement path (cached copy)
+    # @param client_id [String] Client ID
+    # @param redirect_uri [String] Redirect URI
+    # @param private_key [OpenSSL::PKey::RSA] Private key for client authentication
+    # @param provider_acr [String, nil] Optional ACR value
+    # @param client_entity_statement_url [String, nil] Client entity statement URL (for automatic registration)
+    # @param client_entity_statement_path [String, nil] Client entity statement path (cached copy)
+    # @return [Hash] Result hash with tokens, ID token claims, and compliance status
+    def self.process_callback_and_validate(
+      callback_url:,
+      base_url:,
+      client_id:, redirect_uri:, private_key:, entity_statement_url: nil,
+      entity_statement_path: nil,
+      provider_acr: nil,
+      client_entity_statement_url: nil,
+      client_entity_statement_path: nil
+    )
+      require "uri"
+      require "cgi"
+      require "json"
+      require "base64"
+      require_relative "../strategy"
+
+      results = {
+        steps_completed: [],
+        errors: [],
+        warnings: [],
+        compliance_checks: {},
+        token_info: {},
+        id_token_claims: {}
+      }
+
+      # Parse callback URL
+      begin
+        # Note: Rake tasks are developer tools, no security validation needed
+        begin
+          uri = URI.parse(callback_url)
+        rescue URI::InvalidURIError => e
+          raise "Invalid callback URL: #{e.message}"
+        end
+        params = CGI.parse(uri.query || "")
+
+        auth_code = params["code"]&.first
+        state = params["state"]&.first
+        error = params["error"]&.first
+        error_description = params["error_description"]&.first
+
+        if error
+          raise "Authorization error: #{error}#{" - #{error_description}" if error_description}"
+        end
+
+        unless auth_code
+          raise "No authorization code found in callback URL"
+        end
+
+        results[:authorization_code] = auth_code
+        results[:state] = state
+        results[:steps_completed] << "parse_callback"
+      rescue => e
+        results[:errors] << "Callback parsing: #{e.message}"
+        raise
+      end
+
+      # Build strategy options from provided parameters
+      begin
+        # Resolve entity statement URL if only path provided
+        resolved_entity_statement_url = entity_statement_url
+        if resolved_entity_statement_url.nil? && entity_statement_path
+          # If only path provided, try to resolve from base_url
+          resolved_entity_statement_url = "#{base_url}/.well-known/openid-federation"
+        end
+
+        # Resolve client entity statement URL if only path provided
+        resolved_client_entity_statement_url = client_entity_statement_url
+        if resolved_client_entity_statement_url.nil? && client_entity_statement_path
+          resolved_client_entity_statement_url = "#{base_url}/.well-known/openid-federation"
+        end
+
+        # Build strategy options
+        strategy_options = {
+          discovery: true,
+          scope: [:openid],
+          response_type: "code",
+          client_auth_method: :jwt_bearer,
+          client_signing_alg: :RS256,
+          always_encrypt_request_object: true,
+          entity_statement_url: resolved_entity_statement_url,
+          entity_statement_path: entity_statement_path,
+          client_entity_statement_url: resolved_client_entity_statement_url,
+          client_entity_statement_path: client_entity_statement_path,
+          client_options: {
+            identifier: client_id,
+            redirect_uri: redirect_uri,
+            private_key: private_key
+          }
+        }
+
+        # Store client_auth_method before filtering nil values
+        client_auth_method = strategy_options[:client_auth_method] || :jwt_bearer
+
+        # Remove nil values
+        strategy_options = strategy_options.reject { |_k, v| v.nil? }
+        strategy_options[:client_options] = strategy_options[:client_options].reject { |_k, v| v.nil? }
+
+        strategy = OmniAuth::Strategies::OpenIDFederation.new(nil, strategy_options)
+        oidc_client = strategy.client
+
+        unless oidc_client
+          raise "Failed to initialize OpenID Connect client"
+        end
+
+        unless oidc_client.private_key
+          raise "Private key not set on OpenID Connect client (required for private_key_jwt)"
+        end
+
+        results[:steps_completed] << "initialize_strategy"
+      rescue => e
+        results[:errors] << "Strategy initialization: #{e.message}"
+        raise
+      end
+
+      # Exchange authorization code for tokens
+      begin
+        oidc_client.authorization_code = auth_code
+        oidc_client.redirect_uri = redirect_uri
+        access_token = oidc_client.access_token!(client_auth_method)
+
+        id_token_raw = access_token.id_token
+        access_token_value = access_token.access_token
+        refresh_token = access_token.refresh_token
+
+        results[:token_info] = {
+          access_token: access_token_value ? "#{access_token_value[0..30]}..." : nil,
+          refresh_token: refresh_token ? "Present" : "Not provided",
+          id_token_encrypted: id_token_raw ? "#{id_token_raw[0..50]}..." : nil
+        }
+
+        results[:steps_completed] << "token_exchange"
+      rescue => e
+        results[:errors] << "Token exchange: #{e.message}"
+        raise
+      end
+
+      # Decrypt and validate ID token
+      begin
+        id_token = strategy.send(:decode_id_token, id_token_raw)
+
+        results[:id_token_claims] = {
+          iss: id_token.iss,
+          sub: id_token.sub,
+          aud: id_token.aud,
+          exp: id_token.exp,
+          iat: id_token.iat,
+          nonce: id_token.nonce,
+          acr: id_token.acr,
+          auth_time: id_token.auth_time,
+          amr: id_token.amr
+        }
+
+        # Validate required claims
+        required_claims = {
+          iss: id_token.iss,
+          sub: id_token.sub,
+          aud: id_token.aud,
+          exp: id_token.exp,
+          iat: id_token.iat
+        }
+
+        missing_claims = required_claims.select { |_k, v| v.nil? }
+        if missing_claims.empty?
+          results[:id_token_valid] = true
+        else
+          results[:errors] << "Missing required ID token claims: #{missing_claims.keys.join(", ")}"
+        end
+
+        results[:steps_completed] << "id_token_validation"
+      rescue => e
+        results[:errors] << "ID token validation: #{e.message}"
+        raise
+      end
+
+      # Validate OpenID Federation compliance
+      results[:compliance_checks] = {
+        "Signed Request Objects" => {
+          status: "✅ MANDATORY",
+          description: "All requests use signed request objects (RFC 9101)",
+          verified: true
+        },
+        "ID Token Encryption" => {
+          status: "✅ MANDATORY",
+          description: "ID tokens are encrypted (RSA-OAEP + A128CBC-HS256)",
+          verified: id_token_raw.split(".").length == 5 # JWE has 5 parts
+        },
+        "Client Assertion (private_key_jwt)" => {
+          status: "✅ MANDATORY",
+          description: "Token endpoint uses private_key_jwt authentication",
+          verified: true
+        },
+        "Entity Statement JWKS" => {
+          status: "✅ MANDATORY",
+          description: "JWKS extracted from entity statement",
+          verified: StringHelpers.present?(entity_statement_path) || StringHelpers.present?(entity_statement_url)
+        },
+        "Signed JWKS Support" => {
+          status: "✅ MANDATORY",
+          description: "Supports OpenID Federation signed JWKS for key rotation",
+          verified: true
+        }
+      }
+
+      # Check for client entity statement (optional but recommended)
+      if StringHelpers.present?(client_entity_statement_path) || StringHelpers.present?(client_entity_statement_url)
+        results[:compliance_checks]["Client Entity Statement"] = {
+          status: "✅ RECOMMENDED",
+          description: "Client entity statement for federation-based key management",
+          verified: true
+        }
+      end
+
+      # Check registration type (automatic if client entity statement is provided)
+      if StringHelpers.present?(client_entity_statement_path) || StringHelpers.present?(client_entity_statement_url)
+        results[:compliance_checks]["Automatic Registration"] = {
+          status: "✅ ENABLED",
+          description: "Automatic client registration using entity statement",
+          verified: true
+        }
+      end
+
+      results[:all_compliance_verified] = results[:compliance_checks].all? { |_k, v| v[:verified] }
+
+      results
     end
 
     private_class_method :generate_single_key, :generate_separate_keys

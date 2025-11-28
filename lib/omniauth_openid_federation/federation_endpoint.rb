@@ -64,8 +64,6 @@ module OmniauthOpenidFederation
   #   # In config/routes.rb (Rails)
   #   get "/.well-known/openid-federation", to: "omniauth_openid_federation/federation#show"
   #
-  #   # Or use the provided route helper
-  #   OmniauthOpenidFederation::FederationEndpoint.mount_routes
   class FederationEndpoint
     class << self
       # Configure the federation endpoint
@@ -558,26 +556,6 @@ module OmniauthOpenidFederation
       #   - GET /.well-known/jwks.json (standard JWKS)
       #   - GET /.well-known/signed-jwks.json (signed JWKS)
       #
-      # ALTERNATIVE: Use mount_routes helper (for backward compatibility or custom paths):
-      #   Rails.application.routes.draw do
-      #     OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
-      #   end
-      #
-      # @param router [ActionDispatch::Routing::Mapper] The routes mapper (pass `self` from routes.rb)
-      # @param entity_statement_path [String] Path for entity statement endpoint (default: "/.well-known/openid-federation")
-      # @param fetch_path [String] Path for fetch endpoint (default: "/.well-known/openid-federation/fetch")
-      # @param jwks_path [String] Path for standard JWKS endpoint (default: "/.well-known/jwks.json")
-      # @param signed_jwks_path [String] Path for signed JWKS endpoint (default: "/.well-known/signed-jwks.json")
-      # @param as [String, Symbol] Route name prefix (default: :openid_federation)
-      # @deprecated Use `mount OmniauthOpenidFederation::Engine => "/"` instead (Rails-idiomatic way)
-      def mount_routes(router, entity_statement_path: "/.well-known/openid-federation", fetch_path: "/.well-known/openid-federation/fetch", jwks_path: "/.well-known/jwks.json", signed_jwks_path: "/.well-known/signed-jwks.json", as: :openid_federation)
-        # Controller uses Rails-conventional naming (OmniauthOpenidFederation)
-        # which matches natural inflection from omniauth_openid_federation
-        router.get entity_statement_path, to: "omniauth_openid_federation/federation#show", as: as
-        router.get fetch_path, to: "omniauth_openid_federation/federation#fetch", as: :"#{as}_fetch"
-        router.get jwks_path, to: "omniauth_openid_federation/federation#jwks", as: :"#{as}_jwks"
-        router.get signed_jwks_path, to: "omniauth_openid_federation/federation#signed_jwks", as: :"#{as}_signed_jwks"
-      end
 
       # Generate fresh signing and encryption keys and write entity statement to file
       #

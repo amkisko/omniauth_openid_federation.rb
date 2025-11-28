@@ -38,8 +38,6 @@ module OmniAuth
       def extract_client_jwk_signing_key: () -> untyped
       def extract_entity_identifier_from_statement: (Hash[Symbol, untyped] entity_statement, String? configured_identifier) -> String?
       def load_provider_metadata_for_encryption: () -> Hash[String, untyped]?
-      def combine_acr_values: (?configured_acr: String?, ?request_acr: String?) -> String?
-      def normalize_acr_values: (untyped acr_values) -> String?
       def fetch_jwks: (String jwks_uri) -> Hash[String, untyped]
     end
 

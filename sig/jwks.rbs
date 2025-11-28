@@ -35,12 +35,6 @@ module OmniauthOpenidFederation
         ?entity_statement_keys: untyped
       ) -> Array[Hash[String, untyped]]
 
-      def self.json_jwt: (
-        String encoded_jwt,
-        String jwks_uri,
-        ?retried: bool,
-        ?entity_statement_keys: untyped
-      ) -> untyped
     end
 
     class Selector

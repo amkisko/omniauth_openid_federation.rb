@@ -84,6 +84,13 @@ module OmniauthOpenidFederation
     #   config.instrumentation = nil
     attr_accessor :instrumentation
 
+    # Maximum string length for request parameters (default: 8192 / 8KB)
+    # Prevents DoS attacks while allowing legitimate use cases (e.g., encrypted JWT authorization codes)
+    # @return [Integer] Maximum string length in characters
+    # @example
+    #   config.max_string_length = 16384  # Increase to 16KB
+    attr_accessor :max_string_length
+
     def initialize
       @verify_ssl = true # Default to secure
       @cache_ttl = nil # Default: manual rotation (never expires)
@@ -96,6 +103,7 @@ module OmniauthOpenidFederation
       @root_path = nil
       @clock_skew_tolerance = 60 # Default: 60 seconds clock skew tolerance
       @instrumentation = nil # Default: no instrumentation
+      @max_string_length = 8192 # Default: 8KB - prevents DoS while allowing legitimate use cases
     end
 
     # Configure the gem
