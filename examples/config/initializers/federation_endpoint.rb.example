@@ -187,7 +187,7 @@ end
 # ============================================================================
 # Add to config/routes.rb:
 #
-#   OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)
+#   mount OmniauthOpenidFederation::Engine => "/"
 #
 # This mounts all endpoints:
 #   - GET /.well-known/openid-federation (entity statement)
@@ -202,5 +202,5 @@ end
 #   get "/.well-known/signed-jwks.json", to: "omniauth_openid_federation/federation#signed_jwks"
 
 Rails.logger.info "[FederationEndpoint] Configured. Add the route in config/routes.rb:"
-Rails.logger.info "  OmniauthOpenidFederation::FederationEndpoint.mount_routes(self)"
+Rails.logger.info "  mount OmniauthOpenidFederation::Engine => \"/\""
 
