@@ -158,7 +158,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
       header = {alg: "RS256", typ: "JWT", kid: jwks[:keys].first[:kid]}
       encoded_jwt = JWT.encode(payload, private_key, "RS256", header)
 
-      result = described_class.json_jwt(encoded_jwt, jwks_uri)
+      result = described_class.jwt(encoded_jwt, jwks_uri)
 
       expect(result).to be_present
     end
@@ -168,7 +168,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
       header = {alg: "RS256", typ: "JWT", kid: "nonexistent-kid"}
       encoded_jwt = JWT.encode(payload, private_key, "RS256", header)
 
-      expect { described_class.json_jwt(encoded_jwt, jwks_uri) }.to raise_error(OmniauthOpenidFederation::ValidationError, /Could not find public key for kid|Key with kid/)
+      expect { described_class.jwt(encoded_jwt, jwks_uri) }.to raise_error(OmniauthOpenidFederation::ValidationError, /Could not find public key for kid|Key with kid/)
     end
 
     context "security: algorithm enforcement" do
@@ -181,7 +181,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
         es256_jwt = JWT.encode(payload, es256_key, "ES256", {kid: jwks[:keys].first[:kid]})
 
         expect {
-          described_class.json_jwt(es256_jwt, jwks_uri)
+          described_class.jwt(es256_jwt, jwks_uri)
         }.to raise_error(OmniauthOpenidFederation::ValidationError)
       end
 
@@ -192,7 +192,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
         unsigned_jwt = "#{header}.#{payload}."
 
         expect {
-          described_class.json_jwt(unsigned_jwt, jwks_uri)
+          described_class.jwt(unsigned_jwt, jwks_uri)
         }.to raise_error(OmniauthOpenidFederation::ValidationError)
       end
     end
@@ -210,7 +210,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
         tampered_jwt = "#{parts[0]}.#{parts[1]}.#{wrong_signature}"
 
         expect {
-          described_class.json_jwt(tampered_jwt, jwks_uri)
+          described_class.jwt(tampered_jwt, jwks_uri)
         }.to raise_error(OmniauthOpenidFederation::SignatureError)
       end
     end

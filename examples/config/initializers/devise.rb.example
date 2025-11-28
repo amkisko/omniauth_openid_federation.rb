@@ -43,62 +43,78 @@ end
 open_id_config = OpenIdConnectConfig.new
 
 if open_id_config.enabled?
-  Devise.setup do |config|
-    # ... your other Devise configuration ...
+Devise.setup do |config|
+  # ... your other Devise configuration ...
 
-    # OmniAuth 2.0+ defaults to POST only for CSRF protection (CVE-2015-9284)
-    # Always use POST for security - forms must include CSRF token
-    if defined?(OmniAuth)
-      OmniAuth.config.allowed_request_methods = [:post]
-      OmniAuth.config.silence_get_warning = false
+  # OmniAuth 2.0+ defaults to POST only for CSRF protection (CVE-2015-9284)
+  # Always use POST for security - forms must include CSRF token
+  if defined?(OmniAuth)
+    OmniAuth.config.allowed_request_methods = [:post]
+    OmniAuth.config.silence_get_warning = false
 
-      # Configure CSRF validation to check tokens only for request phase (initiating OAuth)
-      # Callback phase uses OAuth state parameter for CSRF protection (validated in strategy)
-      # This ensures:
-      # - Request phase: Forms must include Rails CSRF tokens (standard Rails protection)
-      # - Callback phase: OAuth state parameter provides CSRF protection (external providers can't include Rails tokens)
-      OmniAuth.config.request_validation_phase = lambda do |env|
-        request = Rack::Request.new(env)
-        path = request.path
+    # Configure CSRF validation to check tokens only for request phase (initiating OAuth)
+    # Callback phase uses OAuth state parameter for CSRF protection (validated in strategy)
+    # This ensures:
+    # - Request phase: Forms must include Rails CSRF tokens (standard Rails protection)
+    # - Callback phase: OAuth state parameter provides CSRF protection (external providers can't include Rails tokens)
+    OmniAuth.config.request_validation_phase = lambda do |env|
+      request = Rack::Request.new(env)
+      path = request.path
 
-        # Skip CSRF validation for callback paths (external providers can't include Rails CSRF tokens)
-        # OAuth state parameter provides CSRF protection for callbacks (validated in OpenIDFederation strategy)
-        return true if path.end_with?("/callback")
+      # Skip CSRF validation for callback paths (external providers can't include Rails CSRF tokens)
+      # OAuth state parameter provides CSRF protection for callbacks (validated in OpenIDFederation strategy)
+      return true if path.end_with?("/callback")
 
-        # For request phase, use Rails' standard CSRF token validation
-        # This ensures forms must include valid CSRF tokens when initiating OAuth
-        session = env["rack.session"] || {}
-        token = request.params["authenticity_token"] || request.get_header("X-CSRF-Token")
-        expected_token = session[:_csrf_token] || session["_csrf_token"]
+      # For request phase, use Rails' standard CSRF token validation
+      # This ensures forms must include valid CSRF tokens when initiating OAuth
+      session = env["rack.session"] || {}
+      token = request.params["authenticity_token"] || request.get_header("X-CSRF-Token")
+      expected_token = session[:_csrf_token] || session["_csrf_token"]
 
-        # Validate CSRF token using constant-time comparison
-        if token.present? && expected_token.present?
-          ActiveSupport::SecurityUtils.secure_compare(token.to_s, expected_token.to_s)
-        else
-          false
-        end
+      # Validate CSRF token using constant-time comparison
+      if token.present? && expected_token.present?
+        ActiveSupport::SecurityUtils.secure_compare(token.to_s, expected_token.to_s)
+      else
+        false
       end
     end
+  end
 
-    config.omniauth :openid_federation,
+  config.omniauth :openid_federation,
       strategy_class: OmniAuth::Strategies::OpenIDFederation,
-      name: :openid_federation,
-      scope: [:openid],
-      response_type: "code",
-      discovery: true,
-      client_auth_method: :jwt_bearer,
-      client_signing_alg: :RS256,
+    name: :openid_federation,
+    scope: [:openid],
+    response_type: "code",
+    discovery: true,
+    client_auth_method: :jwt_bearer,
+    client_signing_alg: :RS256,
       entity_statement_path: open_id_config.entity_statement_absolute_path,
-      # Note: acr_values should be passed via request parameters
-      # It will be automatically included in the JWT request object if present
-      # Pass custom parameters from HTTP request to JWT request object
-      # These parameters are extracted from the form/request and added as claims to the signed JWT
-      # Example: request_object_params: ["custom_param", "another_param"]
       always_encrypt_request_object: true,
-      client_options: {
+      # Allow-list of custom parameter names to include in signed request object
+      # Parameters must be present in request.params and listed here to be included
+      request_object_params: [:ftn_spname], # Example: include ftn_spname if present
+      # Proc to modify params before adding to signed request object
+      # Useful for combining config values with form values, adding config-based params, etc.
+      prepare_request_object_params: proc do |params|
+        # Example: Combine config acr_values with form acr_values
+        form_acr_values = params["acr_values"]&.to_s&.strip
+        config_acr_values = open_id_config.acr_values.to_s.strip
+        
+        if config_acr_values.present? && form_acr_values.present?
+          params["acr_values"] = "#{config_acr_values} #{form_acr_values}".strip
+        elsif config_acr_values.present?
+          params["acr_values"] = config_acr_values
+        end
+        
+        # Example: Add custom parameter from config
+        params["ftn_spname"] = open_id_config.ftn_spname if open_id_config.ftn_spname.present?
+        
+        params
+      end,
+    client_options: {
         identifier: open_id_config.client_id,
         redirect_uri: open_id_config.redirect_uri,
         private_key: open_id_config.private_key
-      }
-  end
+    }
+end
 end

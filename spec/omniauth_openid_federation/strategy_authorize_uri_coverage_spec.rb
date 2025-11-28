@@ -174,27 +174,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(client).to have_received(:client_id=)
     end
 
-    it "handles ftn_spname parameter" do
-      strategy = described_class.new(
-        nil,
-        ftn_spname: "test-spname",
-        audience: provider_issuer,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
-      )
-
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
-
-      uri = strategy.authorize_uri
-      expect(uri).to include("ftn_spname")
-    end
+    # Note: ftn_spname was removed as it was provider-specific
+    # acr_values should be passed via request parameters instead
 
     it "handles request_object_params" do
       strategy = described_class.new(

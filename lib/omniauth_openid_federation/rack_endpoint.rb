@@ -25,9 +25,11 @@
 require "rack"
 require "json"
 require "digest"
+require "uri"
 require_relative "cache_adapter"
 require_relative "federation_endpoint"
 require_relative "logger"
+require_relative "constants"
 
 module OmniauthOpenidFederation
   class RackEndpoint
@@ -115,6 +117,17 @@ module OmniauthOpenidFederation
 
       unless subject_entity_id
         return error_response(400, {error: "invalid_request", error_description: "Missing required parameter: sub"}.to_json)
+      end
+
+      # Security: Validate entity identifier per OpenID Federation 1.0 spec
+      # Entity identifiers must be valid HTTP/HTTPS URIs
+      begin
+        # Validate and get trimmed value
+        subject_entity_id = OmniauthOpenidFederation::Validators.validate_entity_identifier!(subject_entity_id)
+      rescue SecurityError => e
+        return error_response(400, {error: "invalid_request", error_description: "Invalid subject entity ID: #{e.message}"}.to_json)
+      rescue => e
+        return error_response(400, {error: "invalid_request", error_description: "Subject entity ID validation failed: #{e.message}"}.to_json)
       end
 
       # Validate that subject is not the issuer (invalid request per spec)

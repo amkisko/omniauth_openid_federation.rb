@@ -87,7 +87,6 @@ module OmniauthOpenidFederation
     attr_accessor private_key: untyped
     attr_accessor state: String?
     attr_accessor nonce: String?
-    attr_accessor ftn_spname: String?
 
     def initialize: (
       client_id: String,

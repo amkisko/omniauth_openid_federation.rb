@@ -148,7 +148,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         query_params = URI.decode_www_form(uri.query || "").to_h
 
         # RFC 9101: All authorization parameters MUST be inside the JWT
-        # Only 'request' parameter should be in query string (and provider-specific params if configured)
+        # Only 'request' parameter should be in query string (per RFC 9101)
         forbidden_params = %w[client_id redirect_uri scope state nonce response_type response_mode]
         forbidden_params.each do |param|
           expect(query_params).not_to have_key(param), "Parameter '#{param}' should not be in query string (must be in JWT)"
@@ -191,7 +191,9 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
       it "does not send unencrypted sensitive data in query string" do
         strategy.options.scope = "openid profile email"
-        strategy.options.acr_values = "urn:example:oidc:acr:level4"
+
+        # Pass acr_values via request parameters (not config)
+        allow(strategy).to receive(:request).and_return(double(params: {"acr_values" => "urn:example:oidc:acr:level4"}))
 
         uri_string = strategy.authorize_uri
         uri = URI.parse(uri_string)

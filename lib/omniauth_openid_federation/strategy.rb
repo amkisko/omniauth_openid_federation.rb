@@ -10,6 +10,8 @@ require "digest"
 require_relative "string_helpers"
 require_relative "logger"
 require_relative "errors"
+require_relative "constants"
+require_relative "configuration"
 require_relative "validators"
 require_relative "http_client"
 require_relative "jws"
@@ -38,8 +40,8 @@ require_relative "federation/metadata_policy_merger"
 # - Metadata Policy Merging (Section 5.1) - Applies metadata policies from trust chain
 # - Automatic Client Registration (Section 11.1) - Uses Entity ID as client_id
 #
-# Features NOT implemented (provider-specific or optional):
-# - Trust marks (Section 7) - Provider-specific feature (parsed but not validated)
+# Features NOT implemented (optional):
+# - Trust marks (Section 7) - Optional feature (parsed but not validated)
 # - Federation endpoints (Section 8) - Server-side feature (Fetch Endpoint implemented separately)
 #
 # This strategy uses the openid_connect gem and extends it with federation-specific features.
@@ -65,7 +67,6 @@ module OmniAuth
       option :client_auth_method, :jwt_bearer
       option :client_signing_alg, :RS256
       option :audience, nil # Audience for JWT request objects (defaults to token_endpoint)
-      option :acr_values, nil # Authentication Context Class Reference values (space-separated string or array)
       option :fetch_userinfo, true # Whether to fetch userinfo endpoint (default: true for backward compatibility, set to false if ID token contains all needed data)
       option :key_source, :local # Key source: :local (use local static private_key) or :federation (use federation/JWKS) - used as default for both signing and decryption
       option :signing_key_source, nil # Signing key source: :local, :federation, or nil (uses key_source)
@@ -82,6 +83,8 @@ module OmniAuth
       option :client_jwk_signing_key, nil # Client JWKS for token endpoint authentication (auto-extracted from client entity statement if available)
       option :trust_anchors, [] # Array of Trust Anchor configurations for trust chain resolution: [{entity_id: "...", jwks: {...}}]
       option :enable_trust_chain_resolution, true # Enable trust chain resolution when issuer/client_id is an Entity ID
+      option :request_object_params, nil # Array of parameter names to include in signed request object from request.params (allow-list)
+      option :prepare_request_object_params, nil # Proc to modify params before adding to signed request object: proc { |params| modified_params }
 
       # Override client_jwk_signing_key to automatically extract from client entity statement
       # This automates client JWKS extraction according to OpenID Federation spec
@@ -263,23 +266,42 @@ module OmniAuth
         super
       end
 
-      # Override request_phase to use our custom authorize_uri instead of client.auth_code
-      # The base OAuth2 strategy calls client.auth_code.authorize_url, but OpenIDConnect::Client
-      # doesn't have an auth_code method - it uses authorization_uri directly
-      #
-      # ENFORCEMENT: This method ALWAYS uses signed request objects (required for security)
-      # The authorize_uri method enforces this requirement - unsigned requests are NOT allowed
+      # Override request_phase to use signed request objects (RFC 9101)
       def request_phase
         redirect authorize_uri
       end
 
-      # Override callback_phase to bypass base OAuth2 strategy's auth_code call
-      # The base OAuth2 strategy tries to call client.auth_code.get_token, but OpenIDConnect::Client
-      # doesn't have an auth_code method - we handle token exchange using oidc_client.access_token!
+      # Override callback_phase to handle token exchange with OpenIDConnect::Client
       def callback_phase
-        # Validate state parameter (CSRF protection)
-        # Use constant-time comparison to prevent timing attacks
-        state_param = request.params["state"]
+        # Security: Validate user input from HTTP request
+        state_param_raw = request.params["state"]
+        code_param_raw = request.params["code"]
+        error_param_raw = request.params["error"]
+        error_description_raw = request.params["error_description"]
+
+        state_param = state_param_raw ? OmniauthOpenidFederation::Validators.sanitize_request_param(state_param_raw) : nil
+        code_param = code_param_raw ? OmniauthOpenidFederation::Validators.sanitize_request_param(code_param_raw) : nil
+        error_param = error_param_raw ? OmniauthOpenidFederation::Validators.sanitize_request_param(error_param_raw) : nil
+        error_description_param = error_description_raw ? OmniauthOpenidFederation::Validators.sanitize_request_param(error_description_raw) : nil
+        if error_param
+          error_msg = "Authorization error: #{error_param}"
+          error_msg += " - #{error_description_param}" if error_description_param
+          OmniauthOpenidFederation::Instrumentation.notify_unexpected_authentication_break(
+            stage: "callback_phase",
+            error_message: error_msg,
+            error_class: "AuthorizationError",
+            request_info: {
+              remote_ip: request.env["REMOTE_ADDR"],
+              user_agent: request.env["HTTP_USER_AGENT"],
+              path: request.path
+            }
+          )
+          env["omniauth_openid_federation.instrumented"] = true
+          fail!(:authorization_error, OmniauthOpenidFederation::ValidationError.new(error_msg))
+          return
+        end
+
+        # CSRF protection: constant-time state comparison
         state_session = session["omniauth.state"]
 
         if OmniauthOpenidFederation::StringHelpers.blank?(state_param) ||
@@ -304,8 +326,7 @@ module OmniAuth
         # Clear state from session
         session.delete("omniauth.state")
 
-        # Validate authorization code is present
-        if OmniauthOpenidFederation::StringHelpers.blank?(request.params["code"])
+        if OmniauthOpenidFederation::StringHelpers.blank?(code_param)
           # Instrument unexpected authentication break
           OmniauthOpenidFederation::Instrumentation.notify_unexpected_authentication_break(
             stage: "callback_phase",
@@ -323,10 +344,8 @@ module OmniAuth
           return
         end
 
-        # Exchange authorization code for access token using OpenID Connect client
-        # This bypasses the base OAuth2 strategy's client.auth_code.get_token call
         begin
-          @access_token = exchange_authorization_code(request.params["code"])
+          @access_token = exchange_authorization_code(code_param)
         rescue => e
           # Instrument unexpected authentication break
           OmniauthOpenidFederation::Instrumentation.notify_unexpected_authentication_break(
@@ -345,24 +364,11 @@ module OmniAuth
           return
         end
 
-        # Build auth hash manually since we bypassed the base strategy's token handling
-        # The base OAuth2 strategy's auth_hash expects @access_token.token, but OpenIDConnect::AccessToken
-        # uses @access_token.access_token, so we need to build it ourselves
         env["omniauth.auth"] = auth_hash
-
-        # Continue with OmniAuth flow
         call_app!
       end
 
-      # Override auth_hash to work with OpenIDConnect::AccessToken
-      # The base OAuth2 strategy expects @access_token.token, but OpenIDConnect::AccessToken uses access_token
-      # We build the hash directly to avoid calling the base strategy's auth_hash which will fail
       def auth_hash
-        # Ensure provider name is always "openid_federation"
-        # The name option should be set, but fallback to "openid_federation" if not
-        # Check both symbol and string keys, and also check the name method
-        options[:name] || options["name"] || (respond_to?(:name) && name) || "openid_federation"
-        # Always use "openid_federation" as the provider name for consistency
         OmniAuth::AuthHash.new(
           provider: "openid_federation",
           uid: uid,
@@ -378,39 +384,56 @@ module OmniAuth
       end
 
       def authorize_uri
-        # In OmniAuth strategies, use request.params instead of params
         request_params = request.params
 
-        # Combine configured ACR values with request ACR values
-        # This allows flexibility: configure assurance level (e.g., level4) at gem level,
-        # while allowing components to specify provider (e.g., oidc.provider.1)
-        options.acr_values = combine_acr_values(
-          configured_acr: options.acr_values,
-          request_acr: request_params["acr_values"]
-        )
+        # Security: Only validate user input from HTTP requests, not config values
+        # Note: Rack params can return arrays for multi-value parameters
+        sanitized_params = {}
+        request_params.each do |key, value|
+          next unless value
+          key_str = key.to_s
+          next if key_str.length > 256
+          # For arrays (multi-value params), sanitize each element and limit size
+          if value.is_a?(Array)
+            # Prevent DoS: limit array size
+            if value.length > 100
+              next
+            end
+            # Sanitize each element
+            sanitized_array = value.map { |v| OmniauthOpenidFederation::Validators.sanitize_request_param(v) }.compact
+            next if sanitized_array.empty?
+            # Keep as array for acr_values (handled by normalize_acr_values)
+            # Convert to space-separated string for other parameters (ui_locales, claims_locales)
+            sanitized_params[key_str] = if key_str == "acr_values"
+              sanitized_array
+            else
+              sanitized_array.join(" ")
+            end
+          else
+            sanitized = OmniauthOpenidFederation::Validators.sanitize_request_param(value)
+            sanitized_params[key_str] = sanitized if sanitized
+          end
+        end
+        request_params = sanitized_params
 
-        # ENFORCE signed request objects - Required for secure authorization requests
-        # All authentication requests MUST use signed request objects
-        # This implementation enforces this requirement - unsigned requests are NOT allowed
+        # Apply custom proc to modify params before adding to signed request object
+        if options.prepare_request_object_params.respond_to?(:call)
+          request_params = options.prepare_request_object_params.call(request_params.dup) || request_params
+          request_params = {} unless request_params.is_a?(Hash)
+        end
+
+        # Enforce signed request objects (RFC 9101) - unsigned requests are not allowed
         client_options_hash = options.client_options || {}
         normalized_options = OmniauthOpenidFederation::Validators.normalize_hash(client_options_hash)
         private_key = normalized_options[:private_key]
-
-        # Validate that private key is present (required for signing)
-        # This ensures signed request objects are ALWAYS used - no bypass possible
         OmniauthOpenidFederation::Validators.validate_private_key!(private_key)
 
-        # Resolve issuer from entity statement if not explicitly configured
-        # This allows issuer to be automatically discovered from entity statement
         resolved_issuer = options.issuer
         unless OmniauthOpenidFederation::StringHelpers.present?(resolved_issuer)
           resolved_issuer = resolve_issuer_from_metadata
-          # Update options.issuer if resolved (for use in JWS builder)
           options.issuer = resolved_issuer if resolved_issuer
         end
 
-        # Resolve audience (required for signed request objects)
-        # Priority: explicit config > entity statement > resolved issuer > token endpoint (from entity/resolved) > client token_endpoint > client_options issuer
         audience_value = resolve_audience(client_options_hash, resolved_issuer)
 
         unless OmniauthOpenidFederation::StringHelpers.present?(audience_value)
@@ -420,33 +443,20 @@ module OmniAuth
           raise OmniauthOpenidFederation::ConfigurationError, error_msg
         end
 
-        # Use signed request object (required for secure authorization requests)
-        # RFC 9101: All authorization parameters MUST be included in the signed JWT
         state_value = new_state
         nonce_value = options.send_nonce ? new_nonce : nil
-
-        # Normalize client options hash keys
-        normalized_options = OmniauthOpenidFederation::Validators.normalize_hash(client_options_hash)
-
-        # Use configured redirect_uri from client_options to ensure it matches what's registered
-        # OmniAuth's callback_url might generate a different URL, so we use the configured one
         configured_redirect_uri = normalized_options[:redirect_uri] || callback_url
 
-        # Handle automatic client registration (OpenID Federation Section 12.1)
-        # For automatic registration, client_id is the entity identifier and entity statement is included
+        # Automatic registration uses entity identifier as client_id (OpenID Federation Section 12.1)
         client_registration_type = options.client_registration_type || :explicit
         client_id_for_request = normalized_options[:identifier]
         client_entity_statement = nil
 
         if client_registration_type == :automatic
-          # Load client entity statement for automatic registration
-          # Entity statement is always available (either from file or generated dynamically)
           client_entity_statement = load_client_entity_statement(
             options.client_entity_statement_path,
             options.client_entity_statement_url
           )
-
-          # Extract entity identifier from entity statement (use 'sub' claim)
           entity_identifier = extract_entity_identifier_from_statement(client_entity_statement, options.client_entity_identifier)
           unless OmniauthOpenidFederation::StringHelpers.present?(entity_identifier)
             error_msg = "Failed to extract entity identifier from client entity statement. " \
@@ -454,44 +464,53 @@ module OmniAuth
             OmniauthOpenidFederation::Logger.error("[Strategy] #{error_msg}")
             raise OmniauthOpenidFederation::ConfigurationError, error_msg
           end
-
-          # Use entity identifier as client_id for automatic registration
           client_id_for_request = entity_identifier
-
-          # Update the OpenID Connect client's identifier for client assertion
-          # The client assertion at the token endpoint should also use the entity identifier
-          # Note: The client is cached, so we update it here for this request
           if client.respond_to?(:identifier=)
             client.identifier = entity_identifier
           elsif client.respond_to?(:client_id=)
             client.client_id = entity_identifier
           end
-
           OmniauthOpenidFederation::Logger.debug("[Strategy] Using automatic registration with entity identifier: #{entity_identifier}")
         end
 
-        # Build JWT request object with all authorization parameters
-        # According to RFC 9101, when using request objects, all params should be in the JWT
-        # Support separate signing/encryption keys per OpenID Federation spec
-        # Signing key source determines whether to use local static private_key or federation/JWKS
         signing_key_source = options.signing_key_source || options.key_source || :local
         jwks = normalized_options[:jwks] || normalized_options["jwks"]
+
+        # Extract already-sanitized user input params (sanitized above)
+        validated_state = state_value.to_s.strip
+        validated_nonce = nonce_value&.to_s&.strip
+        validated_login_hint = request_params["login_hint"]
+        validated_ui_locales = request_params["ui_locales"]
+        validated_claims_locales = request_params["claims_locales"]
+
+        # Config values are trusted (no sanitization needed)
+        validated_client_id = client_id_for_request.to_s.strip
+        validated_redirect_uri = configured_redirect_uri.to_s.strip
+        validated_scope = Array(options.scope).join(" ").strip
+        validated_response_type = options.response_type.to_s.strip
+        validated_prompt = options.prompt&.to_s&.strip
+        validated_hd = options.hd&.to_s&.strip
+        validated_response_mode = options.response_mode&.to_s&.strip
+        validated_issuer = (resolved_issuer || options.issuer)&.to_s&.strip
+        validated_audience = audience_value&.to_s&.strip
+        normalized_acr_values = OmniauthOpenidFederation::Validators.normalize_acr_values(request_params["acr_values"], skip_sanitization: true) || nil
+
         jws_builder = OmniauthOpenidFederation::Jws.new(
-          client_id: client_id_for_request,
-          redirect_uri: configured_redirect_uri,
-          scope: Array(options.scope).join(" "),
-          issuer: resolved_issuer || options.issuer,
-          audience: audience_value,
-          state: state_value,
-          nonce: nonce_value,
-          response_type: options.response_type,
-          response_mode: options.response_mode,
-          login_hint: request_params["login_hint"],
-          ui_locales: request_params["ui_locales"],
-          claims_locales: request_params["claims_locales"],
-          prompt: options.prompt,
-          hd: options.hd,
-          acr_values: options.acr_values,
+          client_id: validated_client_id,
+          redirect_uri: validated_redirect_uri,
+          scope: validated_scope,
+          issuer: validated_issuer,
+          audience: validated_audience,
+          state: validated_state,
+          nonce: validated_nonce,
+          response_type: validated_response_type,
+          response_mode: validated_response_mode,
+          login_hint: validated_login_hint,
+          ui_locales: validated_ui_locales,
+          claims_locales: validated_claims_locales,
+          prompt: validated_prompt,
+          hd: validated_hd,
+          acr_values: normalized_acr_values,
           extra_params: options.extra_authorize_params || {},
           private_key: normalized_options[:private_key],
           jwks: jwks,
@@ -500,29 +519,15 @@ module OmniAuth
           client_entity_statement: client_entity_statement
         )
 
-        # Add provider-specific extension parameters if configured
-        # Note: Some providers may require additional parameters outside the JWT
-        # @deprecated ftn_spname option - Use request_object_params instead for adding params to the JWT request object
-        if options.ftn_spname && !options.ftn_spname.to_s.empty?
-          OmniauthOpenidFederation::Logger.warn("[Strategy] ftn_spname option is deprecated. Use request_object_params: ['ftn_spname'] instead.")
-          jws_builder.ftn_spname = options.ftn_spname
-        end
-
-        # Allow dynamic request object params from HTTP request if configured
-        # These parameters are added as claims to the JWT request object (RFC 9101)
+        # Add dynamic request object params from HTTP request (already sanitized above)
         options.request_object_params&.each do |key|
-          value = request_params[key.to_s]
-          jws_builder.add_claim(key.to_sym, value) if value && !value.to_s.empty?
+          key_str = key.to_s
+          next if key_str.length > 256
+          value = request_params[key_str]
+          jws_builder.add_claim(key_str.to_sym, value) if value
         end
 
-        # ENFORCE: When using signed request objects, ONLY pass the 'request' parameter
-        # All other params MUST be inside the JWT (RFC 9101 requirement)
-        # This ensures secure authorization requests - unsigned requests are NOT allowed
-        #
-        # Load provider metadata for optional request object encryption
-        # According to OpenID Connect Core and RFC 9101, if provider specifies
-        # request_object_encryption_alg, the client SHOULD encrypt request objects
-        # The always_encrypt_request_object option can force encryption if encryption keys are available
+        # RFC 9101: Only 'request' parameter in query, all params in JWT
         provider_metadata = load_provider_metadata_for_encryption
         signed_request_object = jws_builder.sign(
           provider_metadata: provider_metadata,
@@ -534,12 +539,7 @@ module OmniAuth
           raise OmniauthOpenidFederation::SecurityError, error_msg
         end
 
-        # Build authorization URL manually to ensure RFC 9101 compliance
-        # When using signed request objects, ONLY the 'request' parameter should be in the query string
-        # The OpenID Connect client's authorization_uri method may add extra parameters, which violates RFC 9101
-        # So we build the URL manually to ensure compliance
-
-        # Get authorization endpoint from client
+        # Build URL manually to ensure RFC 9101 compliance (only 'request' param in query)
         auth_endpoint = client.authorization_endpoint
         unless OmniauthOpenidFederation::StringHelpers.present?(auth_endpoint)
           error_msg = "Authorization endpoint not configured. Provide authorization_endpoint in client_options or entity statement"
@@ -547,22 +547,20 @@ module OmniAuth
           raise OmniauthOpenidFederation::ConfigurationError, error_msg
         end
 
-        # Build query string with ONLY the request parameter (and provider-specific params if needed)
-        # RFC 9101: All authorization parameters MUST be inside the JWT, only 'request' parameter in query
-        query_params = {
-          request: signed_request_object
-        }
-
-        # Add provider-specific extension parameters outside JWT if configured
-        # These are allowed per provider requirements (some providers require additional parameters)
-        # @deprecated ftn_spname option - Use request_object_params instead for adding params to the JWT request object
-        if options.ftn_spname && !options.ftn_spname.to_s.empty?
-          query_params[:ftn_spname] = options.ftn_spname
+        begin
+          uri = URI.parse(auth_endpoint)
+        rescue URI::InvalidURIError => e
+          error_msg = "Invalid authorization endpoint URI format: #{e.message}"
+          OmniauthOpenidFederation::Logger.error("[Strategy] #{error_msg}")
+          raise OmniauthOpenidFederation::ConfigurationError, error_msg
         end
 
-        # Build the full authorization URL manually
-        uri = URI.parse(auth_endpoint)
-        uri.query = URI.encode_www_form(query_params.reject { |_k, v| v.nil? })
+        max_string_length = ::OmniauthOpenidFederation::Configuration.config.max_string_length
+        if signed_request_object.length > max_string_length
+          OmniauthOpenidFederation::Logger.warn("[Strategy] Request object exceeds maximum length")
+        end
+
+        uri.query = URI.encode_www_form(request: signed_request_object)
         uri.to_s
       end
 
@@ -594,31 +592,21 @@ module OmniAuth
           access_token = @access_token
           access_token ||= exchange_authorization_code(request.params["code"])
 
-          # Decode and validate ID token
           id_token = decode_id_token(access_token.id_token)
           id_token_claims = id_token.raw_attributes || {}
 
-          # Fetch userinfo if configured (default: true for backward compatibility)
-          # According to OpenID Federation spec, ID token may contain all needed data
-          # Developer can disable userinfo fetching if ID token is sufficient
           if options.fetch_userinfo
             begin
               userinfo = access_token.userinfo!
-
-              # Decrypt userinfo if encrypted (JWE format)
               userinfo_hash = decode_userinfo(userinfo)
-
-              # Combine ID token and userinfo (userinfo takes precedence for overlapping claims)
               id_token_claims.merge(userinfo_hash)
             rescue => e
               error_msg = "Failed to fetch or decode userinfo: #{e.class} - #{e.message}"
               OmniauthOpenidFederation::Logger.error("[Strategy] #{error_msg}")
-              # If userinfo fetch fails, log warning but don't fail - ID token may be sufficient
               OmniauthOpenidFederation::Logger.warn("[Strategy] Falling back to ID token claims only")
               id_token_claims
             end
           else
-            # Userinfo fetching disabled - use ID token claims only
             OmniauthOpenidFederation::Logger.debug("[Strategy] Userinfo fetching disabled, using ID token claims only")
             id_token_claims
           end
@@ -628,17 +616,11 @@ module OmniAuth
       private
 
       # Exchange authorization code for access token
-      # This bypasses the base OAuth2 strategy's client.auth_code.get_token call
-      # @param authorization_code [String] The authorization code from the callback
-      # @return [OpenIDConnect::AccessToken] The access token
-      # @raise [StandardError] If token exchange fails
       def exchange_authorization_code(authorization_code)
         client_options_hash = options.client_options || {}
         normalized_options = OmniauthOpenidFederation::Validators.normalize_hash(client_options_hash)
         configured_redirect_uri = normalized_options[:redirect_uri] || callback_url
 
-        # Set the authorization code grant type (required for authorization_code flow)
-        # This sets @grant = Grant::AuthorizationCode.new(...) instead of default Grant::ClientCredentials
         oidc_client.authorization_code = authorization_code
         oidc_client.redirect_uri = configured_redirect_uri
 
@@ -727,10 +709,19 @@ module OmniAuth
 
           # Build full URLs from paths if needed
           # Use resolved issuer if available, otherwise fall back to configured issuer
+          # Note: Config values are trusted, no security validation needed
           issuer_uri = if resolved_issuer
-            URI.parse(resolved_issuer)
+            begin
+              URI.parse(resolved_issuer)
+            rescue URI::InvalidURIError
+              nil
+            end
           elsif options.issuer
-            URI.parse(options.issuer.to_s)
+            begin
+              URI.parse(options.issuer.to_s)
+            rescue URI::InvalidURIError
+              nil
+            end
           end
 
           resolved_hash = {}
@@ -1610,7 +1601,8 @@ module OmniAuth
 
         # Priority 3: Fetch from issuer if provided (only if issuer is a valid URL)
         if OmniauthOpenidFederation::StringHelpers.present?(options.issuer)
-          # Validate that issuer is a valid URL before trying to fetch
+          # Check that issuer is a valid URL format before trying to fetch
+          # Note: Config values are trusted, only basic format check needed
           begin
             parsed_issuer = URI.parse(options.issuer)
             unless parsed_issuer.is_a?(URI::HTTP) || parsed_issuer.is_a?(URI::HTTPS)
@@ -2046,49 +2038,6 @@ module OmniAuth
         rescue => e
           OmniauthOpenidFederation::Logger.debug("[Strategy] Could not load provider metadata for encryption: #{e.message}")
           nil
-        end
-      end
-
-      # Combines configured ACR values with request ACR values
-      # ACR values are space-separated strings per OpenID Connect spec
-      # This allows:
-      # - Configure assurance level (e.g., "urn:example:oidc:acr:level4") at gem level
-      # - Specify provider (e.g., "oidc.provider.1") from component/request
-      # - Both are combined: "oidc.provider.1 urn:example:oidc:acr:level4"
-      #
-      # @param configured_acr [String, Array, nil] ACR values configured at gem level
-      # @param request_acr [String, nil] ACR values from request parameters
-      # @return [String, nil] Combined space-separated ACR values, or nil if both are empty
-      def combine_acr_values(configured_acr:, request_acr:)
-        # Normalize both to arrays of values
-        configured_values = normalize_acr_values(configured_acr)
-        request_values = normalize_acr_values(request_acr)
-
-        # Combine and remove duplicates (preserving order)
-        combined = (request_values + configured_values).uniq
-
-        # Return space-separated string or nil
-        combined.empty? ? nil : combined.join(" ")
-      end
-
-      # Normalizes ACR values to an array
-      # Handles: nil, string (space-separated), array
-      #
-      # @param acr_values [String, Array, nil] ACR values in any format
-      # @return [Array<String>] Array of ACR value strings
-      def normalize_acr_values(acr_values)
-        return [] if OmniauthOpenidFederation::StringHelpers.blank?(acr_values)
-
-        case acr_values
-        when Array
-          # Already an array, filter out blanks
-          acr_values.map(&:to_s).reject { |v| OmniauthOpenidFederation::StringHelpers.blank?(v) }
-        when String
-          # Space-separated string, split and filter
-          acr_values.split(/\s+/).reject { |v| OmniauthOpenidFederation::StringHelpers.blank?(v) }
-        else
-          # Convert to string and split
-          acr_values.to_s.split(/\s+/).reject { |v| OmniauthOpenidFederation::StringHelpers.blank?(v) }
         end
       end
 
