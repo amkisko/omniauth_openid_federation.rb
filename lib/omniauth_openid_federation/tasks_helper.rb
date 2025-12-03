@@ -285,7 +285,19 @@ module OmniauthOpenidFederation
             end
             http = Net::HTTP.new(uri.host, uri.port)
             http.use_ssl = (uri.scheme == "https")
-            http.verify_mode = OpenSSL::SSL::VERIFY_NONE if defined?(Rails) && Rails.respond_to?(:env) && Rails.env.development?
+            if uri.scheme == "https"
+              http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+
+              # Set ca_file directly - this is the simplest and most reliable approach
+              # Try SSL_CERT_FILE first, then default cert file
+              ca_file = if ENV["SSL_CERT_FILE"] && File.file?(ENV["SSL_CERT_FILE"])
+                ENV["SSL_CERT_FILE"]
+              elsif File.exist?(OpenSSL::X509::DEFAULT_CERT_FILE)
+                OpenSSL::X509::DEFAULT_CERT_FILE
+              end
+
+              http.ca_file = ca_file if ca_file
+            end
 
             request_path = uri.path
             request_path += "?#{uri.query}" if uri.query
