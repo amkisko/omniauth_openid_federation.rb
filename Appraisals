@@ -10,7 +10,7 @@ appraise "rails72" do
   gem "omniauth", "~> 2.0"
 end
 
-appraise "rails8ruby34" do
+appraise "rails8" do
   ruby ">= 3.4.0"
   gem "activesupport", "~> 8.1"
   gem "railties", "~> 8.1"

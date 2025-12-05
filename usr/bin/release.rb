@@ -18,7 +18,7 @@ execute_command("bundle")
 execute_command("bundle exec appraisal generate")
 execute_command("bundle exec standardrb --fix")
 execute_command("bundle exec rbs validate")
-execute_command("bundle exec rspec")
+execute_command("bundle exec appraisal rails8 rspec")
 
 puts "Tests passed. Checking git status..."
 
