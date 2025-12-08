@@ -1,0 +1,24 @@
+# Cops that should never be disabled, even in legacy code
+# These are critical for code quality and should always be enforced
+
+Lint/Debugger: # don't leave binding.pry or debugger
+  Enabled: true
+  Exclude: []
+
+RSpec/Focus: # run ALL tests on CI
+  Enabled: true
+  Exclude: []
+
+Rails/Output: # Don't leave puts-debugging
+  Enabled: true
+  Exclude:
+    - usr/**/*  # Allow in usr directory (scripts/utilities)
+
+Rails/FindEach: # each could severely affect the performance, use find_each
+  Enabled: true
+  Exclude: []
+
+Rails/UniqBeforePluck: # uniq.pluck and not pluck.uniq
+  Enabled: true
+  Exclude: []
+
