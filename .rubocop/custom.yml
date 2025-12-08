@@ -1,0 +1,22 @@
+# Custom cop overrides and project-specific rules
+# These extend Standard's defaults without changing them
+
+Style/AccessModifierDeclarations:
+  EnforcedStyle: inline
+
+# Disable specific cops globally based on .standard.yml ignore rules
+Rails/ActiveRecordCallbacksOrder:
+  Enabled: false
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Lint/UselessAssignment:
+  Enabled: false
+
+# Allow Rails/Exit in usr/**/* directory
+# Note: Rails/Output exclusion for usr/**/* is handled in .rubocop/strict.yml
+Rails/Exit:
+  Exclude:
+    - usr/**/*
+

@@ -1,0 +1,16 @@
+# RSpec-specific RuboCop configuration
+# Standard-rspec plugin provides base config, but we can customize here
+
+plugins:
+  - rubocop-rspec
+
+RSpec/ExampleLength:
+  Max: 10
+
+RSpec/SpecFilePathFormat:
+  Enabled: false
+  Exclude:
+    - spec/**/*
+
+RSpec/HooksBeforeExamples:
+  Enabled: false
