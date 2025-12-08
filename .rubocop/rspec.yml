@@ -5,7 +5,7 @@ plugins:
   - rubocop-rspec
 
 RSpec/ExampleLength:
-  Max: 10
+  Max: 80
 
 RSpec/SpecFilePathFormat:
   Enabled: false
