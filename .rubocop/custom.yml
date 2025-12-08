@@ -20,3 +20,11 @@ Rails/Exit:
   Exclude:
     - usr/**/*
 
+RSpec/DescribeClass:
+  Exclude:
+    - spec/omniauth_openid_federation/errors_spec.rb
+    - spec/omniauth_openid_federation/security_fuzzing_spec.rb
+
+RSpec/VerifiedDoubles:
+  Enabled: false
+
