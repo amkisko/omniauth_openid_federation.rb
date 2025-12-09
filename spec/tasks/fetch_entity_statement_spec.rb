@@ -49,9 +49,11 @@ RSpec.describe "openid_federation:fetch_entity_statement" do
   end
 
   context "when URL is provided via argument" do
+    let(:cached_entity_statement_content) { entity_statement_content }
+
     before do
       stub_request(:get, entity_statement_url)
-        .to_return(status: 200, body: entity_statement_content, headers: {"Content-Type" => "application/jwt"})
+        .to_return(status: 200, body: cached_entity_statement_content, headers: {"Content-Type" => "application/jwt"})
     end
 
     it "fetches and saves entity statement" do
@@ -59,7 +61,7 @@ RSpec.describe "openid_federation:fetch_entity_statement" do
 
       aggregate_failures do
         expect(File.exist?(output_file)).to be true
-        expect(File.read(output_file)).to eq(entity_statement_content)
+        expect(File.read(output_file)).to eq(cached_entity_statement_content)
         expect(result[:stdout]).to include("✅ Entity statement saved to:")
         expect(result[:stdout]).to include("✅ Fingerprint:")
       end
@@ -76,9 +78,9 @@ RSpec.describe "openid_federation:fetch_entity_statement" do
     end
 
     it "validates fingerprint when provided" do
-      fingerprint = Digest::SHA256.hexdigest(entity_statement_content).downcase
+      fingerprint = Digest::SHA256.hexdigest(cached_entity_statement_content).downcase
       stub_request(:get, entity_statement_url)
-        .to_return(status: 200, body: entity_statement_content, headers: {"Content-Type" => "application/jwt"})
+        .to_return(status: 200, body: cached_entity_statement_content, headers: {"Content-Type" => "application/jwt"})
       result = run_rake_task("openid_federation:fetch_entity_statement", entity_statement_url, fingerprint, output_file)
 
       aggregate_failures do
