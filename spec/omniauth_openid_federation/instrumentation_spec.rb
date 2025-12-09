@@ -98,7 +98,7 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
         described_class.notify("test_event")
 
         after_time = Time.now.utc
-        timestamp = Time.zone.parse(called_with[:timestamp])
+        timestamp = OmniauthOpenidFederation::TimeHelpers.parse(called_with[:timestamp])
         # Timestamp should be recent (within last second)
         aggregate_failures do
           expect(timestamp).to be <= after_time

@@ -1,5 +1,6 @@
 # Rake tasks for OmniAuth OpenID Federation
 # Thin wrappers around TasksHelper for CLI interface
+require_relative "../omniauth_openid_federation/time_helpers"
 
 namespace :openid_federation do
   desc "Fetch entity statement from OpenID Federation provider"
@@ -262,8 +263,8 @@ namespace :openid_federation do
       end
       puts "   Issuer: #{metadata[:issuer]}"
       puts "   Subject: #{metadata[:sub]}"
-      puts "   Expires: #{Time.zone.at(metadata[:exp])}" if metadata[:exp]
-      puts "   Issued At: #{Time.zone.at(metadata[:iat])}" if metadata[:iat]
+      puts "   Expires: #{OmniauthOpenidFederation::TimeHelpers.at(metadata[:exp])}" if metadata[:exp]
+      puts "   Issued At: #{OmniauthOpenidFederation::TimeHelpers.at(metadata[:iat])}" if metadata[:iat]
       puts
 
       # Key status information
@@ -594,7 +595,7 @@ namespace :openid_federation do
           if value
             if [:exp, :iat, :auth_time].include?(key)
               time_value = begin
-                Time.zone.at(value)
+                OmniauthOpenidFederation::TimeHelpers.at(value)
               rescue
                 value
               end
