@@ -44,7 +44,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
   end
 
   describe "client_jwk_signing_key method" do
-    it "returns configured value when present" do
+    it "returns configured client_jwk_signing_key value when explicitly set" do
       jwks_json = '{"keys":[]}'
       strategy = described_class.new(
         nil,
@@ -61,7 +61,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(result).to eq(jwks_json)
     end
 
-    it "extracts from client entity statement when configured value is nil" do
+    it "extracts JWKS from client entity statement file when configured value is nil" do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -87,9 +87,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Test through public API: options accessor
       result = strategy.options[:client_jwk_signing_key]
-      expect(result).to be_a(String)
       parsed = JSON.parse(result)
-      expect(parsed).to have_key("keys")
+      aggregate_failures do
+        expect(result).to be_a(String)
+        expect(parsed).to have_key("keys")
+      end
     end
 
     it "returns nil when not available" do
@@ -109,7 +111,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
   end
 
   describe "options accessor override" do
-    it "dynamically sets client_jwk_signing_key from entity statement" do
+    it "dynamically sets client_jwk_signing_key from entity statement via options accessor" do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -134,7 +136,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(opts[:client_jwk_signing_key]).to be_a(String)
     end
 
-    it "does not override if already set" do
+    it "preserves existing client_jwk_signing_key value in options accessor" do
       jwks_json = '{"keys":[]}'
       strategy = described_class.new(
         nil,
@@ -166,8 +168,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: client method uses resolve_endpoints_from_metadata
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When no entity statement, client should still work with configured endpoints
       client = strategy.client
@@ -201,8 +202,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: client method uses resolve_endpoints_from_metadata
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Client should resolve endpoints from entity statement
       client = strategy.client
@@ -235,8 +235,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: client method uses resolve_endpoints_from_metadata
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Client should resolve endpoints using entity_issuer fallback
       client = strategy.client
@@ -261,8 +260,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: client method uses resolve_endpoints_from_metadata
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When entity statement parsing fails, should fall back to configured endpoints
       client = strategy.client
@@ -285,8 +283,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses resolve_issuer_from_metadata via resolve_audience
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When no entity statement, should use configured issuer or fail gracefully
       uri = strategy.authorize_uri
@@ -314,19 +311,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses resolve_issuer_from_metadata via resolve_audience
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should use entity issuer (iss claim) when metadata doesn't have issuer
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify the JWT payload contains the issuer as audience
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["aud"]).to eq(provider_issuer)
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["aud"]).to eq(provider_issuer)
+      end
     end
 
     it "handles errors in resolve_issuer_from_metadata" do
@@ -347,8 +345,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses resolve_issuer_from_metadata via resolve_audience
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When entity statement parsing fails, should fall back to configured issuer or fail
       # Since we have configured endpoints, it should use those
@@ -390,8 +387,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -424,8 +420,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -456,8 +451,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -476,14 +470,13 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
     end
 
-    it "handles authorization endpoint as audience fallback" do
+    it "uses authorization endpoint URL as audience when entity statement is unavailable" do
       strategy = described_class.new(
         nil,
         client_options: {
@@ -495,14 +488,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
-      expect(uri).to be_present
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(uri).to include("/oauth2/authorize")
+      end
     end
 
-    it "handles authorization endpoint from client" do
+    it "uses client-provided authorization endpoint for audience resolution" do
       strategy = described_class.new(
         nil,
         client_options: {
@@ -514,11 +509,15 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
-      expect(uri).to be_present
+      uri_obj = URI.parse(uri)
+      query_params = URI.decode_www_form(uri_obj.query || "").to_h
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(query_params).to have_key("request")
+      end
     end
 
     it "handles no audience found scenario" do
@@ -531,8 +530,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       expect { strategy.authorize_uri }.to raise_error(OmniauthOpenidFederation::ConfigurationError)
     end
@@ -594,8 +592,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement for automatic registration
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should load client entity statement from cache for automatic registration
       uri = strategy.authorize_uri
@@ -651,8 +648,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should handle cache errors and generate dynamically
       uri = strategy.authorize_uri
@@ -707,8 +703,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should generate entity statement dynamically when cache is empty
       uri = strategy.authorize_uri
@@ -734,8 +729,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should raise error when FederationEndpoint is not configured
       expect {
@@ -768,8 +762,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should raise error when generation fails
       expect {
@@ -820,8 +813,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement_from_file
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should load client entity statement from file for automatic registration
       uri = strategy.authorize_uri
@@ -876,8 +868,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement_from_file
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should load client entity statement from relative path
       uri = strategy.authorize_uri
@@ -931,8 +922,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement_from_file
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should load client entity statement from relative path using File.expand_path
       uri = strategy.authorize_uri
@@ -984,19 +974,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should use configured entity identifier when provided
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify the JWT payload contains configured identifier
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["iss"]).to eq("configured-id")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["iss"]).to eq("configured-id")
+      end
     end
 
     it "extracts from sub claim" do
@@ -1039,19 +1030,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should extract entity identifier from sub claim
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify the JWT payload contains sub claim as issuer
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["iss"]).to eq("https://client.example.com")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["iss"]).to eq("https://client.example.com")
+      end
     end
 
     it "falls back to iss claim when sub is missing" do
@@ -1093,19 +1085,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should fall back to iss claim when sub is missing
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify the JWT payload contains iss claim as issuer
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["iss"]).to eq("https://client.example.com")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["iss"]).to eq("https://client.example.com")
+      end
     end
 
     it "handles missing both sub and iss" do
@@ -1146,20 +1139,21 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should handle missing sub and iss gracefully
       # When both are missing, it should fall back to configured identifier
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify the JWT payload contains fallback identifier
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["iss"]).to eq("fallback-identifier")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["iss"]).to eq("fallback-identifier")
+      end
     end
 
     it "handles errors in extraction" do
@@ -1198,8 +1192,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should raise error when client entity statement is invalid
       # Invalid JWT format is caught during loading, before extraction
@@ -1224,18 +1217,19 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_provider_metadata_for_encryption
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When no entity statement, request object should not be encrypted
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify request object is not encrypted (3 parts for JWT, 5 for JWE)
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
-      expect(parts.length).to eq(3) # Not encrypted
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(parts.length).to eq(3) # Not encrypted
+      end
     end
 
     it "returns nil when file does not exist" do
@@ -1253,17 +1247,18 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_provider_metadata_for_encryption
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When file doesn't exist, request object should not be encrypted
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
-      expect(parts.length).to eq(3) # Not encrypted
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(parts.length).to eq(3) # Not encrypted
+      end
     end
 
     it "loads metadata with encryption parameters" do
@@ -1312,18 +1307,19 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_provider_metadata_for_encryption
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When provider requires encryption, request object should be encrypted
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify request object is encrypted (5 parts for JWE)
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
-      expect(parts.length).to eq(5) # Encrypted (JWE)
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(parts.length).to eq(5) # Encrypted (JWE)
+      end
     end
 
     it "handles errors in loading metadata" do
@@ -1344,17 +1340,18 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_provider_metadata_for_encryption
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When metadata loading fails, request object should not be encrypted
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
-      expect(parts.length).to eq(3) # Not encrypted
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(parts.length).to eq(3) # Not encrypted
+      end
     end
   end
 
@@ -1374,8 +1371,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Test through public API: authorize_uri uses load_metadata_for_key_extraction
       # This is used when extracting signing keys from entity statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When no entity statement, should work with configured private key
       uri = strategy.authorize_uri
@@ -1397,8 +1393,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_metadata_for_key_extraction
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When file doesn't exist, should work with configured private key
       uri = strategy.authorize_uri
@@ -1433,8 +1428,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Test through public API: authorize_uri uses load_metadata_for_key_extraction
       # This is used when extracting signing keys from entity statement for federation
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should load metadata with JWKS from entity statement
       uri = strategy.authorize_uri
@@ -1459,8 +1453,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_metadata_for_key_extraction
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When metadata loading fails, should work with configured private key
       uri = strategy.authorize_uri

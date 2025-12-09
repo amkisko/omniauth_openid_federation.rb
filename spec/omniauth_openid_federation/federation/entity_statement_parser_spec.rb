@@ -35,17 +35,21 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementParser do
     it "parses entity statement without signature validation" do
       result = described_class.parse(jwt_string, validate_signature: false, validate_full: true)
 
-      expect(result).to be_a(Hash)
-      expect(result[:issuer]).to eq("https://provider.example.com")
-      expect(result[:metadata]).to be_present
-      expect(result[:metadata][:openid_provider]).to be_present
+      aggregate_failures do
+        expect(result).to be_a(Hash)
+        expect(result[:issuer]).to eq("https://provider.example.com")
+        expect(result[:metadata]).to be_present
+        expect(result[:metadata][:openid_provider]).to be_present
+      end
     end
 
     it "parses entity statement with signature validation" do
       result = described_class.parse(jwt_string, validate_signature: true)
 
-      expect(result).to be_a(Hash)
-      expect(result[:issuer]).to eq("https://provider.example.com")
+      aggregate_failures do
+        expect(result).to be_a(Hash)
+        expect(result[:issuer]).to eq("https://provider.example.com")
+      end
     end
 
     it "raises error on invalid JWT format" do
@@ -110,14 +114,17 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementParser do
         jwt_with_wrong_signature = JWT.encode(payload, other_key, "RS256", header)
 
         parser = described_class.new(jwt_with_wrong_signature, validate_signature: true)
-        expect(OmniauthOpenidFederation::Logger).to receive(:error).with(/Entity statement signature validation failed/)
+        allow(OmniauthOpenidFederation::Logger).to receive(:error)
 
-        expect {
-          parser.parse
-        }.to raise_error(
-          OmniauthOpenidFederation::SignatureError,
-          /Entity statement signature validation failed/
-        )
+        aggregate_failures do
+          expect {
+            parser.parse
+          }.to raise_error(
+            OmniauthOpenidFederation::SignatureError,
+            /Entity statement signature validation failed/
+          )
+          expect(OmniauthOpenidFederation::Logger).to have_received(:error).with(/Entity statement signature validation failed/)
+        end
       end
     end
   end

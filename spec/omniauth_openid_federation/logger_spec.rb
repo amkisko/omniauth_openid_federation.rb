@@ -13,29 +13,33 @@ RSpec.describe OmniauthOpenidFederation::Logger do
 
   describe ".debug" do
     it "logs debug message" do
-      expect(test_logger).to receive(:debug).with("[OpenIDFederation] test message")
+      allow(test_logger).to receive(:debug)
       described_class.debug("test message")
+      expect(test_logger).to have_received(:debug).with("[OpenIDFederation] test message")
     end
   end
 
   describe ".info" do
     it "logs info message" do
-      expect(test_logger).to receive(:info).with("[OpenIDFederation] test message")
+      allow(test_logger).to receive(:info)
       described_class.info("test message")
+      expect(test_logger).to have_received(:info).with("[OpenIDFederation] test message")
     end
   end
 
   describe ".warn" do
     it "logs warning message" do
-      expect(test_logger).to receive(:warn).with("[OpenIDFederation] test message")
+      allow(test_logger).to receive(:warn)
       described_class.warn("test message")
+      expect(test_logger).to have_received(:warn).with("[OpenIDFederation] test message")
     end
   end
 
   describe ".error" do
     it "logs error message" do
-      expect(test_logger).to receive(:error).with("[OpenIDFederation] test message")
+      allow(test_logger).to receive(:error)
       described_class.error("test message")
+      expect(test_logger).to have_received(:error).with("[OpenIDFederation] test message")
     end
   end
 
@@ -76,10 +80,12 @@ RSpec.describe OmniauthOpenidFederation::Logger do
         hide_const("OmniAuth")
 
         logger = described_class.logger
-        expect(logger).to respond_to(:debug)
-        expect(logger).to respond_to(:info)
-        expect(logger).to respond_to(:warn)
-        expect(logger).to respond_to(:error)
+        aggregate_failures do
+          expect(logger).to respond_to(:debug)
+          expect(logger).to respond_to(:info)
+          expect(logger).to respond_to(:warn)
+          expect(logger).to respond_to(:error)
+        end
       end
 
       it "returns NullLogger if no logger is available" do

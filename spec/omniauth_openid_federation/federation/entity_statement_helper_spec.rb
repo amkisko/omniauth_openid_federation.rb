@@ -20,6 +20,10 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementHelper do
   end
 
   before do
+    # Create fixtures directory if it doesn't exist
+    fixtures_dir = File.dirname(entity_statement_path)
+    FileUtils.mkdir_p(fixtures_dir) unless File.directory?(fixtures_dir)
+
     # Create a temporary entity statement file
     File.write(entity_statement_path, entity_statement_content) if defined?(Rails)
   end
@@ -31,12 +35,14 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementHelper do
   describe ".parse_for_signed_jwks" do
     context "when Rails is available" do
       let(:temp_rails_root) { Dir.mktmpdir }
+      let(:temp_rails_root_pathname) { Pathname.new(temp_rails_root) }
 
       before do
-        # Ensure Rails is defined for these tests
-        unless defined?(Rails)
-          rails_root_pathname = Pathname.new(temp_rails_root)
-          stub_const("Rails", double(root: rails_root_pathname))
+        # Stub Rails.root to use temp directory to avoid creating files in project config/
+        if defined?(Rails)
+          allow(Rails).to receive(:root).and_return(temp_rails_root_pathname)
+        else
+          stub_const("Rails", double(root: temp_rails_root_pathname))
         end
       end
 
@@ -45,15 +51,16 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementHelper do
       end
 
       it "parses entity statement and returns metadata" do
-        if defined?(Rails)
-          # Create file in Rails config directory
-          rails_config_path = Rails.root.join("config", "entity_statement.jwt").to_s
-          FileUtils.mkdir_p(File.dirname(rails_config_path))
-          File.write(rails_config_path, entity_statement_content)
+        # Create file in temp Rails config directory using absolute path
+        temp_config_dir = File.join(temp_rails_root, "config")
+        FileUtils.mkdir_p(temp_config_dir)
+        rails_config_path = File.join(temp_config_dir, "entity_statement.jwt")
+        File.write(rails_config_path, entity_statement_content)
 
-          # Use full path to pass validation
-          result = described_class.parse_for_signed_jwks(rails_config_path)
+        # Use full path to pass validation
+        result = described_class.parse_for_signed_jwks(rails_config_path)
 
+        aggregate_failures do
           expect(result).to be_a(Hash)
           expect(result).to have_key(:signed_jwks_uri)
           expect(result).to have_key(:entity_jwks)
@@ -62,46 +69,44 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementHelper do
       end
 
       it "uses Rails.root.join when Rails is available (line 22)" do
-        if defined?(Rails)
-          # Create file in Rails config directory
-          rails_config_path = Rails.root.join("config", "test_entity.jwt").to_s
-          FileUtils.mkdir_p(File.dirname(rails_config_path))
-          File.write(rails_config_path, entity_statement_content)
+        # Create file in temp Rails config directory using absolute path
+        temp_config_dir = File.join(temp_rails_root, "config")
+        FileUtils.mkdir_p(temp_config_dir)
+        rails_config_path = File.join(temp_config_dir, "test_entity.jwt")
+        File.write(rails_config_path, entity_statement_content)
 
-          # This should use the Rails branch at line 22
-          # Use full path to pass validation
-          result = described_class.parse_for_signed_jwks(rails_config_path)
+        # This should use the Rails branch at line 22
+        # Use full path to pass validation
+        result = described_class.parse_for_signed_jwks(rails_config_path)
+        aggregate_failures do
           expect(result).to be_a(Hash)
           expect(result).to have_key(:signed_jwks_uri)
         end
       end
 
       it "returns nil when file does not exist" do
-        if defined?(Rails)
-          # Use a path within the allowed directory
-          nonexistent_path = Rails.root.join("config", "nonexistent.jwt").to_s
-          result = described_class.parse_for_signed_jwks(nonexistent_path)
-          expect(result).to be_nil
-        end
+        # Use a path within the temp allowed directory
+        temp_config_dir = File.join(temp_rails_root, "config")
+        FileUtils.mkdir_p(temp_config_dir)
+        nonexistent_path = File.join(temp_config_dir, "nonexistent.jwt")
+        result = described_class.parse_for_signed_jwks(nonexistent_path)
+        expect(result).to be_nil
       end
 
       it "raises SecurityError for path traversal attempts" do
-        if defined?(Rails)
-          expect { described_class.parse_for_signed_jwks("../../../etc/passwd") }
-            .to raise_error(OmniauthOpenidFederation::SecurityError)
-        end
+        expect { described_class.parse_for_signed_jwks("../../../etc/passwd") }
+          .to raise_error(OmniauthOpenidFederation::SecurityError)
       end
 
       it "raises ValidationError when parsing fails" do
-        if defined?(Rails)
-          # Create file in Rails config directory
-          invalid_path = Rails.root.join("config", "invalid.jwt").to_s
-          FileUtils.mkdir_p(File.dirname(invalid_path))
-          File.write(invalid_path, "invalid jwt")
+        # Create file in temp Rails config directory using absolute path
+        temp_config_dir = File.join(temp_rails_root, "config")
+        FileUtils.mkdir_p(temp_config_dir)
+        invalid_path = File.join(temp_config_dir, "invalid.jwt")
+        File.write(invalid_path, "invalid jwt")
 
-          expect { described_class.parse_for_signed_jwks(invalid_path) }
-            .to raise_error(OmniauthOpenidFederation::ValidationError)
-        end
+        expect { described_class.parse_for_signed_jwks(invalid_path) }
+          .to raise_error(OmniauthOpenidFederation::ValidationError)
       end
     end
 
@@ -136,9 +141,12 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementHelper do
         allowed_dir = File.join(config.root_path, "config")
         nonexistent_path = File.join(allowed_dir, "nonexistent.jwt")
 
-        expect(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Entity statement file not found/)
+        allow(OmniauthOpenidFederation::Logger).to receive(:warn)
         result = described_class.parse_for_signed_jwks(nonexistent_path)
-        expect(result).to be_nil
+        aggregate_failures do
+          expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Entity statement file not found/)
+          expect(result).to be_nil
+        end
 
         FileUtils.rm_rf(config.root_path) if File.directory?(config.root_path)
         config.root_path = nil
@@ -147,17 +155,18 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementHelper do
       it "logs error and raises ValidationError when parsing fails" do
         config = OmniauthOpenidFederation::Configuration.config
         config.root_path = Dir.mktmpdir
-
-        # Create file in the allowed directory
         allowed_dir = File.join(config.root_path, "config")
         FileUtils.mkdir_p(allowed_dir) unless File.directory?(allowed_dir)
         file_path = File.join(allowed_dir, "invalid.jwt")
         File.write(file_path, "invalid jwt")
 
-        expect(OmniauthOpenidFederation::Logger).to receive(:error).with(/Failed to parse entity statement/)
-        expect {
-          described_class.parse_for_signed_jwks(file_path)
-        }.to raise_error(OmniauthOpenidFederation::ValidationError, /Failed to parse entity statement/)
+        allow(OmniauthOpenidFederation::Logger).to receive(:error)
+        aggregate_failures do
+          expect {
+            described_class.parse_for_signed_jwks(file_path)
+          }.to raise_error(OmniauthOpenidFederation::ValidationError, /Failed to parse entity statement/)
+          expect(OmniauthOpenidFederation::Logger).to have_received(:error).with(/Failed to parse entity statement/)
+        end
 
         FileUtils.rm_rf(config.root_path) if File.directory?(config.root_path)
         config.root_path = nil

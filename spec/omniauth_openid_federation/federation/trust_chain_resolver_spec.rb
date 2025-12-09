@@ -206,9 +206,11 @@ RSpec.describe OmniauthOpenidFederation::Federation::TrustChainResolver do
 
         chain = resolver.resolve!
 
-        expect(chain).to be_an(Array)
-        expect(chain.length).to eq(2) # Leaf config + Subordinate statement
-        expect(chain.first).to eq(leaf_config)
+        aggregate_failures do
+          expect(chain).to be_an(Array)
+          expect(chain.length).to eq(2) # Leaf config + Subordinate statement
+          expect(chain.first).to eq(leaf_config)
+        end
       end
     end
 
@@ -283,7 +285,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::TrustChainResolver do
       end
     end
 
-    context "error cases" do
+    context "when handling error cases" do
       it "raises ValidationError when leaf has no authority_hints and is not a Trust Anchor" do
         leaf_config = create_entity_statement(
           iss: leaf_entity_id,
@@ -418,7 +420,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::TrustChainResolver do
         )
       end
 
-      it "raises ValidationError when chain does not terminate at Trust Anchor" do
+      it "raises ValidationError when chain with intermediate entity does not terminate at Trust Anchor" do
         # OpenID Federation spec: Trust chain MUST terminate at a configured Trust Anchor
         # Create a chain: leaf -> intermediate -> non-trust-anchor
         # The non-trust-anchor is not in trust_anchors but has no authority_hints
@@ -639,7 +641,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::TrustChainResolver do
         )
       end
 
-      it "raises ValidationError when chain does not terminate at Trust Anchor" do
+      it "raises ValidationError when direct chain does not terminate at Trust Anchor" do
         # Behavior: Trust chain must terminate at a configured Trust Anchor
         # Test by creating a chain that doesn't terminate at a trust anchor
         # Create a non-trust-anchor entity that has no authority_hints
@@ -765,12 +767,14 @@ RSpec.describe OmniauthOpenidFederation::Federation::TrustChainResolver do
         chain = resolver.resolve!
 
         # Behavior: Should return only Entity Configuration when leaf is Trust Anchor
-        expect(chain.length).to eq(1)
-        expect(chain.first).to eq(leaf_config)
+        aggregate_failures do
+          expect(chain.length).to eq(1)
+          expect(chain.first).to eq(leaf_config)
+        end
       end
     end
 
-    context "OpenID Federation spec compliance" do
+    context "when validating OpenID Federation spec compliance" do
       it "validates authority_hints are followed in order" do
         # OpenID Federation spec: authority_hints MUST be followed to build trust chain
         leaf_config = create_entity_statement(
@@ -815,8 +819,10 @@ RSpec.describe OmniauthOpenidFederation::Federation::TrustChainResolver do
         chain = resolver.resolve!
 
         # Behavior: Should follow authority_hints to build chain
-        expect(chain).to be_an(Array)
-        expect(chain.length).to eq(2) # Leaf config + Subordinate statement
+        aggregate_failures do
+          expect(chain).to be_an(Array)
+          expect(chain.length).to eq(2) # Leaf config + Subordinate statement
+        end
       end
 
       it "validates each statement in chain is properly signed" do

@@ -15,8 +15,10 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           .to_return(status: 200, body: "success")
 
         response = described_class.get(uri)
-        expect(response.status).to eq(200)
-        expect(response.body.to_s).to eq("success")
+        aggregate_failures do
+          expect(response.status).to eq(200)
+          expect(response.body.to_s).to eq("success")
+        end
       end
     end
 
@@ -107,13 +109,15 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           config.retry_delay = 0.1
         end
 
-        start_time = Time.now
+        start_time = Time.zone.now
         response = described_class.get(uri)
-        elapsed = Time.now - start_time
+        elapsed = Time.zone.now - start_time
 
-        expect(response.status).to eq(200)
-        # Should have retried with delays (at least some delay)
-        expect(elapsed).to be > 0.1
+        aggregate_failures do
+          expect(response.status).to eq(200)
+          # Should have retried with delays (at least some delay)
+          expect(elapsed).to be > 0.1
+        end
       end
     end
 
@@ -168,12 +172,14 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           {status: 200, body: "success"}
         end
 
-        start_time = Time.now
+        start_time = Time.zone.now
         response = described_class.get(uri, max_retries: 2, retry_delay: 0.2)
-        elapsed = Time.now - start_time
+        elapsed = Time.zone.now - start_time
 
-        expect(response.status).to eq(200)
-        expect(elapsed).to be >= 0.2
+        aggregate_failures do
+          expect(response.status).to eq(200)
+          expect(elapsed).to be >= 0.2
+        end
       end
     end
 
@@ -199,9 +205,12 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           config.http_options = options_proc
         end
 
-        expect(options_proc).to receive(:call).and_call_original
+        allow(options_proc).to receive(:call).and_call_original
         response = described_class.get(uri)
-        expect(response.status).to eq(200)
+        aggregate_failures do
+          expect(response.status).to eq(200)
+          expect(options_proc).to have_received(:call)
+        end
       end
     end
   end

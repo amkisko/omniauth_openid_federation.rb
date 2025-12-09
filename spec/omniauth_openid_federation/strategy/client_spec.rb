@@ -348,8 +348,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Trigger authorize_uri which calls resolve_audience
       uri = strategy.authorize_uri
@@ -390,8 +389,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -431,8 +429,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -451,8 +448,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -470,8 +466,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -490,8 +485,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -530,8 +524,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -568,8 +561,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -590,8 +582,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -599,7 +590,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
   end
 
   describe "private methods - resolve_jwks_for_validation" do
-    it "resolves JWKS from entity statement" do
+    it "resolves JWKS from entity statement with string keys" do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -745,7 +736,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Also stub load_provider_entity_statement to ensure it returns the entity statement
-      allow(strategy).to receive(:load_provider_entity_statement).and_return(jwt.strip)
 
       id_token_payload = {
         iss: provider_issuer,
@@ -767,7 +757,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       # Stub resolve_jwks_for_validation_with_kid to return the JWKS directly
       # This ensures the JWKS is available even if entity statement loading has issues
       jwks_hash = {"keys" => [jwk]}
-      allow(strategy).to receive(:resolve_jwks_for_validation_with_kid).and_return(jwks_hash)
+      allow(strategy).to receive_messages(load_provider_entity_statement: jwt.strip, resolve_jwks_for_validation_with_kid: jwks_hash)
 
       raw_info = strategy.raw_info
       expect(raw_info).to be_a(Hash)
@@ -1041,8 +1031,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
       allow(oidc_client).to receive(:access_token!).and_return(access_token_double)
 
-      allow(strategy).to receive(:request).and_return(double(params: {"code" => "auth-code"}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {"code" => "auth-code"}), session: {})
 
       # This should trigger exchange_authorization_code
       raw_info = strategy.raw_info
@@ -1067,8 +1056,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       allow(oidc_client).to receive(:redirect_uri=)
       allow(oidc_client).to receive(:access_token!).and_raise(StandardError.new("Token exchange failed"))
 
-      allow(strategy).to receive(:request).and_return(double(params: {"code" => "auth-code"}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {"code" => "auth-code"}), session: {})
 
       expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::NetworkError)
     end
@@ -1089,8 +1077,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       mock_session = {}
-      allow(strategy).to receive(:session).and_return(mock_session)
-      allow(strategy).to receive(:request).and_return(double(params: {}))
+      allow(strategy).to receive_messages(
+        session: mock_session,
+        request: double(params: {})
+      )
 
       # Trigger request_phase which calls new_state
       strategy.request_phase
@@ -1112,11 +1102,13 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:session).and_return({})
-      allow(strategy).to receive(:request).and_return(double(params: {}))
+      allow(strategy).to receive_messages(
+        session: {},
+        request: double(params: {})
+      )
 
       # Trigger request_phase which calls new_nonce
-      strategy.request_phase
+      expect { strategy.request_phase }.not_to raise_error
     end
   end
 end

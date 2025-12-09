@@ -2,26 +2,103 @@
 
 ## Using rspec
 
-All tests should be run using `bundle exec rspec`
+All tests should be run using `bundle exec appraisal rails8 rspec`
 
 ```bash
 # Run all tests
-bundle exec rspec
+bundle exec appraisal rails8 rspec
 
 # Run with fail-fast (stop on first failure)
-bundle exec rspec --fail-fast
+bundle exec appraisal rails8 rspec --fail-fast
 
 # For verbose output
-DEBUG=1 bundle exec rspec
+DEBUG=1 bundle exec appraisal rails8 rspec
 
 # Show zero coverage lines
-SHOW_ZERO_COVERAGE=1 bundle exec rspec
+SHOW_ZERO_COVERAGE=1 bundle exec appraisal rails8 rspec
 
 # Run single spec file at exact line number
-DEBUG=1 bundle exec rspec spec/path/to/spec_file.rb:10
+DEBUG=1 bundle exec appraisal rails8 rspec spec/path/to/spec_file.rb:10
 ```
 
 ## RSpec Testing Guidelines
+
+### Spec File Organization Strategies
+
+This gem uses the **"Split Specs"** approach (Method-as-File) for complex classes. There are three main approaches to organizing RSpec specs:
+
+#### 1. The "Standard" Consensus (Mirroring) - Default for Simple Classes
+
+The default expectation for most Ruby gems. The file structure in `spec/` mirrors `lib/` exactly 1-to-1.
+
+```
+lib/
+└── omniauth_openid_federation/
+    └── client.rb
+
+spec/
+└── omniauth_openid_federation/
+    └── client_spec.rb
+```
+
+**Best For:** Small to medium-sized classes (< 300 lines, < 10 methods)
+
+**Why it's consensus:** Zero cognitive load. If you see `lib/auth/parser.rb`, tests are in `spec/auth/parser_spec.rb`.
+
+**The Problem:** As classes grow, `client_spec.rb` becomes a 2,000+ line "god object" that's hard to navigate.
+
+#### 2. The "Split Specs" Approach (Method-as-File) - Used in This Gem
+
+For complex classes where a single file becomes unmanageable. Create a directory named after the class/module, and files named after methods (or behaviors).
+
+```
+lib/
+└── omniauth_openid_federation/
+    └── strategy.rb      # Defines OmniAuth::Strategies::OpenIDFederation
+
+spec/
+└── omniauth_openid_federation/
+    └── strategy/        # Directory matches the class name
+        ├── authorize_uri_spec.rb
+        ├── callback_phase_spec.rb
+        └── client_jwk_signing_key_spec.rb
+```
+
+**Best For:** Complex core classes (> 500 lines, > 10 methods, high cyclomatic complexity)
+
+**Pros:**
+- **Focus:** Only load context for the specific method you're fixing
+- **Git History:** Easier to see changes to specific method logic
+- **Navigation:** Quick to find tests for a specific method
+
+**Cons:**
+- **Discovery:** New contributors might look for `client_spec.rb` and get confused
+- **Shared Contexts:** May duplicate setup code across files (mitigate with `spec/support/shared_contexts`)
+
+**Key Requirement:** Ensure the class is loaded in a main spec file or shared context.
+
+#### 3. The "Subject-Based" or "Behavioral" Approach
+
+Focuses on features/scenarios rather than method names. Popular in gems heavy on business logic.
+
+```
+spec/
+└── omniauth_openid_federation/
+    └── authentication_flow/
+        ├── successful_authorization_spec.rb  # Tests multiple methods interacting
+        ├── token_exchange_error_spec.rb
+        └── csrf_protection_spec.rb
+```
+
+**Best For:** Integration-heavy gems where testing "Method A" in isolation is less useful than testing "Scenario B"
+
+#### Decision Matrix
+
+| If your class is... | Use Approach... |
+| :--- | :--- |
+| Standard (under 300 lines, < 10 methods) | #1 Mirroring (Stick to this until it hurts) |
+| A "God Class" (complex core, > 500 lines) | #2 Split Specs (Method-as-File) |
+| A Process/Workflow (integration-heavy) | #3 Behavioral (Group by outcome) |
 
 ### Core Philosophy: Behavior Verification vs. Implementation Coupling
 
@@ -43,6 +120,67 @@ When a test couples itself to implementation details—for instance, by assertin
 - Never test features that are built into Ruby or external gems
 - Never write tests for performance unless specifically requested
 - Isolate external dependencies (HTTP calls, file system, time) at architectural boundaries only
+
+### Practical Metrics and Heuristics
+
+#### The "Danger Zone" Metrics (When to Split)
+
+These are the practical thresholds where files become hard to read/maintain, triggering a refactor or the split approach.
+
+| Metric | Code (lib/) | Specs (spec/) | Notes |
+| :--- | :--- | :--- | :--- |
+| **Lines per File** | 100 - 300 | 300 - 500 | At 500+ lines, a spec file becomes a "scroll nightmare." At 1,000+, it's a "God Object." |
+| **Lines per Method/Example** | 5 - 10 | 10 - 20 | `it` blocks should be short. If an `it` block is >15 lines, you're testing too many things or setup is complex. |
+| **Methods per Class** | ~10 - 20 | N/A | For specs, this translates to "Examples per Describe block." |
+
+#### Strict OOP Rules
+
+These rules are strict but excellent for the code you're writing (not necessarily the tests).
+
+- **100 lines per class**
+- **5 lines per method**
+- **4 parameters maximum per method**
+
+**How this applies:** If you follow this for your `lib/` code, your classes will naturally be small, which usually means your `spec/` files (Mirroring approach) stay small automatically. Your need for splitting specs often indicates your `lib/` classes are large/complex.
+
+#### The RuboCop Defaults (Automated Consensus)
+
+RuboCop is the standard linter. Its defaults represent the "average" agreement of the community.
+
+- **ClassLength:** Max 100 lines (often bumped to 150-200 in real apps)
+- **ModuleLength:** Max 100 lines
+- **MethodLength:** Max 10 lines
+- **RSpec/ExampleLength:** Max 5 lines (statements inside the `it` block). Note: This excludes setup code like `let` or `before`.
+
+#### Practical RSpec Heuristics
+
+**The "Scroll Test"**
+- If you have to scroll more than 2 screens to find the `let` definitions that apply to the test you're reading, the file is too long or the context is too nested.
+
+**The "Context Depth"**
+- **Ideal:** 2-3 levels of nesting (`describe` -> `context` -> `it`)
+- **Max:** 4 levels
+- **Too Deep:** 5+ levels. This usually implies you're testing logic variations that should be extracted into a separate class or method.
+
+**For Method-as-File Approach (Split Specs):**
+- **Lines per File:** Aim for < 100 lines per method-spec file. If a single method needs 200+ lines of testing, that specific method is likely too complex (Cyclomatic Complexity).
+- **Shared Contexts:** Keep your `shared_context` files under 50 lines. If your setup is larger than that, your object graph is likely too coupled.
+
+#### File Naming Conventions
+
+For the **Split Specs** approach used in this gem:
+
+- **Folder names** = Module/Class names (matches `lib/` structure)
+- **File names** = Method names or behavior areas
+- **Examples:**
+  - `lib/omniauth_openid_federation/strategy.rb` → `spec/omniauth_openid_federation/strategy/authorize_uri_spec.rb`
+  - `lib/omniauth_openid_federation/access_token.rb` → `spec/omniauth_openid_federation/access_token/resource_request_spec.rb`
+  - `lib/omniauth_openid_federation/tasks_helper.rb` → `spec/omniauth_openid_federation/tasks/test_authentication_flow_spec.rb`
+
+**Naming Rules:**
+- Use method names for files when testing a single method: `authorize_uri_spec.rb`
+- Use behavior names for files when testing multiple methods together: `callback_phase_spec.rb`
+- Avoid generic names like `edge_cases_spec.rb`, `coverage_spec.rb`, `additional_spec.rb` - use specific method/behavior names for easy search
 
 ### Test Type Selection
 
@@ -145,11 +283,31 @@ If the Input Derivation Protocol fails (no public input can trigger the line), t
 - Keep `let` blocks close to where they're used
 - Avoid creating unused data with `let!`
 
-### Shared Contexts
+### Shared Contexts and Helpers
 
 - Use `spec/support/` for shared examples, custom matchers, and test helpers
 - Create shared contexts for truly shared behavior across multiple spec files
 - Scope helpers appropriately using `config.include` by spec type
+
+**For Split Specs Approach:**
+- **Shared Contexts:** When using method-as-file approach, create shared contexts to avoid duplicating setup code
+- **Keep shared contexts small:** Under 50 lines per shared context file
+- **Example structure:**
+  ```ruby
+  # spec/support/shared_contexts/strategy_helpers.rb
+  RSpec.shared_context "strategy helpers" do
+    let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
+    let(:public_key) { private_key.public_key }
+    let(:provider_issuer) { "https://provider.example.com" }
+    # ... shared setup
+  end
+
+  # spec/omniauth_openid_federation/strategy/authorize_uri_spec.rb
+  RSpec.describe OmniAuth::Strategies::OpenIDFederation, "#authorize_uri" do
+    include_context "strategy helpers"
+    # ... tests
+  end
+  ```
 
 ### Isolation Best Practices
 
@@ -430,3 +588,22 @@ end
 | **Maintenance Cost** | Low (Survives changes) | High (Requires updates on refactor) |
 | **Architectural Impact** | Encourages Decoupling & DI | Encourages Tightly Coupled Code |
 
+### Code Quality Metrics Summary
+
+#### Target Metrics for This Gem
+
+| Metric | Target | Warning | Critical |
+| :--- | :--- | :--- | :--- |
+| **Spec file length** | < 100 lines | 100-300 lines | > 300 lines |
+| **Example (`it`) length** | < 10 lines | 10-20 lines | > 20 lines |
+| **Context nesting depth** | 2-3 levels | 4 levels | 5+ levels |
+| **Shared context length** | < 50 lines | 50-100 lines | > 100 lines |
+| **Methods per class (lib/)** | < 10 | 10-20 | > 20 |
+| **Lines per class (lib/)** | < 100 | 100-300 | > 300 |
+
+#### When to Refactor
+
+- **Split a spec file** when it exceeds 300 lines or requires scrolling > 2 screens to find relevant `let` definitions
+- **Extract shared context** when setup code is duplicated across 3+ spec files
+- **Split a class** when it exceeds 300 lines or has > 20 methods (applies to `lib/` code)
+- **Simplify a test** when an `it` block exceeds 15 lines or tests multiple behaviors

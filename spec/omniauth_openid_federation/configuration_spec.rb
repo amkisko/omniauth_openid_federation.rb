@@ -29,8 +29,10 @@ RSpec.describe OmniauthOpenidFederation::Configuration do
         config.cache_ttl = 3600
       end
 
-      expect(described_class.config.verify_ssl).to be false
-      expect(described_class.config.cache_ttl).to eq(3600)
+      aggregate_failures do
+        expect(described_class.config.verify_ssl).to be false
+        expect(described_class.config.cache_ttl).to eq(3600)
+      end
     end
 
     it "returns the configuration instance" do
@@ -46,10 +48,12 @@ RSpec.describe OmniauthOpenidFederation::Configuration do
     it "sets default values" do
       config = described_class.new
 
-      expect(config.verify_ssl).to be true
-      expect(config.http_timeout).to eq(10)
-      expect(config.max_retries).to eq(3)
-      expect(config.retry_delay).to eq(1)
+      aggregate_failures do
+        expect(config.verify_ssl).to be true
+        expect(config.http_timeout).to eq(10)
+        expect(config.max_retries).to eq(3)
+        expect(config.retry_delay).to eq(1)
+      end
     end
 
     it "sets cache_ttl to nil by default (manual rotation)" do

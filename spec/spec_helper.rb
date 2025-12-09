@@ -6,6 +6,7 @@ SimpleCov.start do
   track_files "{lib,app}/**/*.rb"
   add_filter "/lib/tasks/"
   add_filter "/lib/omniauth_openid_federation/version.rb"
+  add_filter "/spec/"
   formatter SimpleCov::Formatter::MultiFormatter.new([
     SimpleCov::Formatter::HTMLFormatter,
     SimpleCov::Formatter::CoberturaFormatter,
@@ -32,11 +33,95 @@ Dir[File.expand_path("support/**/*.rb", __dir__)].sort.each { |f| require_relati
 # Include HTTP stubbing helpers in all specs
 RSpec.configure do |config|
   config.include HttpStubbing
+
+  # Use defined order for reproducible test runs
+  # This helps identify test isolation issues by ensuring consistent execution order
+  # Rails-dependent tests (controllers, railtie) should run early to avoid state pollution
+  config.order = :defined
+
+  # Custom ordering: Run Rails-dependent tests first before any tests that stub Rails
+  # This prevents test isolation issues where Rails stubs break subsequent Rails-dependent tests
+  config.register_ordering :global do |items|
+    # Separate Rails-dependent tests from others
+    rails_dependent = []
+    other_tests = []
+    items.each do |item|
+      if /(federation_controller|railtie)/.match?(item.metadata[:file_path])
+        rails_dependent << item
+      else
+        other_tests << item
+      end
+    end
+    # Run Rails-dependent tests first, then others
+    [*rails_dependent, *other_tests]
+  end
+
+  # Ensure Rails-dependent tests run first to avoid state pollution from other tests
+  # This helps with test isolation by running tests that require clean Rails state early
+  config.before(:suite) do
+    # Rails tests will run first due to alphabetical file ordering
+    # (controllers/ and railtie_spec.rb come early alphabetically)
+  end
 end
 
 RSpec.configure do |config|
   # Clear cache adapter before each test to prevent test pollution
-  config.before(:each) do
+  config.before do
+    # Reset FederationEndpoint configuration to prevent test isolation issues
+    # This ensures tests that modify configuration don't affect other tests
+    if defined?(OmniauthOpenidFederation::FederationEndpoint)
+      OmniauthOpenidFederation::FederationEndpoint.instance_variable_set(:@configuration, nil)
+    end
+
+    # Restore Rails if it was stubbed or hidden by previous tests
+    # Tests that use stub_const("Rails", ...) or hide_const("Rails") can break subsequent Rails-dependent tests
+    # RSpec should automatically restore stub_const/hide_const, but we ensure Rails is available
+    if defined?(Rails)
+      # Rails is defined - check if it was stubbed (doesn't respond to :application)
+      # Real Rails module responds to :application, stubbed versions typically don't
+      begin
+        if Rails.is_a?(Module) && !Rails.respond_to?(:application, true)
+          # Rails was likely stubbed and not restored by RSpec
+          # Try to restore it by reloading rails_helper
+          # Note: We can't use remove_const here as it's flagged by RuboCop
+          # Instead, we rely on RSpec's stub_const to restore automatically
+          # If Rails is still stubbed, the next test that requires rails_helper will restore it
+          begin
+            # Reload rails_helper to restore Rails (this will redefine Rails if it was stubbed)
+            require_relative "rails_helper" if File.exist?(File.join(__dir__, "rails_helper.rb"))
+          rescue LoadError, NameError
+            # rails_helper might not be available or might fail to load
+            # This is OK - some tests don't need Rails
+          end
+        end
+      rescue
+        # If we can't check Rails state, continue - some tests don't need it
+      end
+    else
+      # Rails was hidden or not defined - try to restore it by loading rails_helper
+      # This ensures Rails-dependent tests have Rails available
+      begin
+        require_relative "rails_helper" if File.exist?(File.join(__dir__, "rails_helper.rb"))
+      rescue LoadError, NameError
+        # rails_helper might not be available or might fail to load
+        # This is OK - some tests don't need Rails
+      end
+    end
+
+    # Ensure Rails application is properly initialized for Rails-dependent tests
+    # This helps with test isolation by ensuring consistent Rails state
+    if defined?(Rails) && Rails.respond_to?(:application) && Rails.application
+      # Ensure routes are finalized if Rails is available
+      # This prevents issues where routes aren't loaded when tests run in certain orders
+      begin
+        if Rails.application.respond_to?(:routes) && Rails.application.routes.respond_to?(:finalize!)
+          Rails.application.routes.finalize! unless Rails.application.routes.finalized?
+        end
+      rescue
+        # Routes might already be finalized or in an invalid state, ignore
+      end
+    end
+
     OmniauthOpenidFederation::CacheAdapter.reset!
     # Only clear if adapter is available and not a test double
     begin

@@ -82,10 +82,12 @@ RSpec.describe "Security: JWT Fuzzing and Timing Attack Tests" do
 
       # Should either reject or handle gracefully (implementation dependent)
       # Use begin/rescue to handle either error type
-      expect {
-        OmniauthOpenidFederation::Jwks::Decode.jwt(jwt, jwks_uri)
-      }.to raise_error do |error|
-        expect([OmniauthOpenidFederation::ValidationError, StandardError]).to include(error.class)
+      aggregate_failures do
+        expect {
+          OmniauthOpenidFederation::Jwks::Decode.jwt(jwt, jwks_uri)
+        }.to raise_error do |error|
+          expect([OmniauthOpenidFederation::ValidationError, StandardError]).to include(error.class)
+        end
       end
     end
 

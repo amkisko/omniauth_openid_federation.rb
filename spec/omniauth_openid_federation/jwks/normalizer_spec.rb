@@ -7,17 +7,21 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Normalizer do
         jwks = {"keys" => [{kty: "RSA", kid: "1"}]}
         result = described_class.to_jwks_hash(jwks)
 
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to be_an(Array)
-        expect(result["keys"].first).to be_a(Hash)
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to be_an(Array)
+          expect(result["keys"].first).to be_a(Hash)
+        end
       end
 
       it "normalizes hash with symbol keys" do
         jwks = {keys: [{kty: "RSA", kid: "1"}]}
         result = described_class.to_jwks_hash(jwks)
 
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to be_an(Array)
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to be_an(Array)
+        end
       end
     end
 
@@ -26,23 +30,29 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Normalizer do
         jwks = [{kty: "RSA", kid: "1"}, {kty: "RSA", kid: "2"}]
         result = described_class.to_jwks_hash(jwks)
 
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to be_an(Array)
-        expect(result["keys"].length).to eq(2)
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to be_an(Array)
+          expect(result["keys"].length).to eq(2)
+        end
       end
     end
 
     context "with other formats" do
       it "handles empty hash" do
         result = described_class.to_jwks_hash({})
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to eq([])
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to eq([])
+        end
       end
 
       it "handles nil" do
         result = described_class.to_jwks_hash(nil)
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to eq([])
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to eq([])
+        end
       end
 
       it "handles non-Hash JWK objects" do
@@ -54,9 +64,11 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Normalizer do
         jwks = [jwk_object]
         result = described_class.to_jwks_hash(jwks)
 
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to be_an(Array)
-        expect(result["keys"].length).to eq(1)
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to be_an(Array)
+          expect(result["keys"].length).to eq(1)
+        end
       end
     end
   end

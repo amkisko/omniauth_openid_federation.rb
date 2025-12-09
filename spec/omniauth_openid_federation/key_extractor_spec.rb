@@ -111,7 +111,9 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
       it "normalizes string private key to OpenSSL::PKey::RSA" do
         pem_key = private_key.to_pem
         result = described_class.extract_signing_key(private_key: pem_key)
-        expect(result).to be_a(OpenSSL::PKey::RSA)
+        aggregate_failures do
+          expect(result).to be_a(OpenSSL::PKey::RSA)
+        end
       end
     end
 
@@ -128,7 +130,7 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
     end
   end
 
-  describe ".extract_encryption_key" do
+  describe ".extract_encryption_key with JWKS" do
     context "with JWKS containing encryption key" do
       it "extracts encryption key from JWKS with use: 'enc'" do
         jwks = {
@@ -195,7 +197,9 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
       it "normalizes string private key to OpenSSL::PKey::RSA" do
         pem_key = private_key.to_pem
         result = described_class.extract_encryption_key(private_key: pem_key)
-        expect(result).to be_a(OpenSSL::PKey::RSA)
+        aggregate_failures do
+          expect(result).to be_a(OpenSSL::PKey::RSA)
+        end
       end
     end
 
@@ -229,9 +233,11 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
       signing_key = described_class.extract_signing_key(jwks: jwks)
       encryption_key = described_class.extract_encryption_key(jwks: jwks)
 
-      expect(signing_key).to be_a(OpenSSL::PKey::RSA)
-      expect(encryption_key).to be_a(OpenSSL::PKey::RSA)
-      expect(signing_key.to_pem).not_to eq(encryption_key.to_pem)
+      aggregate_failures do
+        expect(signing_key).to be_a(OpenSSL::PKey::RSA)
+        expect(encryption_key).to be_a(OpenSSL::PKey::RSA)
+        expect(signing_key.to_pem).not_to eq(encryption_key.to_pem)
+      end
     end
 
     it "uses same key for both when only one key present (backward compatibility)" do
@@ -241,10 +247,11 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
 
       signing_key = described_class.extract_signing_key(jwks: jwks)
       encryption_key = described_class.extract_encryption_key(jwks: jwks)
-
-      expect(signing_key).to be_a(OpenSSL::PKey::RSA)
-      expect(encryption_key).to be_a(OpenSSL::PKey::RSA)
-      expect(signing_key.to_pem).to eq(encryption_key.to_pem)
+      aggregate_failures do
+        expect(signing_key).to be_a(OpenSSL::PKey::RSA)
+        expect(encryption_key).to be_a(OpenSSL::PKey::RSA)
+        expect(signing_key.to_pem).to eq(encryption_key.to_pem)
+      end
     end
   end
 
@@ -270,7 +277,9 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
       }
 
       result = described_class.extract_key(jwks: jwks, use: "enc")
-      expect(result).to be_a(OpenSSL::PKey::RSA)
+      aggregate_failures do
+        expect(result).to be_a(OpenSSL::PKey::RSA)
+      end
     end
 
     it "tries signing first, then encryption when use is not specified" do
@@ -302,16 +311,20 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
       jwk_data = rsa_key_to_jwk_hash(public_key)
       result = described_class.jwk_to_openssl_key(jwk_data)
 
-      expect(result).to be_a(OpenSSL::PKey::RSA)
-      expect(result.public?).to be true
+      aggregate_failures do
+        expect(result).to be_a(OpenSSL::PKey::RSA)
+        expect(result.public?).to be true
+      end
     end
 
     it "converts private JWK to OpenSSL key" do
       jwk_data = rsa_key_to_jwk_hash(private_key)
       result = described_class.jwk_to_openssl_key(jwk_data)
 
-      expect(result).to be_a(OpenSSL::PKey::RSA)
-      expect(result.private?).to be true
+      aggregate_failures do
+        expect(result).to be_a(OpenSSL::PKey::RSA)
+        expect(result.private?).to be true
+      end
     end
 
     it "handles symbol keys in JWK data" do
@@ -335,5 +348,26 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
         }.to raise_error(ArgumentError, /JWT::JWK is required for OpenSSL 3.0 compatibility/)
       end
     end
+  end
+
+  describe ".extract_encryption_key edge cases" do
+    # Test line 121: Returns empty array when no keys available
+    it "returns empty array when no keys available and no private_key" do
+      result = described_class.extract_encryption_key
+      expect(result).to be_nil
+    end
+
+    it "returns empty array when JWKS has no keys" do
+      result = described_class.extract_encryption_key(jwks: {"keys" => []})
+      expect(result).to be_nil
+    end
+  end
+
+  # Test line 143: ArgumentError for invalid private key type
+  # Test via public API (extract_signing_key calls normalize_private_key internally)
+  it "raises ArgumentError for invalid private key type" do
+    expect {
+      described_class.extract_signing_key(private_key: Object.new)
+    }.to raise_error(ArgumentError, /Invalid private key type: Object/)
   end
 end

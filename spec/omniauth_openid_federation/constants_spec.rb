@@ -3,8 +3,10 @@ require "spec_helper"
 RSpec.describe OmniauthOpenidFederation::Constants do
   describe "KEY_ROTATION_HTTP_CODES" do
     it "contains expected HTTP status codes" do
-      expect(described_class::KEY_ROTATION_HTTP_CODES).to include(401, 403, 404)
-      expect(described_class::KEY_ROTATION_HTTP_CODES.length).to eq(3)
+      aggregate_failures do
+        expect(described_class::KEY_ROTATION_HTTP_CODES).to include(401, 403, 404)
+        expect(described_class::KEY_ROTATION_HTTP_CODES.length).to eq(3)
+      end
     end
 
     it "is frozen" do

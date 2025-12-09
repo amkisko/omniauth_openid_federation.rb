@@ -12,10 +12,11 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
       # Set an adapter first
       custom_adapter = double("CustomAdapter")
       described_class.adapter = custom_adapter
-      expect(described_class.adapter).to eq(custom_adapter)
 
-      # Reset
+      # Reset - this clears @adapter, so next access will re-detect
       described_class.reset!
+      # After reset, adapter getter will re-detect (may return Rails.cache if available)
+      # So we just verify the instance variable is nil, not the adapter getter
       expect(described_class.instance_variable_get(:@adapter)).to be_nil
     end
   end
@@ -46,10 +47,10 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
         expect(result).to eq("computed-value")
       end
 
-      it "executes the block even without a key" do
+      it "executes the block even with nil key" do
         # When cache is not available, fetch should just execute the block
-        # But we need a valid key for the adapter if it exists
-        result = described_class.fetch("test-key") { "computed-value" }
+        # even if key is nil
+        result = described_class.fetch(nil) { "computed-value" }
         expect(result).to eq("computed-value")
       end
     end
@@ -76,27 +77,29 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
 
       it "caches and returns the computed value" do
         result1 = described_class.fetch("test-key") { "computed-value" }
-        expect(result1).to eq("computed-value")
 
         # Second call should use cache
         result2 = described_class.fetch("test-key") { "different-value" }
-        expect(result2).to eq("computed-value")
+        aggregate_failures do
+          expect(result1).to eq("computed-value")
+          expect(result2).to eq("computed-value")
+        end
       end
 
       it "passes expires_in option to adapter" do
-        expect(adapter).to receive(:fetch).with("test-key", expires_in: 3600)
+        allow(adapter).to receive(:fetch).with("test-key", expires_in: 3600)
         described_class.fetch("test-key", expires_in: 3600) { "value" }
+        expect(adapter).to have_received(:fetch).with("test-key", expires_in: 3600)
       end
 
       it "passes nil expires_in when not specified" do
-        expect(adapter).to receive(:fetch).with("test-key", expires_in: nil)
+        allow(adapter).to receive(:fetch).with("test-key", expires_in: nil)
         described_class.fetch("test-key") { "value" }
+        expect(adapter).to have_received(:fetch).with("test-key", expires_in: nil)
       end
 
       it "returns cached value when available" do
-        allow(adapter).to receive(:fetch) do |key, options = {}, &block|
-          "cached-value"
-        end
+        allow(adapter).to receive(:fetch).and_return("cached-value")
         result = described_class.fetch("test-key") { "computed-value" }
         expect(result).to eq("cached-value")
       end
@@ -122,13 +125,19 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
       end
 
       it "delegates to adapter.read" do
-        expect(adapter).to receive(:read).with("test-key").and_return("cached-value")
-        expect(described_class.read("test-key")).to eq("cached-value")
+        allow(adapter).to receive(:read).with("test-key").and_return("cached-value")
+        aggregate_failures do
+          expect(described_class.read("test-key")).to eq("cached-value")
+          expect(adapter).to have_received(:read).with("test-key")
+        end
       end
 
       it "returns nil when adapter returns nil" do
-        expect(adapter).to receive(:read).with("test-key").and_return(nil)
-        expect(described_class.read("test-key")).to be_nil
+        allow(adapter).to receive(:read).with("test-key").and_return(nil)
+        aggregate_failures do
+          expect(described_class.read("test-key")).to be_nil
+          expect(adapter).to have_received(:read).with("test-key")
+        end
       end
     end
   end
@@ -152,13 +161,15 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
       end
 
       it "delegates to adapter.write" do
-        expect(adapter).to receive(:write).with("test-key", "value", expires_in: nil)
+        allow(adapter).to receive(:write).with("test-key", "value", expires_in: nil)
         described_class.write("test-key", "value")
+        expect(adapter).to have_received(:write).with("test-key", "value", expires_in: nil)
       end
 
       it "passes expires_in option" do
-        expect(adapter).to receive(:write).with("test-key", "value", expires_in: 3600)
+        allow(adapter).to receive(:write).with("test-key", "value", expires_in: 3600)
         described_class.write("test-key", "value", expires_in: 3600)
+        expect(adapter).to have_received(:write).with("test-key", "value", expires_in: 3600)
       end
     end
   end
@@ -182,8 +193,9 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
       end
 
       it "delegates to adapter.delete" do
-        expect(adapter).to receive(:delete).with("test-key")
+        allow(adapter).to receive(:delete).with("test-key")
         described_class.delete("test-key")
+        expect(adapter).to have_received(:delete).with("test-key")
       end
     end
   end
@@ -208,8 +220,9 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
         end
 
         it "calls adapter.clear" do
-          expect(adapter).to receive(:clear)
+          allow(adapter).to receive(:clear)
           described_class.clear
+          expect(adapter).to have_received(:clear)
         end
       end
 
@@ -222,8 +235,9 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
         end
 
         it "does not call adapter.clear" do
-          expect(adapter).not_to receive(:clear)
+          allow(adapter).to receive(:clear)
           described_class.clear
+          expect(adapter).not_to have_received(:clear)
         end
       end
     end
@@ -283,7 +297,8 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
       end
 
       after do
-        # Don't manually remove Rails - let RSpec handle stub cleanup
+        # RSpec's stub_const should automatically restore Rails
+        # We just need to ensure CacheAdapter is reset
         described_class.reset!
       end
 
@@ -296,7 +311,7 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
     context "when ActiveSupport::Cache::MemoryStore is available" do
       before do
         # Ensure Rails is not defined
-        Object.send(:remove_const, :Rails) if defined?(Rails)
+        hide_const("Rails") if defined?(Rails)
 
         # Mock ActiveSupport::Cache::MemoryStore
         memory_store_class = Class.new do
@@ -325,7 +340,7 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
     context "when ActiveSupport::Cache::MemoryStore load fails" do
       before do
         # Ensure Rails is not defined
-        Object.send(:remove_const, :Rails) if defined?(Rails)
+        hide_const("Rails") if defined?(Rails)
 
         # Mock ActiveSupport::Cache::Store but make MemoryStore require fail
         stub_const("ActiveSupport::Cache::Store", Class.new)
@@ -347,7 +362,7 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
     context "when no cache is available" do
       before do
         # Ensure Rails is not defined
-        Object.send(:remove_const, :Rails) if defined?(Rails)
+        hide_const("Rails") if defined?(Rails)
 
         # Ensure ActiveSupport::Cache is not available by stubbing detect_adapter
         allow(described_class).to receive(:detect_adapter).and_return(nil)
@@ -390,8 +405,10 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
     describe "#fetch" do
       it "delegates to cache store with options" do
         result = adapter.fetch("test-key", expires_in: 3600) { "value" }
-        expect(result).to eq("value")
-        expect(cache_store["test-key"]).to eq("value")
+        aggregate_failures do
+          expect(result).to eq("value")
+          expect(cache_store["test-key"]).to eq("value")
+        end
       end
 
       it "works without expires_in" do

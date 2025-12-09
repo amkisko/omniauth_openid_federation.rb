@@ -35,8 +35,10 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
     it "creates instance with content" do
       instance = described_class.new(entity_statement_content)
 
-      expect(instance.entity_statement).to eq(entity_statement_content)
-      expect(instance.fingerprint).to be_present
+      aggregate_failures do
+        expect(instance.entity_statement).to eq(entity_statement_content)
+        expect(instance.fingerprint).to be_present
+      end
     end
 
     it "accepts custom fingerprint" do
@@ -76,12 +78,14 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
       instance = described_class.new(entity_statement_content)
       metadata = instance.parse
 
-      expect(metadata).to be_a(Hash)
-      # Behavior: Should extract issuer from entity statement
-      expect(metadata[:issuer]).to eq("https://provider.example.com")
-      # Behavior: Should contain metadata structure
-      expect(metadata[:metadata]).to be_present
-      expect(metadata[:metadata][:openid_provider]).to be_present
+      aggregate_failures do
+        expect(metadata).to be_a(Hash)
+        # Behavior: Should extract issuer from entity statement
+        expect(metadata[:issuer]).to eq("https://provider.example.com")
+        # Behavior: Should contain metadata structure
+        expect(metadata[:metadata]).to be_present
+        expect(metadata[:metadata][:openid_provider]).to be_present
+      end
     end
 
     it "caches parsed metadata" do
@@ -97,15 +101,17 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
       instance = described_class.new(entity_statement_content)
       metadata = instance.parse
 
-      # Behavior: Should extract required metadata fields per OpenID Federation spec
-      expect(metadata).to have_key(:issuer)
-      expect(metadata).to have_key(:metadata)
-      expect(metadata[:metadata]).to have_key(:openid_provider)
+      aggregate_failures do
+        # Behavior: Should extract required metadata fields per OpenID Federation spec
+        expect(metadata).to have_key(:issuer)
+        expect(metadata).to have_key(:metadata)
+        expect(metadata[:metadata]).to have_key(:openid_provider)
 
-      provider_metadata = metadata[:metadata][:openid_provider]
-      # Behavior: Should contain required provider endpoints
-      expect(provider_metadata).to have_key(:authorization_endpoint)
-      expect(provider_metadata).to have_key(:token_endpoint)
+        provider_metadata = metadata[:metadata][:openid_provider]
+        # Behavior: Should contain required provider endpoints
+        expect(provider_metadata).to have_key(:authorization_endpoint)
+        expect(provider_metadata).to have_key(:token_endpoint)
+      end
     end
   end
 
@@ -132,8 +138,10 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
 
       instance = described_class.fetch!(url)
 
-      expect(instance).to be_a(described_class)
-      expect(instance.entity_statement).to eq(entity_statement_content)
+      aggregate_failures do
+        expect(instance).to be_a(described_class)
+        expect(instance.entity_statement).to eq(entity_statement_content)
+      end
     end
 
     it "validates fingerprint when provided" do
@@ -171,6 +179,155 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
       expect { described_class.fetch!(url, fingerprint: "wrong-fingerprint") }.to raise_error(
         OmniauthOpenidFederation::ValidationError
       )
+    end
+
+    # Test line 80: fetch_from_issuer! calls build_entity_statement_url
+    it "fetches entity statement from issuer using fetch_from_issuer!" do
+      issuer_uri = "https://provider.example.com"
+      entity_statement_url = "#{issuer_uri}/.well-known/openid-federation"
+      stub_request(:get, entity_statement_url)
+        .to_return(status: 200, body: entity_statement_content)
+
+      instance = described_class.fetch_from_issuer!(issuer_uri)
+
+      aggregate_failures do
+        expect(instance).to be_a(described_class)
+        expect(instance.entity_statement).to eq(entity_statement_content)
+      end
+    end
+
+    # Test lines 125, 128, 134: ValidationError handling in fetch!
+    it "raises ValidationError with instrumentation on validation failure" do
+      # Create invalid entity statement (missing required fields)
+      invalid_content = "invalid.jwt.content"
+      stub_request(:get, url)
+        .to_return(status: 200, body: invalid_content)
+
+      allow(OmniauthOpenidFederation::Instrumentation).to receive(:notify_entity_statement_validation_failed)
+
+      aggregate_failures do
+        expect { described_class.fetch!(url) }.to raise_error(
+          OmniauthOpenidFederation::ValidationError
+        )
+        expect(OmniauthOpenidFederation::Instrumentation).to have_received(:notify_entity_statement_validation_failed)
+      end
+    end
+
+    # Test lines 156, 161: validate_against_previous
+    it "validates against previous statement successfully" do
+      stub_request(:get, url)
+        .to_return(status: 200, body: entity_statement_content)
+
+      instance = described_class.fetch!(url)
+
+      # Create a previous statement with same issuer but earlier exp
+      previous_payload = {
+        iss: "https://provider.example.com",
+        sub: "https://provider.example.com",
+        exp: Time.now.to_i + 1800,  # Earlier expiration
+        iat: Time.now.to_i - 3600
+      }
+      previous_jwt = JWT.encode(previous_payload, private_key, "RS256")
+      previous_instance = described_class.new(previous_jwt)
+
+      result = instance.validate_against_previous(previous_instance)
+      expect(result).to be true
+    end
+
+    it "validates against previous statement as String" do
+      stub_request(:get, url)
+        .to_return(status: 200, body: entity_statement_content)
+
+      instance = described_class.fetch!(url)
+
+      # Create a previous statement as string
+      previous_payload = {
+        iss: "https://provider.example.com",
+        sub: "https://provider.example.com",
+        exp: Time.now.to_i + 1800,
+        iat: Time.now.to_i - 3600
+      }
+      previous_jwt = JWT.encode(previous_payload, private_key, "RS256")
+
+      result = instance.validate_against_previous(previous_jwt)
+      expect(result).to be true
+    end
+
+    it "validates against previous statement as Hash" do
+      stub_request(:get, url)
+        .to_return(status: 200, body: entity_statement_content)
+
+      instance = described_class.fetch!(url)
+
+      # Create a previous statement as Hash
+      previous_payload = {
+        "iss" => "https://provider.example.com",
+        "sub" => "https://provider.example.com",
+        "exp" => Time.now.to_i + 1800,
+        "iat" => Time.now.to_i - 3600
+      }
+
+      result = instance.validate_against_previous(previous_payload)
+      expect(result).to be true
+    end
+
+    it "returns false when issuer doesn't match in validate_against_previous" do
+      stub_request(:get, url)
+        .to_return(status: 200, body: entity_statement_content)
+
+      instance = described_class.fetch!(url)
+
+      previous_payload = {
+        "iss" => "https://different-provider.example.com",
+        "sub" => "https://provider.example.com",
+        "exp" => Time.now.to_i + 1800,
+        "iat" => Time.now.to_i - 3600
+      }
+
+      result = instance.validate_against_previous(previous_payload)
+      expect(result).to be false
+    end
+
+    it "returns false when current exp is earlier than previous exp" do
+      stub_request(:get, url)
+        .to_return(status: 200, body: entity_statement_content)
+
+      instance = described_class.fetch!(url)
+
+      previous_payload = {
+        "iss" => "https://provider.example.com",
+        "sub" => "https://provider.example.com",
+        "exp" => Time.now.to_i + 7200,  # Later expiration
+        "iat" => Time.now.to_i - 3600
+      }
+
+      result = instance.validate_against_previous(previous_payload)
+      expect(result).to be false
+    end
+
+    # Test lines 325, 327: Error handling in decode_payload
+    it "handles JSON::ParserError in decode_payload" do
+      # Create entity statement with invalid JSON in payload
+      invalid_payload = Base64.urlsafe_encode64("invalid json").gsub(/=+$/, "")
+      header = Base64.urlsafe_encode64({alg: "RS256", typ: "entity-statement+jwt"}.to_json).gsub(/=+$/, "")
+      invalid_jwt = "#{header}.#{invalid_payload}.signature"
+
+      instance = described_class.new(invalid_jwt)
+
+      expect {
+        instance.decode_payload
+      }.to raise_error(OmniauthOpenidFederation::ValidationError, /Failed to parse entity statement payload/)
+    end
+
+    it "handles ArgumentError in decode_payload" do
+      # Create entity statement with invalid base64
+      invalid_jwt = "invalid.base64.signature"
+
+      instance = described_class.new(invalid_jwt)
+
+      expect {
+        instance.decode_payload
+      }.to raise_error(OmniauthOpenidFederation::ValidationError, /Failed to decode entity statement/)
     end
   end
 end
