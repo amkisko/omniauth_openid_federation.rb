@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 1.3.2 (2025-12-09)
+
+- Added `TimeHelpers` module for compatibility with non-Rails environments
+- Replaced `Time.zone` usage with `TimeHelpers` to work with or without ActiveSupport
+
 ## 1.3.1 (2025-12-09)
 
 - Enhanced SSL configuration for HTTPS requests in tasks_helper.rb
