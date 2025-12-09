@@ -67,6 +67,7 @@ lint:
         - standard-rspec@0.3.1
         - rubocop-rails@2.34.2
         - rubocop-rspec@3.8.0
+        - rubocop-thread_safety@0.7.3
     - stylelint@16.26.1
     - yamllint@1.37.1
     - gitleaks@8.29.0
