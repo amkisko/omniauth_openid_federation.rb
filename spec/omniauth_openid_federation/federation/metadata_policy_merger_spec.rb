@@ -300,8 +300,10 @@ RSpec.describe OmniauthOpenidFederation::Federation::MetadataPolicyMerger do
       merger = described_class.new(trust_chain: [statement])
       effective = merger.apply_policies(leaf_metadata)
 
-      expect(effective[:openid_relying_party][:redirect_uris]).to include("https://rp.example.com/callback")
-      expect(effective[:openid_relying_party][:redirect_uris]).to include("https://additional.example.com/callback")
+      aggregate_failures do
+        expect(effective[:openid_relying_party][:redirect_uris]).to include("https://rp.example.com/callback")
+        expect(effective[:openid_relying_party][:redirect_uris]).to include("https://additional.example.com/callback")
+      end
     end
 
     it "applies default operator when value is absent" do
@@ -646,12 +648,14 @@ RSpec.describe OmniauthOpenidFederation::Federation::MetadataPolicyMerger do
       merged = merger.merge_policies
 
       # The unknown operator should be preserved in the merged policy
-      expect(merged).to have_key("openid_relying_party")
-      expect(merged["openid_relying_party"]).to have_key("redirect_uris")
       redirect_uris_policy = merged["openid_relying_party"]["redirect_uris"]
       # Keys are normalized to strings
-      expect(redirect_uris_policy).to have_key("unknown_operator")
-      expect(redirect_uris_policy["unknown_operator"]).to eq("value")
+      aggregate_failures do
+        expect(merged).to have_key("openid_relying_party")
+        expect(merged["openid_relying_party"]).to have_key("redirect_uris")
+        expect(redirect_uris_policy).to have_key("unknown_operator")
+        expect(redirect_uris_policy["unknown_operator"]).to eq("value")
+      end
     end
 
     it "logs warning for unknown operators during merge" do

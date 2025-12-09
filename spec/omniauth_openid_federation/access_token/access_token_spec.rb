@@ -139,8 +139,10 @@ RSpec.describe OpenIDConnect::AccessToken do
 
         result = access_token.resource_request { response }
 
-        expect(result).to be_a(Hash)
-        expect(result["sub"]).to eq("user123")
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["sub"]).to eq("user123")
+        end
       ensure
         File.delete(entity_statement_path) if File.exist?(entity_statement_path)
       end
@@ -205,8 +207,10 @@ RSpec.describe OpenIDConnect::AccessToken do
 
         result = access_token.resource_request { response }
 
-        expect(result).to be_a(Hash)
-        expect(result["user_id"]).to eq("123")
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["user_id"]).to eq("123")
+        end
       end
 
       it "handles path traversal in entity statement path" do

@@ -140,8 +140,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -315,7 +314,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
     end
 
-    it "covers decode_id_token JWT decode error handling" do
+    it "covers decode_id_token JWT decode error handling with wrong signature" do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -352,7 +351,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::SignatureError)
     end
 
-    it "covers decode_id_token with available kids logging" do
+    it "covers decode_id_token error handling with available kids logging" do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {

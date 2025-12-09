@@ -1,7 +1,7 @@
 require "spec_helper"
 
 RSpec.describe OmniauthOpenidFederation::EndpointResolver do
-  describe ".resolve" do
+  describe ".resolve with config" do
     it "returns endpoints from config when provided" do
       config = {
         authorization_endpoint: "/oauth2/authorize",
@@ -13,18 +13,22 @@ RSpec.describe OmniauthOpenidFederation::EndpointResolver do
 
       result = described_class.resolve(config: config)
 
-      expect(result[:authorization_endpoint]).to eq("/oauth2/authorize")
-      expect(result[:token_endpoint]).to eq("/oauth2/token")
-      expect(result[:userinfo_endpoint]).to eq("/oauth2/userinfo")
-      expect(result[:jwks_uri]).to eq("/.well-known/jwks.json")
-      expect(result[:audience]).to eq("https://provider.example.com")
+      aggregate_failures do
+        expect(result[:authorization_endpoint]).to eq("/oauth2/authorize")
+        expect(result[:token_endpoint]).to eq("/oauth2/token")
+        expect(result[:userinfo_endpoint]).to eq("/oauth2/userinfo")
+        expect(result[:jwks_uri]).to eq("/.well-known/jwks.json")
+        expect(result[:audience]).to eq("https://provider.example.com")
+      end
     end
 
     it "returns nil endpoints when config is empty" do
       result = described_class.resolve(config: {})
 
-      expect(result[:authorization_endpoint]).to be_nil
-      expect(result[:token_endpoint]).to be_nil
+      aggregate_failures do
+        expect(result[:authorization_endpoint]).to be_nil
+        expect(result[:token_endpoint]).to be_nil
+      end
     end
 
     it "handles entity statement path" do
@@ -92,7 +96,7 @@ RSpec.describe OmniauthOpenidFederation::EndpointResolver do
     end
   end
 
-  describe ".resolve" do
+  describe ".resolve with entity statement" do
     context "with entity statement" do
       let(:entity_statement_path) { "spec/fixtures/entity_statement.jwt" }
       let(:entity_statement_content) do
@@ -209,9 +213,12 @@ RSpec.describe OmniauthOpenidFederation::EndpointResolver do
         temp_file.write("invalid jwt")
         temp_file.rewind
 
-        expect(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Failed to parse entity statement/)
+        allow(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Failed to parse entity statement/)
         result = described_class.send(:load_entity_statement_metadata, temp_file.path)
-        expect(result).to be_nil
+        aggregate_failures do
+          expect(result).to be_nil
+          expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to parse entity statement/)
+        end
 
         temp_file.close
         temp_file.unlink

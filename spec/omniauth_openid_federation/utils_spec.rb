@@ -6,12 +6,14 @@ RSpec.describe OmniauthOpenidFederation::Utils do
       hash = {"key" => "value", :symbol => "symbol_value"}
       result = described_class.to_indifferent_hash(hash)
 
-      if defined?(ActiveSupport::HashWithIndifferentAccess)
-        expect(result).to be_a(ActiveSupport::HashWithIndifferentAccess)
-        expect(result["key"]).to eq("value")
-        expect(result[:key]).to eq("value")
-      else
-        expect(result).to be_a(Hash)
+      aggregate_failures do
+        if defined?(ActiveSupport::HashWithIndifferentAccess)
+          expect(result).to be_a(ActiveSupport::HashWithIndifferentAccess)
+          expect(result["key"]).to eq("value")
+          expect(result[:key]).to eq("value")
+        else
+          expect(result).to be_a(Hash)
+        end
       end
     end
 
@@ -31,8 +33,10 @@ RSpec.describe OmniauthOpenidFederation::Utils do
         hash = {"key" => "value"}
         result = described_class.to_indifferent_hash(hash)
 
-        expect(result).to be_a(Hash)
-        expect(result).to eq(hash)
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result).to eq(hash)
+        end
       end
     end
   end
@@ -100,8 +104,10 @@ RSpec.describe OmniauthOpenidFederation::Utils do
       path = "config/file.txt"
       result = described_class.validate_file_path!(path)
 
-      expect(result).to start_with("/")
-      expect(File.absolute_path?(result)).to be true
+      aggregate_failures do
+        expect(result).to start_with("/")
+        expect(File.absolute_path?(result)).to be true
+      end
     end
 
     context "with allowed_dirs" do
@@ -130,19 +136,25 @@ RSpec.describe OmniauthOpenidFederation::Utils do
     end
 
     it "returns false for invalid JWT format" do
-      expect(described_class.valid_jwt_format?("header.payload")).to be false
-      expect(described_class.valid_jwt_format?("header")).to be false
-      expect(described_class.valid_jwt_format?("header.payload.signature.extra")).to be false
+      aggregate_failures do
+        expect(described_class.valid_jwt_format?("header.payload")).to be false
+        expect(described_class.valid_jwt_format?("header")).to be false
+        expect(described_class.valid_jwt_format?("header.payload.signature.extra")).to be false
+      end
     end
 
     it "returns false for empty parts" do
-      expect(described_class.valid_jwt_format?("..")).to be false
-      expect(described_class.valid_jwt_format?("header..signature")).to be false
+      aggregate_failures do
+        expect(described_class.valid_jwt_format?("..")).to be false
+        expect(described_class.valid_jwt_format?("header..signature")).to be false
+      end
     end
 
     it "returns false for non-string" do
-      expect(described_class.valid_jwt_format?(nil)).to be false
-      expect(described_class.valid_jwt_format?(123)).to be false
+      aggregate_failures do
+        expect(described_class.valid_jwt_format?(nil)).to be false
+        expect(described_class.valid_jwt_format?(123)).to be false
+      end
     end
   end
 
@@ -164,12 +176,14 @@ RSpec.describe OmniauthOpenidFederation::Utils do
     it "extracts JWKS from valid entity statement" do
       result = described_class.extract_jwks_from_entity_statement(valid_jwt)
 
-      expect(result).to be_a(Hash)
-      expect(result[:keys]).to be_an(Array)
-      expect(result[:keys].length).to eq(1)
-      # JSON.parse returns string keys, but we access with symbol
-      key = result[:keys][0]
-      expect(key["kid"] || key[:kid]).to eq("key1")
+      aggregate_failures do
+        expect(result).to be_a(Hash)
+        expect(result[:keys]).to be_an(Array)
+        expect(result[:keys].length).to eq(1)
+        # JSON.parse returns string keys, but we access with symbol
+        key = result[:keys][0]
+        expect(key["kid"] || key[:kid]).to eq("key1")
+      end
     end
 
     it "returns nil for invalid JWT format" do
@@ -219,8 +233,10 @@ RSpec.describe OmniauthOpenidFederation::Utils do
       jwt = "#{header}.#{payload}.signature"
 
       result = described_class.extract_jwks_from_entity_statement(jwt)
-      expect(result).not_to be_nil
-      expect(result[:keys].length).to eq(1)
+      aggregate_failures do
+        expect(result).not_to be_nil
+        expect(result[:keys].length).to eq(1)
+      end
     end
 
     it "handles JSON parse errors gracefully" do
@@ -228,8 +244,11 @@ RSpec.describe OmniauthOpenidFederation::Utils do
       invalid_payload = "not-valid-json"
       jwt = "#{header}.#{invalid_payload}.signature"
 
-      expect(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Failed to extract JWKS/)
-      expect(described_class.extract_jwks_from_entity_statement(jwt)).to be_nil
+      allow(OmniauthOpenidFederation::Logger).to receive(:warn)
+      aggregate_failures do
+        expect(described_class.extract_jwks_from_entity_statement(jwt)).to be_nil
+        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to extract JWKS/)
+      end
     end
 
     it "handles Base64 decode errors gracefully" do
@@ -237,8 +256,11 @@ RSpec.describe OmniauthOpenidFederation::Utils do
       invalid_payload = "invalid-base64!!!"
       jwt = "#{header}.#{invalid_payload}.signature"
 
-      expect(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Failed to extract JWKS/)
-      expect(described_class.extract_jwks_from_entity_statement(jwt)).to be_nil
+      allow(OmniauthOpenidFederation::Logger).to receive(:warn)
+      aggregate_failures do
+        expect(described_class.extract_jwks_from_entity_statement(jwt)).to be_nil
+        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to extract JWKS/)
+      end
     end
   end
 
@@ -307,12 +329,14 @@ RSpec.describe OmniauthOpenidFederation::Utils do
     it "converts RSA key to JWK with default use (sig)" do
       jwk = described_class.rsa_key_to_jwk(private_key)
 
-      expect(jwk).to be_a(Hash)
-      expect(jwk[:kty]).to eq("RSA")
-      expect(jwk[:kid]).to be_a(String)
-      expect(jwk[:n]).to be_a(String)
-      expect(jwk[:e]).to be_a(String)
-      expect(jwk[:use]).to eq("sig")
+      aggregate_failures do
+        expect(jwk).to be_a(Hash)
+        expect(jwk[:kty]).to eq("RSA")
+        expect(jwk[:kid]).to be_a(String)
+        expect(jwk[:n]).to be_a(String)
+        expect(jwk[:e]).to be_a(String)
+        expect(jwk[:use]).to eq("sig")
+      end
     end
 
     it "converts RSA key to JWK with use: enc" do
@@ -346,8 +370,10 @@ RSpec.describe OmniauthOpenidFederation::Utils do
       public_key = private_key.public_key
       jwk = described_class.rsa_key_to_jwk(public_key)
 
-      expect(jwk).to be_a(Hash)
-      expect(jwk[:kty]).to eq("RSA")
+      aggregate_failures do
+        expect(jwk).to be_a(Hash)
+        expect(jwk[:kty]).to eq("RSA")
+      end
     end
   end
 end

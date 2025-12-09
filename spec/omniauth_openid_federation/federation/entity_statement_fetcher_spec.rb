@@ -174,21 +174,24 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementFetcher do
 
     describe "#entity_statement" do
       it "loads entity statement from file" do
-        fetcher = described_class::FileFetcher.new(file_path)
+        # Pass empty array to skip directory validation (only path traversal protection applies)
+        fetcher = described_class::FileFetcher.new(file_path, allowed_dirs: [])
         statement = fetcher.entity_statement
         expect(statement).to be_a(OmniauthOpenidFederation::Federation::EntityStatement)
       end
 
       it "strips whitespace from file content" do
         File.write(file_path, "  #{entity_statement_content}  ")
-        fetcher = described_class::FileFetcher.new(file_path)
+        # Pass empty array to skip directory validation (only path traversal protection applies)
+        fetcher = described_class::FileFetcher.new(file_path, allowed_dirs: [])
         statement = fetcher.entity_statement
         expect(statement).to be_a(OmniauthOpenidFederation::Federation::EntityStatement)
       end
 
       it "raises FetchError when file not found" do
         nonexistent_path = "/nonexistent/path.jwt"
-        fetcher = described_class::FileFetcher.new(nonexistent_path)
+        # Pass empty array to skip directory validation (only path traversal protection applies)
+        fetcher = described_class::FileFetcher.new(nonexistent_path, allowed_dirs: [])
         expect {
           fetcher.entity_statement
         }.to raise_error(OmniauthOpenidFederation::Federation::EntityStatement::FetchError, /Entity statement file not found/)

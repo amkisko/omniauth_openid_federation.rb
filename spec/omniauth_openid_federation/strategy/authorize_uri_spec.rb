@@ -44,8 +44,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -82,8 +81,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -121,8 +119,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       client = strategy.client
       allow(client).to receive(:identifier=)
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -165,13 +162,14 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       allow(client).to receive(:respond_to?).with(:identifier=).and_return(false)
       allow(client).to receive(:respond_to?).with(:client_id=).and_return(true)
       allow(client).to receive(:client_id=)
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
-      expect(uri).to be_present
-      # Verify client_id= was called as fallback
-      expect(client).to have_received(:client_id=)
+      aggregate_failures do
+        expect(uri).to be_present
+        # Verify client_id= was called as fallback
+        expect(client).to have_received(:client_id=)
+      end
     end
 
     # Note: ftn_spname was removed as it was provider-specific
@@ -192,8 +190,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {"custom_param" => "value"}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {"custom_param" => "value"}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -214,8 +211,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {"custom_param" => ""}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {"custom_param" => ""}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -235,14 +231,13 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(
+      allow(strategy).to receive_messages(request: double(
         params: {
           "login_hint" => "user@example.com",
           "ui_locales" => "en",
           "claims_locales" => "en"
         }
-      ))
-      allow(strategy).to receive(:session).and_return({})
+      ), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -278,8 +273,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -299,8 +293,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Mock Jws to return nil
       jws_builder = double
@@ -327,8 +320,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       client = strategy.client
       allow(client).to receive(:authorization_endpoint).and_return(nil)
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       expect {
         strategy.authorize_uri
@@ -362,8 +354,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -384,8 +375,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -406,8 +396,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -428,8 +417,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -452,8 +440,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -475,8 +462,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -497,8 +483,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -518,8 +503,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
-      allow(strategy).to receive(:callback_url).and_return(redirect_uri)
+      allow(strategy).to receive_messages(
+        session: {},
+        callback_url: redirect_uri
+      )
 
       uri = strategy.authorize_uri
       expect(uri).to be_present

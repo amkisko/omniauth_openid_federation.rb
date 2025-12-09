@@ -20,12 +20,13 @@ RSpec.describe OmniauthOpenidFederation::RateLimiter do
         max_requests = 3
 
         # Make requests up to limit
-        max_requests.times do
-          expect(described_class.allow?(key, max_requests: max_requests, window: 60)).to be true
+        aggregate_failures do
+          max_requests.times do
+            expect(described_class.allow?(key, max_requests: max_requests, window: 60)).to be true
+          end
+          # Next request should be throttled
+          expect(described_class.allow?(key, max_requests: max_requests, window: 60)).to be false
         end
-
-        # Next request should be throttled
-        expect(described_class.allow?(key, max_requests: max_requests, window: 60)).to be false
       end
 
       it "allows requests after window expires" do
@@ -52,10 +53,12 @@ RSpec.describe OmniauthOpenidFederation::RateLimiter do
 
         # Exceed limit for key1
         described_class.allow?(key1, max_requests: max_requests, window: 60)
-        expect(described_class.allow?(key1, max_requests: max_requests, window: 60)).to be false
+        aggregate_failures do
+          expect(described_class.allow?(key1, max_requests: max_requests, window: 60)).to be false
 
-        # key2 should still be allowed
-        expect(described_class.allow?(key2, max_requests: max_requests, window: 60)).to be true
+          # key2 should still be allowed
+          expect(described_class.allow?(key2, max_requests: max_requests, window: 60)).to be true
+        end
       end
 
       it "filters out timestamps outside the window" do
@@ -82,8 +85,9 @@ RSpec.describe OmniauthOpenidFederation::RateLimiter do
 
         described_class.allow?(key, max_requests: max_requests, window: 60)
 
-        expect(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Rate limit exceeded/)
+        allow(OmniauthOpenidFederation::Logger).to receive(:warn)
         described_class.allow?(key, max_requests: max_requests, window: 60)
+        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Rate limit exceeded/)
       end
     end
 
@@ -106,13 +110,15 @@ RSpec.describe OmniauthOpenidFederation::RateLimiter do
 
       # Exceed limit
       described_class.allow?(key, max_requests: max_requests, window: 60)
-      expect(described_class.allow?(key, max_requests: max_requests, window: 60)).to be false
+      aggregate_failures do
+        expect(described_class.allow?(key, max_requests: max_requests, window: 60)).to be false
 
-      # Reset
-      described_class.reset!(key)
+        # Reset
+        described_class.reset!(key)
 
-      # Should allow again
-      expect(described_class.allow?(key, max_requests: max_requests, window: 60)).to be true
+        # Should allow again
+        expect(described_class.allow?(key, max_requests: max_requests, window: 60)).to be true
+      end
     end
 
     context "when Rails.cache is not available" do

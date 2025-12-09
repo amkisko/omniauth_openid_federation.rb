@@ -83,8 +83,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     before do
       strategy.options.issuer = issuer
       strategy.options.audience = audience
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
     end
 
     context "when private key is missing" do
@@ -107,8 +106,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       it "raises ConfigurationError when private key is missing" do
         strategy_without_key.options.issuer = issuer
         strategy_without_key.options.audience = audience
-        allow(strategy_without_key).to receive(:request).and_return(double(params: {}))
-        allow(strategy_without_key).to receive(:session).and_return({})
+        allow(strategy_without_key).to receive_messages(request: double(params: {}), session: {})
 
         expect {
           strategy_without_key.authorize_uri
@@ -128,18 +126,19 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         query_params = URI.decode_www_form(uri.query || "").to_h
 
         # The 'request' parameter must be present (signed JWT)
-        expect(query_params).to have_key("request")
         request_param = query_params["request"]
 
         # Verify it's a valid JWT (3 parts for signed, 5 parts if encrypted)
         parts = request_param.split(".")
-        expect(parts.length).to be >= 3 # At least 3 parts (JWT) or 5 (JWE)
-
         # Verify it's signed (decode header to check alg)
         header = JSON.parse(Base64.urlsafe_decode64(parts[0]))
-        expect(header["alg"]).to eq("RS256")
-        # Request objects use typ: "JWT", not "entity-statement+jwt" (that's only for entity statements)
-        expect(header["typ"]).to eq("JWT")
+        aggregate_failures do
+          expect(query_params).to have_key("request")
+          expect(parts.length).to be >= 3 # At least 3 parts (JWT) or 5 (JWE)
+          expect(header["alg"]).to eq("RS256")
+          # Request objects use typ: "JWT", not "entity-statement+jwt" (that's only for entity statements)
+          expect(header["typ"]).to eq("JWT")
+        end
       end
 
       it "does NOT include authorization parameters in query string (only in JWT)" do
@@ -150,21 +149,22 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         # RFC 9101: All authorization parameters MUST be inside the JWT
         # Only 'request' parameter should be in query string (per RFC 9101)
         forbidden_params = %w[client_id redirect_uri scope state nonce response_type response_mode]
-        forbidden_params.each do |param|
-          expect(query_params).not_to have_key(param), "Parameter '#{param}' should not be in query string (must be in JWT)"
-        end
-
         # Decode the request JWT to verify all params are inside
         request_jwt = query_params["request"]
         parts = request_jwt.split(".")
         payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
 
         # Verify all required params are in the JWT payload
-        expect(payload).to have_key("client_id")
-        expect(payload).to have_key("redirect_uri")
-        expect(payload).to have_key("scope")
-        expect(payload).to have_key("state")
-        expect(payload).to have_key("response_type")
+        aggregate_failures do
+          forbidden_params.each do |param|
+            expect(query_params).not_to have_key(param), "Parameter '#{param}' should not be in query string (must be in JWT)"
+          end
+          expect(payload).to have_key("client_id")
+          expect(payload).to have_key("redirect_uri")
+          expect(payload).to have_key("scope")
+          expect(payload).to have_key("state")
+          expect(payload).to have_key("response_type")
+        end
       end
 
       it "ensures request object is always signed (never unsigned)" do
@@ -176,16 +176,17 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
         # Verify it's a JWT (not plain text parameters)
         parts = request_param.split(".")
-        expect(parts.length).to be >= 3 # JWT has at least 3 parts
-
         # Verify signature is present (3rd part for JWT, 5th part for JWE)
-        if parts.length == 3
-          # Signed JWT: header.payload.signature
-          expect(parts[2]).to be_present # Signature must be present
-        elsif parts.length == 5
-          # Encrypted JWT (JWE): header.encrypted_key.iv.ciphertext.tag
-          # This is also valid - signed then encrypted
-          expect(parts[4]).to be_present # Tag must be present
+        aggregate_failures do
+          expect(parts.length).to be >= 3 # JWT has at least 3 parts
+          if parts.length == 3
+            # Signed JWT: header.payload.signature
+            expect(parts[2]).to be_present # Signature must be present
+          elsif parts.length == 5
+            # Encrypted JWT (JWE): header.encrypted_key.iv.ciphertext.tag
+            # This is also valid - signed then encrypted
+            expect(parts[4]).to be_present # Tag must be present
+          end
         end
       end
 
@@ -201,17 +202,18 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
         # Sensitive parameters should NOT be in query string
         sensitive_params = %w[scope acr_values login_hint]
-        sensitive_params.each do |param|
-          expect(query_params).not_to have_key(param), "Sensitive parameter '#{param}' should not be in query string"
-        end
-
         # But they should be in the JWT
         request_jwt = query_params["request"]
         parts = request_jwt.split(".")
         payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
 
-        expect(payload["scope"]).to eq("openid profile email")
-        expect(payload["acr_values"]).to eq("urn:example:oidc:acr:level4")
+        aggregate_failures do
+          sensitive_params.each do |param|
+            expect(query_params).not_to have_key(param), "Sensitive parameter '#{param}' should not be in query string"
+          end
+          expect(payload["scope"]).to eq("openid profile email")
+          expect(payload["acr_values"]).to eq("urn:example:oidc:acr:level4")
+        end
       end
     end
 
@@ -247,12 +249,13 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
         # When encrypted, JWE has 5 parts
         parts = request_param.split(".")
-        expect(parts.length).to eq(5), "Encrypted request object should have 5 parts (JWE format)"
-
         # Verify it's encrypted (JWE header)
         header = JSON.parse(Base64.urlsafe_decode64(parts[0]))
-        expect(header["enc"]).to eq("A128CBC-HS256")
-        expect(header["alg"]).to eq("RSA-OAEP")
+        aggregate_failures do
+          expect(parts.length).to eq(5), "Encrypted request object should have 5 parts (JWE format)"
+          expect(header["enc"]).to eq("A128CBC-HS256")
+          expect(header["alg"]).to eq("RSA-OAEP")
+        end
       end
     end
   end

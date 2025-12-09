@@ -5,7 +5,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
   let(:public_key) { private_key.public_key }
   let(:entity_jwk) { JWT::JWK.new(public_key) }
   let(:issuer) { "https://provider.example.com" }
-  let(:subject) { "https://provider.example.com" }
+  let(:entity_subject) { "https://provider.example.com" }
   let(:jwks) do
     {
       "keys" => [entity_jwk.export.stringify_keys]
@@ -28,7 +28,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
     it "initializes with required parameters" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata
@@ -40,7 +40,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
     it "extracts kid from JWKS when not provided" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata
@@ -53,7 +53,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       custom_kid = "custom-key-id"
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata,
@@ -67,7 +67,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       custom_expiration = 7200
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata,
@@ -81,46 +81,52 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       jwks_with_symbol = {keys: [entity_jwk.export.stringify_keys]}
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks_with_symbol,
         metadata: metadata
       )
 
       normalized = builder.instance_variable_get(:@jwks)
-      expect(normalized).to have_key("keys")
-      expect(normalized["keys"]).to be_an(Array)
+      aggregate_failures do
+        expect(normalized).to have_key("keys")
+        expect(normalized["keys"]).to be_an(Array)
+      end
     end
 
     it "normalizes JWKS array" do
       jwks_array = [entity_jwk.export.stringify_keys]
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks_array,
         metadata: metadata
       )
 
       normalized = builder.instance_variable_get(:@jwks)
-      expect(normalized).to have_key("keys")
-      expect(normalized["keys"]).to be_an(Array)
+      aggregate_failures do
+        expect(normalized).to have_key("keys")
+        expect(normalized["keys"]).to be_an(Array)
+      end
     end
 
     it "normalizes single JWK hash" do
       single_jwk = entity_jwk.export.stringify_keys
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: single_jwk,
         metadata: metadata
       )
 
       normalized = builder.instance_variable_get(:@jwks)
-      expect(normalized).to have_key("keys")
-      expect(normalized["keys"]).to be_an(Array)
-      expect(normalized["keys"].length).to eq(1)
+      aggregate_failures do
+        expect(normalized).to have_key("keys")
+        expect(normalized["keys"]).to be_an(Array)
+        expect(normalized["keys"].length).to eq(1)
+      end
     end
 
     it "normalizes keys with symbol keys to string keys" do
@@ -135,15 +141,17 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       }
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks_with_symbols,
         metadata: metadata
       )
 
       normalized = builder.instance_variable_get(:@jwks)
-      expect(normalized["keys"].first).to have_key("kty")
-      expect(normalized["keys"].first).not_to have_key(:kty)
+      aggregate_failures do
+        expect(normalized["keys"].first).to have_key("kty")
+        expect(normalized["keys"].first).not_to have_key(:kty)
+      end
     end
   end
 
@@ -151,7 +159,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
     it "builds and signs entity statement JWT" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata
@@ -159,14 +167,16 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
 
       jwt_string = builder.build
 
-      expect(jwt_string).to be_a(String)
-      expect(jwt_string.split(".").length).to eq(3) # JWT has 3 parts
+      aggregate_failures do
+        expect(jwt_string).to be_a(String)
+        expect(jwt_string.split(".").length).to eq(3) # JWT has 3 parts
+      end
     end
 
     it "includes issuer, subject, iat, exp in payload" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata
@@ -176,17 +186,19 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       decoded = JWT.decode(jwt_string, public_key, true, {algorithm: "RS256"})
 
       payload = decoded.first
-      expect(payload["iss"]).to eq(issuer)
-      expect(payload["sub"]).to eq(subject)
-      expect(payload["iat"]).to be_a(Integer)
-      expect(payload["exp"]).to be_a(Integer)
-      expect(payload["exp"]).to be > payload["iat"]
+      aggregate_failures do
+        expect(payload["iss"]).to eq(issuer)
+        expect(payload["sub"]).to eq(entity_subject)
+        expect(payload["iat"]).to be_a(Integer)
+        expect(payload["exp"]).to be_a(Integer)
+        expect(payload["exp"]).to be > payload["iat"]
+      end
     end
 
     it "includes jwks in payload" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata
@@ -196,14 +208,16 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       decoded = JWT.decode(jwt_string, public_key, true, {algorithm: "RS256"})
 
       payload = decoded.first
-      expect(payload["jwks"]).to be_a(Hash)
-      expect(payload["jwks"]["keys"]).to be_an(Array)
+      aggregate_failures do
+        expect(payload["jwks"]).to be_a(Hash)
+        expect(payload["jwks"]["keys"]).to be_an(Array)
+      end
     end
 
     it "includes metadata in payload" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata
@@ -213,15 +227,17 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       decoded = JWT.decode(jwt_string, public_key, true, {algorithm: "RS256"})
 
       payload = decoded.first
-      expect(payload["metadata"]).to be_a(Hash)
-      expect(payload["metadata"]["openid_provider"]).to be_present
+      aggregate_failures do
+        expect(payload["metadata"]).to be_a(Hash)
+        expect(payload["metadata"]["openid_provider"]).to be_present
+      end
     end
 
     it "uses custom expiration_seconds" do
       custom_expiration = 7200
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata,
@@ -238,7 +254,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
     it "raises ConfigurationError when issuer is missing" do
       builder = described_class.new(
         issuer: "",
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: metadata
@@ -268,7 +284,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
     it "raises ConfigurationError when private_key is missing" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: nil,
         jwks: jwks,
         metadata: metadata
@@ -284,7 +300,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       expect {
         described_class.new(
           issuer: issuer,
-          subject: subject,
+          subject: entity_subject,
           private_key: private_key,
           jwks: nil,
           metadata: metadata
@@ -298,7 +314,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
     it "raises ConfigurationError when jwks is empty" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: {},
         metadata: metadata
@@ -314,7 +330,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
     it "raises ConfigurationError when jwks has no keys" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: {"keys" => []},
         metadata: metadata
@@ -329,7 +345,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
     it "raises ConfigurationError when metadata is missing" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: nil
@@ -344,7 +360,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
     it "raises ConfigurationError when metadata is empty" do
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks,
         metadata: {}
@@ -367,7 +383,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       }
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks_without_kid,
         metadata: metadata
@@ -383,7 +399,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       invalid_key = "not a key"
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: invalid_key,
         jwks: jwks,
         metadata: metadata,
@@ -399,7 +415,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       expect {
         described_class.new(
           issuer: issuer,
-          subject: subject,
+          subject: entity_subject,
           private_key: private_key,
           jwks: "not a hash or array",
           metadata: metadata
@@ -419,7 +435,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       jwks_with_object = {"keys" => [jwk_object]}
       builder = described_class.new(
         issuer: issuer,
-        subject: subject,
+        subject: entity_subject,
         private_key: private_key,
         jwks: jwks_with_object,
         metadata: metadata,
@@ -427,9 +443,11 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       )
 
       normalized = builder.instance_variable_get(:@jwks)
-      expect(normalized["keys"]).to be_an(Array)
       # When key is not a Hash, normalize_keys returns it as-is (line 129)
-      expect(normalized["keys"].first).to eq(jwk_object)
+      aggregate_failures do
+        expect(normalized["keys"]).to be_an(Array)
+        expect(normalized["keys"].first).to eq(jwk_object)
+      end
     end
   end
 end

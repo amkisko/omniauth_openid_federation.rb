@@ -7,7 +7,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
   let(:jwk_export) { jwk.export }
 
   let(:issuer) { "https://provider.example.com" }
-  let(:subject) { "https://provider.example.com" }
+  let(:entity_subject) { "https://provider.example.com" }
 
   def create_valid_jwt(iss:, sub:, additional_claims: {})
     payload = {
@@ -26,23 +26,25 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
 
   describe "#initialize" do
     it "initializes with required parameters" do
-      jwt_string = create_valid_jwt(iss: issuer, sub: subject)
+      jwt_string = create_valid_jwt(iss: issuer, sub: entity_subject)
       validator = described_class.new(jwt_string: jwt_string)
 
-      expect(validator.instance_variable_get(:@jwt_string)).to eq(jwt_string)
-      expect(validator.instance_variable_get(:@issuer_entity_configuration)).to be_nil
-      expect(validator.instance_variable_get(:@clock_skew_tolerance)).to eq(OmniauthOpenidFederation.config.clock_skew_tolerance)
+      aggregate_failures do
+        expect(validator.instance_variable_get(:@jwt_string)).to eq(jwt_string)
+        expect(validator.instance_variable_get(:@issuer_entity_configuration)).to be_nil
+        expect(validator.instance_variable_get(:@clock_skew_tolerance)).to eq(OmniauthOpenidFederation.config.clock_skew_tolerance)
+      end
     end
 
     it "accepts custom clock_skew_tolerance" do
-      jwt_string = create_valid_jwt(iss: issuer, sub: subject)
+      jwt_string = create_valid_jwt(iss: issuer, sub: entity_subject)
       validator = described_class.new(jwt_string: jwt_string, clock_skew_tolerance: 120)
 
       expect(validator.instance_variable_get(:@clock_skew_tolerance)).to eq(120)
     end
 
     it "accepts issuer_entity_configuration" do
-      jwt_string = create_valid_jwt(iss: issuer, sub: subject)
+      jwt_string = create_valid_jwt(iss: issuer, sub: entity_subject)
       issuer_config = {jwks: {keys: [jwk_export]}}
       validator = described_class.new(jwt_string: jwt_string, issuer_entity_configuration: issuer_config)
 
@@ -53,16 +55,18 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
   describe "#validate!" do
     context "with valid Entity Configuration" do
       it "validates successfully" do
-        jwt_string = create_valid_jwt(iss: issuer, sub: subject)
+        jwt_string = create_valid_jwt(iss: issuer, sub: entity_subject)
         validator = described_class.new(jwt_string: jwt_string)
 
         result = validator.validate!
 
-        expect(result).to be_a(Hash)
-        expect(result[:header]).to be_a(Hash)
-        expect(result[:claims]).to be_a(Hash)
-        expect(result[:is_entity_configuration]).to be true
-        expect(result[:is_subordinate_statement]).to be false
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result[:header]).to be_a(Hash)
+          expect(result[:claims]).to be_a(Hash)
+          expect(result[:is_entity_configuration]).to be true
+          expect(result[:is_subordinate_statement]).to be false
+        end
       end
     end
 
@@ -89,12 +93,14 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
 
         result = validator.validate!
 
-        expect(result[:is_entity_configuration]).to be false
-        expect(result[:is_subordinate_statement]).to be true
+        aggregate_failures do
+          expect(result[:is_entity_configuration]).to be false
+          expect(result[:is_subordinate_statement]).to be true
+        end
       end
     end
 
-    context "JWT format validation" do
+    context "when validating JWT format" do
       it "raises ValidationError for invalid JWT format" do
         validator = described_class.new(jwt_string: "invalid.jwt")
 
@@ -129,9 +135,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "typ header validation" do
+    context "when validating typ header" do
       it "raises ValidationError for missing typ header" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -146,7 +152,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for wrong typ header" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "JWT", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -161,10 +167,10 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "alg header validation" do
+    context "when validating alg header" do
       it "raises ValidationError for missing alg header" do
         # Manually construct JWT without alg header
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {typ: "entity-statement+jwt", kid: jwk_export[:kid]}
 
         # Manually encode to avoid JWT.encode adding alg automatically
@@ -184,7 +190,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for alg: none" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "none", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -199,23 +205,24 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "logs warning for unsupported algorithm" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "HS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
         validator = described_class.new(jwt_string: jwt_string)
 
-        expect(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Unsupported algorithm/)
+        allow(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Unsupported algorithm/)
 
         begin
           validator.validate!
         rescue OmniauthOpenidFederation::ValidationError
           # Expected to fail on other validations
         end
+        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Unsupported algorithm/)
       end
     end
 
-    context "sub claim validation" do
+    context "when validating sub claim" do
       it "raises ValidationError for missing sub claim" do
         payload = {iss: issuer, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
@@ -247,9 +254,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "iss claim validation" do
+    context "when validating iss claim" do
       it "raises ValidationError for missing iss claim" do
-        payload = {sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -264,7 +271,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for invalid iss claim format" do
-        payload = {iss: "not-a-uri", sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: "not-a-uri", sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -279,9 +286,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "iat claim validation" do
+    context "when validating iat claim" do
       it "raises ValidationError for missing iat claim" do
-        payload = {iss: issuer, sub: subject, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -296,7 +303,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for iat too far in the future" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i + 200, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i + 200, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -311,7 +318,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "allows iat within clock skew tolerance" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i + 30, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i + 30, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -322,9 +329,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "exp claim validation" do
+    context "when validating exp claim" do
       it "raises ValidationError for missing exp claim" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -339,7 +346,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for expired statement" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i - 7200, exp: Time.now.to_i - 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i - 7200, exp: Time.now.to_i - 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -354,7 +361,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "allows exp within clock skew tolerance" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i - 3600, exp: Time.now.to_i - 30, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i - 3600, exp: Time.now.to_i - 30, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -365,9 +372,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "jwks claim validation" do
+    context "when validating jwks claim" do
       it "raises ValidationError for missing jwks claim" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -382,7 +389,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for invalid jwks format" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: "not-an-object"}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: "not-an-object"}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -397,7 +404,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for jwks without keys array" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -413,7 +420,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
 
       it "raises ValidationError for duplicate kid values" do
         duplicate_jwk = jwk_export.dup
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export, duplicate_jwk]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export, duplicate_jwk]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -428,9 +435,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "kid header validation" do
+    context "when validating kid header" do
       it "raises ValidationError for missing kid header" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt"}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -445,7 +452,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for empty kid header" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: ""}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -461,7 +468,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
 
       it "raises ValidationError for non-string kid header" do
         # Manually construct JWT with non-string kid
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: 123}
 
         # Manually encode to preserve non-string kid
@@ -481,9 +488,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "kid matching validation" do
+    context "when validating kid matching" do
       it "raises ValidationError when kid doesn't match any key in JWKS" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: "nonexistent-kid"}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -498,7 +505,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "validates kid matching for Entity Configuration" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -509,7 +516,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "authority_hints validation" do
+    context "when validating authority_hints" do
       it "validates authority_hints for Subordinate Statement" do
         issuer_id = "https://ta.example.com"
         subject_id = "https://rp.example.com"
@@ -580,9 +587,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "crit claim validation" do
+    context "when validating crit claim" do
       it "validates crit claim when present" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, crit: ["metadata_policy"]}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, crit: ["metadata_policy"]}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -593,7 +600,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for invalid crit format" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, crit: "not-an-array"}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, crit: "not-an-array"}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -608,21 +615,22 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "logs warning for unknown crit claims" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, crit: ["unknown_claim"]}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, crit: ["unknown_claim"]}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
         validator = described_class.new(jwt_string: jwt_string)
 
-        expect(OmniauthOpenidFederation::Logger).to receive(:warn).with(/contains crit claim with unknown claims/)
+        allow(OmniauthOpenidFederation::Logger).to receive(:warn).with(/contains crit claim with unknown claims/)
 
         validator.validate!
+        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/contains crit claim with unknown claims/)
       end
     end
 
-    context "authority_hints syntax validation" do
+    context "when validating authority_hints syntax" do
       it "validates authority_hints syntax for Entity Configuration" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, authority_hints: ["https://ta.example.com"]}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, authority_hints: ["https://ta.example.com"]}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -633,7 +641,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for invalid authority_hints format" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, authority_hints: "not-an-array"}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, authority_hints: "not-an-array"}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -648,7 +656,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for empty authority_hints" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, authority_hints: []}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, authority_hints: []}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -663,7 +671,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for invalid authority_hints values" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, authority_hints: ["not-a-uri"]}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, authority_hints: ["not-a-uri"]}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -678,9 +686,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "metadata syntax validation" do
+    context "when validating metadata syntax" do
       it "validates metadata syntax" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, metadata: {openid_provider: {issuer: issuer}}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, metadata: {openid_provider: {issuer: issuer}}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -691,7 +699,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for invalid metadata format" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, metadata: "not-an-object"}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, metadata: "not-an-object"}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -706,7 +714,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
 
       it "raises ValidationError for null metadata values" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, metadata: {openid_provider: nil}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, metadata: {openid_provider: nil}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
@@ -721,9 +729,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
       end
     end
 
-    context "statement type specific validations" do
+    context "when validating statement type specifics" do
       it "raises ValidationError when metadata_policy in Entity Configuration" do
-        payload = {iss: issuer, sub: subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, metadata_policy: {}}
+        payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, metadata_policy: {}}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 

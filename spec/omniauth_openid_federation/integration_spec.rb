@@ -129,8 +129,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
       # Set up strategy with mock environment
       strategy.instance_variable_set(:@env, mock_env)
       strategy.instance_variable_set(:@request, mock_request)
-      allow(strategy).to receive(:session).and_return(mock_session)
-      allow(strategy).to receive(:request).and_return(mock_request)
+      allow(strategy).to receive_messages(
+        session: mock_session,
+        request: mock_request
+      )
     end
 
     describe "#request_phase" do
@@ -140,35 +142,33 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
 
         result = strategy.request_phase
 
-        # Should be a redirect response
-        expect(result).to be_a(Array)
-        expect(result[0]).to eq(302) # Redirect status
-        expect(result[1]).to include("Location" => be_a(String))
-
         # Extract URL from Location header
         location = result[1]["Location"]
         uri = URI.parse(location)
 
         # Verify it's the authorization endpoint
-        expect(uri.host).to eq(URI.parse(provider_issuer).host)
-        expect(uri.path).to eq("/oauth2/authorize")
-
-        # Verify query contains request parameter (signed JWT)
         query_params = URI.decode_www_form(uri.query || "").to_h
-        expect(query_params).to have_key("request")
-
-        # Verify request is a valid JWT
         request_jwt = query_params["request"]
         parts = request_jwt.split(".")
-        expect(parts.length).to eq(3) # Signed JWT has 3 parts
 
         # Decode and verify payload
         payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-        expect(payload["client_id"]).to eq(client_id)
-        expect(payload["redirect_uri"]).to eq(redirect_uri)
-        expect(payload["scope"]).to eq("openid")
-        expect(payload["response_type"]).to eq("code")
-        expect(payload["state"]).to eq("test-state-value")
+
+        # Should be a redirect response
+        aggregate_failures do
+          expect(result).to be_a(Array)
+          expect(result[0]).to eq(302) # Redirect status
+          expect(result[1]).to include("Location" => be_a(String))
+          expect(uri.host).to eq(URI.parse(provider_issuer).host)
+          expect(uri.path).to eq("/oauth2/authorize")
+          expect(query_params).to have_key("request")
+          expect(parts.length).to eq(3) # Signed JWT has 3 parts
+          expect(payload["client_id"]).to eq(client_id)
+          expect(payload["redirect_uri"]).to eq(redirect_uri)
+          expect(payload["scope"]).to eq("openid")
+          expect(payload["response_type"]).to eq("code")
+          expect(payload["state"]).to eq("test-state-value")
+        end
       end
 
       it "stores state in session for CSRF protection" do
@@ -191,8 +191,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         request_jwt = query_params["request"]
         payload = JSON.parse(Base64.urlsafe_decode64(request_jwt.split(".")[1]))
 
-        expect(payload).to have_key("nonce")
-        expect(payload["nonce"]).to eq("test-nonce-value")
+        aggregate_failures do
+          expect(payload).to have_key("nonce")
+          expect(payload["nonce"]).to eq("test-nonce-value")
+        end
       end
     end
 
@@ -268,14 +270,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         strategy.callback_phase
 
         # Verify auth hash was built
-        expect(auth_hash_captured).to be_a(OmniAuth::AuthHash)
-        expect(auth_hash_captured.provider).to eq("openid_federation")
-        expect(auth_hash_captured.uid).to eq("user-123")
-        expect(auth_hash_captured.info.email).to eq("user@example.com")
-        expect(auth_hash_captured.info.name).to eq("Test User")
-        expect(auth_hash_captured.credentials.token).to eq(access_token_value)
-        expect(auth_hash_captured.credentials.refresh_token).to eq("test-refresh-token")
-        expect(auth_hash_captured.credentials.expires).to be true
+        aggregate_failures do
+          expect(auth_hash_captured).to be_a(OmniAuth::AuthHash)
+          expect(auth_hash_captured.provider).to eq("openid_federation")
+          expect(auth_hash_captured.uid).to eq("user-123")
+          expect(auth_hash_captured.info.email).to eq("user@example.com")
+          expect(auth_hash_captured.info.name).to eq("Test User")
+          expect(auth_hash_captured.credentials.token).to eq(access_token_value)
+          expect(auth_hash_captured.credentials.refresh_token).to eq("test-refresh-token")
+          expect(auth_hash_captured.credentials.expires).to be true
+        end
       end
 
       it "validates state parameter for CSRF protection" do
@@ -286,11 +290,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         strategy.callback_phase
 
         # Verify error was set
-        expect(strategy.env["omniauth.error.type"]).to eq(:csrf_detected)
-        expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::SecurityError)
-
-        # Verify state is not cleared on error
-        expect(mock_session["omniauth.state"]).to eq("test-state-value")
+        aggregate_failures do
+          expect(strategy.env["omniauth.error.type"]).to eq(:csrf_detected)
+          expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::SecurityError)
+          # Verify state is not cleared on error
+          expect(mock_session["omniauth.state"]).to eq("test-state-value")
+        end
       end
 
       it "clears state from session after successful validation" do
@@ -309,8 +314,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         strategy.callback_phase
 
         # Verify error was set
-        expect(strategy.env["omniauth.error.type"]).to eq(:missing_code)
-        expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::ValidationError)
+        aggregate_failures do
+          expect(strategy.env["omniauth.error.type"]).to eq(:missing_code)
+          expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::ValidationError)
+        end
       end
 
       it "handles token exchange errors gracefully" do
@@ -321,8 +328,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         strategy.callback_phase
 
         # Verify error was set
-        expect(strategy.env["omniauth.error.type"]).to eq(:token_exchange_error)
-        expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::NetworkError)
+        aggregate_failures do
+          expect(strategy.env["omniauth.error.type"]).to eq(:token_exchange_error)
+          expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::NetworkError)
+        end
       end
     end
 
@@ -355,22 +364,26 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
       it "builds complete auth hash with all required fields" do
         auth_hash = strategy.auth_hash
 
-        expect(auth_hash).to be_a(OmniAuth::AuthHash)
-        expect(auth_hash.provider).to eq("openid_federation")
-        expect(auth_hash.uid).to eq("user-123")
-        expect(auth_hash.info).to be_a(Hash)
-        expect(auth_hash.credentials).to be_a(Hash)
-        expect(auth_hash.extra).to be_a(Hash)
+        aggregate_failures do
+          expect(auth_hash).to be_a(OmniAuth::AuthHash)
+          expect(auth_hash.provider).to eq("openid_federation")
+          expect(auth_hash.uid).to eq("user-123")
+          expect(auth_hash.info).to be_a(Hash)
+          expect(auth_hash.credentials).to be_a(Hash)
+          expect(auth_hash.extra).to be_a(Hash)
+        end
       end
 
       it "includes correct credentials" do
         auth_hash = strategy.auth_hash
 
-        expect(auth_hash.credentials[:token]).to eq(access_token_value)
-        expect(auth_hash.credentials[:refresh_token]).to eq("test-refresh-token")
-        expect(auth_hash.credentials[:expires]).to be true
-        expect(auth_hash.credentials[:expires_at]).to be_a(Integer)
-        expect(auth_hash.credentials[:expires_at]).to be > Time.now.to_i
+        aggregate_failures do
+          expect(auth_hash.credentials[:token]).to eq(access_token_value)
+          expect(auth_hash.credentials[:refresh_token]).to eq("test-refresh-token")
+          expect(auth_hash.credentials[:expires]).to be true
+          expect(auth_hash.credentials[:expires_at]).to be_a(Integer)
+          expect(auth_hash.credentials[:expires_at]).to be > Time.now.to_i
+        end
       end
     end
 
@@ -428,11 +441,13 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
       it "extracts user info from raw_info" do
         info = strategy.info
 
-        expect(info[:email]).to eq("user@example.com")
-        expect(info[:name]).to eq("Test User")
-        expect(info[:first_name]).to eq("Test")
-        expect(info[:last_name]).to eq("User")
-        expect(info[:nickname]).to eq("testuser")
+        aggregate_failures do
+          expect(info[:email]).to eq("user@example.com")
+          expect(info[:name]).to eq("Test User")
+          expect(info[:first_name]).to eq("Test")
+          expect(info[:last_name]).to eq("User")
+          expect(info[:nickname]).to eq("testuser")
+        end
       end
     end
 
@@ -458,9 +473,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
       it "includes raw_info in extra" do
         extra = strategy.extra
 
-        expect(extra[:raw_info]).to be_a(Hash)
-        expect(extra[:raw_info]["sub"]).to eq("user-123")
-        expect(extra[:raw_info]["email"]).to eq("user@example.com")
+        aggregate_failures do
+          expect(extra[:raw_info]).to be_a(Hash)
+          expect(extra[:raw_info]["sub"]).to eq("user-123")
+          expect(extra[:raw_info]["email"]).to eq("user@example.com")
+        end
       end
     end
 
@@ -510,8 +527,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         it "uses ID token claims only" do
           raw_info = strategy.raw_info
 
-          expect(raw_info["sub"]).to eq("user-123")
-          expect(raw_info["email"]).to eq("user@example.com")
+          aggregate_failures do
+            expect(raw_info["sub"]).to eq("user-123")
+            expect(raw_info["email"]).to eq("user@example.com")
+          end
         end
       end
 
@@ -539,8 +558,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         it "fetches and merges userinfo with ID token" do
           raw_info = strategy.raw_info
 
-          expect(raw_info["sub"]).to eq("user-123") # From ID token
-          expect(raw_info["email"]).to eq("user@example.com") # From userinfo (takes precedence)
+          aggregate_failures do
+            expect(raw_info["sub"]).to eq("user-123") # From ID token
+            expect(raw_info["email"]).to eq("user@example.com") # From userinfo (takes precedence)
+          end
         end
       end
     end
@@ -562,8 +583,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         }
       )
 
-      allow(strategy_without_key).to receive(:request).and_return(double(params: {}))
-      allow(strategy_without_key).to receive(:session).and_return({})
+      allow(strategy_without_key).to receive_messages(
+        request: double(params: {}),
+        session: {}
+      )
 
       expect {
         strategy_without_key.request_phase
@@ -585,17 +608,30 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
 
       strategy_no_audience.options.issuer = nil
       strategy_no_audience.options.audience = nil
-      allow(strategy_no_audience).to receive(:request).and_return(double(params: {}))
-      allow(strategy_no_audience).to receive(:session).and_return({})
+      allow(strategy_no_audience).to receive_messages(
+        request: double(params: {}),
+        session: {}
+      )
 
       # Audience can be resolved from token_endpoint, so it might not raise
       # Let's verify it either raises or resolves audience from token_endpoint
+      result_or_error = nil
+      error_message = nil
       begin
-        result = strategy_no_audience.request_phase
+        result_or_error = strategy_no_audience.request_phase
         # If it doesn't raise, it should have resolved audience from token_endpoint
-        expect(result).to be_a(Array)
       rescue OmniauthOpenidFederation::ConfigurationError => e
-        expect(e.message).to match(/Audience is required/)
+        result_or_error = e
+        error_message = e.message
+      end
+      # Ensure we got either a result or an error
+      aggregate_failures do
+        expect(result_or_error).not_to be_nil
+        if result_or_error.is_a?(Array)
+          expect(result_or_error).to be_a(Array)
+        else
+          expect(error_message).to match(/Audience is required/)
+        end
       end
     end
   end

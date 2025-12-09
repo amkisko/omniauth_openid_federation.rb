@@ -1,6 +1,6 @@
 RSpec.describe OmniauthOpenidFederation do
   it "has a version number" do
-    expect(OmniauthOpenidFederation::VERSION).not_to be nil
+    expect(OmniauthOpenidFederation::VERSION).not_to be_nil
   end
 
   describe ".configure" do
@@ -36,8 +36,10 @@ RSpec.describe OmniauthOpenidFederation do
 
         result = described_class.rotate_jwks(jwks_uri)
 
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to be_present
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to be_present
+        end
       end
     end
 
@@ -74,15 +76,25 @@ RSpec.describe OmniauthOpenidFederation do
 
       it "raises ConfigurationError when file not found" do
         if defined?(Rails)
-          expect(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Entity statement file not found/)
-          expect { described_class.rotate_jwks(jwks_uri, entity_statement_path: "nonexistent.jwt") }
-            .to raise_error(OmniauthOpenidFederation::ConfigurationError, /not found/)
+          # Create a temp file path that doesn't exist
+          temp_file = Tempfile.new(["nonexistent", ".jwt"])
+          entity_statement_path = temp_file.path
+          temp_file.close
+          temp_file.unlink # Ensure file does not exist
+
+          allow(OmniauthOpenidFederation::Logger).to receive(:warn)
+          aggregate_failures do
+            expect { described_class.rotate_jwks(jwks_uri, entity_statement_path: entity_statement_path) }
+              .to raise_error(OmniauthOpenidFederation::ConfigurationError, /not found/)
+            expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Entity statement file not found/)
+          end
         end
       end
 
       it "uses signed JWKS when available in entity statement" do
         if defined?(Rails)
           # Create entity statement with signed_jwks_uri
+          entity_statement_path = Tempfile.new(["entity_statement", ".jwt"]).path
           private_key = OpenSSL::PKey::RSA.new(2048)
           public_key = private_key.public_key
           jwk = JWT::JWK.new(public_key)
@@ -102,21 +114,28 @@ RSpec.describe OmniauthOpenidFederation do
           entity_statement_jwt = JWT.encode(entity_statement_payload, private_key, "RS256", entity_statement_header)
           File.write(entity_statement_path, entity_statement_jwt)
 
-          # Stub HTTP call for signed JWKS (architectural boundary)
-          signed_jwks_payload = {keys: [{kty: "RSA", kid: "key1"}]}
-          signed_jwks_jwt = JWT.encode(signed_jwks_payload, private_key, "RS256", {alg: "RS256", typ: "JWT", kid: jwk_export[:kid]})
-          stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
-            .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
+          begin
+            # Stub HTTP call for signed JWKS (architectural boundary)
+            signed_jwks_payload = {keys: [{kty: "RSA", kid: "key1"}]}
+            signed_jwks_jwt = JWT.encode(signed_jwks_payload, private_key, "RS256", {alg: "RS256", typ: "JWT", kid: jwk_export[:kid]})
+            stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
+              .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
-          result = described_class.rotate_jwks(jwks_uri, entity_statement_path: entity_statement_path)
-          expect(result).to be_a(Hash)
-          expect(result["keys"]).to be_present
+            result = described_class.rotate_jwks(jwks_uri, entity_statement_path: entity_statement_path)
+            aggregate_failures do
+              expect(result).to be_a(Hash)
+              expect(result["keys"]).to be_present
+            end
+          ensure
+            File.delete(entity_statement_path) if File.exist?(entity_statement_path)
+          end
         end
       end
 
       it "falls back to standard JWKS when signed JWKS fails" do
         if defined?(Rails)
           # Create entity statement with signed_jwks_uri
+          entity_statement_path = Tempfile.new(["entity_statement", ".jwt"]).path
           private_key = OpenSSL::PKey::RSA.new(2048)
           public_key = private_key.public_key
           jwk = JWT::JWK.new(public_key)
@@ -136,18 +155,25 @@ RSpec.describe OmniauthOpenidFederation do
           entity_statement_jwt = JWT.encode(entity_statement_payload, private_key, "RS256", entity_statement_header)
           File.write(entity_statement_path, entity_statement_jwt)
 
-          # Stub HTTP call for signed JWKS to fail (architectural boundary)
-          stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
-            .to_return(status: 500)
+          begin
+            # Stub HTTP call for signed JWKS to fail (architectural boundary)
+            stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
+              .to_return(status: 500)
 
-          expect(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Failed to use signed JWKS/)
+            allow(OmniauthOpenidFederation::Logger).to receive(:warn)
 
-          stub_request(:get, jwks_uri)
-            .to_return(status: 200, body: jwks_response.to_json, headers: {"Content-Type" => "application/json"})
+            stub_request(:get, jwks_uri)
+              .to_return(status: 200, body: jwks_response.to_json, headers: {"Content-Type" => "application/json"})
 
-          result = described_class.rotate_jwks(jwks_uri, entity_statement_path: entity_statement_path)
-          expect(result).to be_a(Hash)
-          expect(result["keys"]).to be_present
+            result = described_class.rotate_jwks(jwks_uri, entity_statement_path: entity_statement_path)
+            aggregate_failures do
+              expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to use signed JWKS/)
+              expect(result).to be_a(Hash)
+              expect(result["keys"]).to be_present
+            end
+          ensure
+            File.delete(entity_statement_path) if File.exist?(entity_statement_path)
+          end
         end
       end
 
@@ -164,6 +190,7 @@ RSpec.describe OmniauthOpenidFederation do
       it "uses entity statement keys for standard JWKS fallback" do
         if defined?(Rails)
           # Create entity statement without signed_jwks_uri
+          entity_statement_path = Tempfile.new(["entity_statement", ".jwt"]).path
           header = Base64.urlsafe_encode64({alg: "RS256"}.to_json, padding: false)
           payload = Base64.urlsafe_encode64({
             iss: "https://provider.example.com",
@@ -174,8 +201,12 @@ RSpec.describe OmniauthOpenidFederation do
           stub_request(:get, jwks_uri)
             .to_return(status: 200, body: jwks_response.to_json, headers: {"Content-Type" => "application/json"})
 
-          result = described_class.rotate_jwks(jwks_uri, entity_statement_path: entity_statement_path)
-          expect(result).to be_a(Hash)
+          begin
+            result = described_class.rotate_jwks(jwks_uri, entity_statement_path: entity_statement_path)
+            expect(result).to be_a(Hash)
+          ensure
+            File.delete(entity_statement_path) if File.exist?(entity_statement_path)
+          end
         end
       end
     end

@@ -13,8 +13,10 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Selector do
       }
 
       result = described_class.current_keys(jwks)
-      expect(result["keys"].length).to eq(2)
-      expect(result["keys"].map { |k| k[:kid] }).to contain_exactly("sig1", "enc1")
+      aggregate_failures do
+        expect(result["keys"].length).to eq(2)
+        expect(result["keys"].map { |k| k[:kid] }).to contain_exactly("sig1", "enc1")
+      end
     end
 
     it "handles string keys" do
@@ -121,8 +123,10 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Selector do
       }
 
       result = described_class.signing_keys(jwks)
-      expect(result.length).to eq(2)
-      expect(result.map { |k| k[:kid] }).to contain_exactly("sig1", "sig2")
+      aggregate_failures do
+        expect(result.length).to eq(2)
+        expect(result.map { |k| k[:kid] }).to contain_exactly("sig1", "sig2")
+      end
     end
 
     it "handles string keys" do
@@ -158,8 +162,10 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Selector do
       }
 
       result = described_class.encryption_keys(jwks)
-      expect(result.length).to eq(2)
-      expect(result.map { |k| k[:kid] }).to contain_exactly("enc1", "enc2")
+      aggregate_failures do
+        expect(result.length).to eq(2)
+        expect(result.map { |k| k[:kid] }).to contain_exactly("enc1", "enc2")
+      end
     end
 
     it "handles string keys" do

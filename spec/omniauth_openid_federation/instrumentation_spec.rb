@@ -28,13 +28,15 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
         described_class.notify("test_event", data: {key: "value"}, severity: :error)
 
-        expect(called_with).not_to be_nil
-        expect(called_with[0]).to eq("test_event")
-        expect(called_with[1]).to be_a(Hash)
-        expect(called_with[1][:event]).to eq("test_event")
-        expect(called_with[1][:severity]).to eq(:error)
-        expect(called_with[1][:data]).to be_a(Hash)
-        expect(called_with[1][:timestamp]).to be_a(String)
+        aggregate_failures do
+          expect(called_with).not_to be_nil
+          expect(called_with[0]).to eq("test_event")
+          expect(called_with[1]).to be_a(Hash)
+          expect(called_with[1][:event]).to eq("test_event")
+          expect(called_with[1][:severity]).to eq(:error)
+          expect(called_with[1][:data]).to be_a(Hash)
+          expect(called_with[1][:timestamp]).to be_a(String)
+        end
       end
 
       it "sanitizes sensitive data" do
@@ -47,9 +49,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
           state: "secret-state"
         })
 
-        expect(called_with[:data][:token]).to eq("[REDACTED]")
-        expect(called_with[:data][:private_key]).to eq("[REDACTED]")
-        expect(called_with[:data][:state]).to eq("[REDACTED]")
+        aggregate_failures do
+          expect(called_with[:data][:token]).to eq("[REDACTED]")
+          expect(called_with[:data][:private_key]).to eq("[REDACTED]")
+          expect(called_with[:data][:state]).to eq("[REDACTED]")
+        end
       end
 
       it "sanitizes nested hashes" do
@@ -63,8 +67,10 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
           }
         })
 
-        expect(called_with[:data][:nested][:token]).to eq("[REDACTED]")
-        expect(called_with[:data][:nested][:public_data]).to eq("safe")
+        aggregate_failures do
+          expect(called_with[:data][:nested][:token]).to eq("[REDACTED]")
+          expect(called_with[:data][:nested][:public_data]).to eq("safe")
+        end
       end
 
       it "sanitizes arrays with hashes" do
@@ -78,9 +84,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
           ]
         })
 
-        expect(called_with[:data][:items][0][:token]).to eq("[REDACTED]")
-        expect(called_with[:data][:items][0][:name]).to eq("item1")
-        expect(called_with[:data][:items][1][:token]).to eq("[REDACTED]")
+        aggregate_failures do
+          expect(called_with[:data][:items][0][:token]).to eq("[REDACTED]")
+          expect(called_with[:data][:items][0][:name]).to eq("item1")
+          expect(called_with[:data][:items][1][:token]).to eq("[REDACTED]")
+        end
       end
 
       it "includes timestamp in payload" do
@@ -90,10 +98,12 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
         described_class.notify("test_event")
 
         after_time = Time.now.utc
-        timestamp = Time.parse(called_with[:timestamp])
+        timestamp = Time.zone.parse(called_with[:timestamp])
         # Timestamp should be recent (within last second)
-        expect(timestamp).to be <= after_time
-        expect(timestamp).to be >= (after_time - 1)
+        aggregate_failures do
+          expect(timestamp).to be <= after_time
+          expect(timestamp).to be >= (after_time - 1)
+        end
       end
 
       it "uses default severity :warning" do
@@ -164,9 +174,10 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
         config.instrumentation = ->(event, payload) { raise StandardError, "Instrumentation failed" }
         allow(OmniauthOpenidFederation::Logger).to receive(:warn)
 
-        expect { described_class.notify("test_event") }.not_to raise_error
-
-        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(match(/Failed to notify/))
+        aggregate_failures do
+          expect { described_class.notify("test_event") }.not_to raise_error
+          expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(match(/Failed to notify/))
+        end
       end
     end
   end
@@ -178,11 +189,13 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_csrf_detected(state_param: "param", state_session: "session")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_CSRF_DETECTED)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("State parameter mismatch")
-      expect(called_with[1][:data][:state_param]).to eq("[REDACTED]")
-      expect(called_with[1][:data][:state_session]).to eq("[REDACTED]")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_CSRF_DETECTED)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("State parameter mismatch")
+        expect(called_with[1][:data][:state_param]).to eq("[REDACTED]")
+        expect(called_with[1][:data][:state_session]).to eq("[REDACTED]")
+      end
     end
   end
 
@@ -193,11 +206,13 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_signature_verification_failed(token_type: "id_token", kid: "key-id")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_SIGNATURE_VERIFICATION_FAILED)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("JWT signature verification failed")
-      expect(called_with[1][:data][:token_type]).to eq("id_token")
-      expect(called_with[1][:data][:kid]).to eq("key-id")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_SIGNATURE_VERIFICATION_FAILED)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("JWT signature verification failed")
+        expect(called_with[1][:data][:token_type]).to eq("id_token")
+        expect(called_with[1][:data][:kid]).to eq("key-id")
+      end
     end
   end
 
@@ -208,9 +223,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_decryption_failed(token_type: "id_token")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_DECRYPTION_FAILED)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Token decryption failed")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_DECRYPTION_FAILED)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Token decryption failed")
+      end
     end
   end
 
@@ -221,9 +238,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_token_validation_failed(validation_type: "claims", missing_claims: ["sub"])
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_TOKEN_VALIDATION_FAILED)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Token validation failed")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_TOKEN_VALIDATION_FAILED)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Token validation failed")
+      end
     end
   end
 
@@ -234,9 +253,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_key_rotation_detected(jwks_uri: "https://example.com/jwks", kid: "old-key")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_KEY_ROTATION_DETECTED)
-      expect(called_with[1][:severity]).to eq(:warning)
-      expect(called_with[1][:data][:reason]).to include("Key rotation detected")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_KEY_ROTATION_DETECTED)
+        expect(called_with[1][:severity]).to eq(:warning)
+        expect(called_with[1][:data][:reason]).to include("Key rotation detected")
+      end
     end
   end
 
@@ -247,9 +268,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_kid_not_found(kid: "missing-key", jwks_uri: "https://example.com/jwks")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_KID_NOT_FOUND)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Key ID not found")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_KID_NOT_FOUND)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Key ID not found")
+      end
     end
   end
 
@@ -260,9 +283,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_entity_statement_validation_failed(entity_id: "https://example.com")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_ENTITY_STATEMENT_VALIDATION_FAILED)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Entity statement validation failed")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_ENTITY_STATEMENT_VALIDATION_FAILED)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Entity statement validation failed")
+      end
     end
   end
 
@@ -276,11 +301,13 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
         calculated_fingerprint: "calculated"
       )
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_FINGERPRINT_MISMATCH)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("fingerprint mismatch")
-      expect(called_with[1][:data][:expected_fingerprint]).to eq("[REDACTED]")
-      expect(called_with[1][:data][:calculated_fingerprint]).to eq("[REDACTED]")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_FINGERPRINT_MISMATCH)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("fingerprint mismatch")
+        expect(called_with[1][:data][:expected_fingerprint]).to eq("[REDACTED]")
+        expect(called_with[1][:data][:calculated_fingerprint]).to eq("[REDACTED]")
+      end
     end
   end
 
@@ -291,9 +318,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_trust_chain_validation_failed(entity_id: "https://example.com")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_TRUST_CHAIN_VALIDATION_FAILED)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Trust chain validation failed")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_TRUST_CHAIN_VALIDATION_FAILED)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Trust chain validation failed")
+      end
     end
   end
 
@@ -304,9 +333,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_endpoint_mismatch(endpoint_type: "authorization", expected: "https://example.com/auth")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_ENDPOINT_MISMATCH)
-      expect(called_with[1][:severity]).to eq(:warning)
-      expect(called_with[1][:data][:reason]).to include("Endpoint mismatch detected")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_ENDPOINT_MISMATCH)
+        expect(called_with[1][:severity]).to eq(:warning)
+        expect(called_with[1][:data][:reason]).to include("Endpoint mismatch detected")
+      end
     end
   end
 
@@ -317,9 +348,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_unexpected_authentication_break(stage: "callback", error_message: "Unexpected error")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_UNEXPECTED_AUTHENTICATION_BREAK)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Unexpected authentication break")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_UNEXPECTED_AUTHENTICATION_BREAK)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Unexpected authentication break")
+      end
     end
   end
 
@@ -330,9 +363,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_state_mismatch(state_param: "param", state_session: "session")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_STATE_MISMATCH)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("State parameter mismatch")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_STATE_MISMATCH)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("State parameter mismatch")
+      end
     end
   end
 
@@ -343,9 +378,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_missing_required_claims(missing_claims: ["sub", "iss"], token_type: "id_token")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_MISSING_REQUIRED_CLAIMS)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Token missing required claims")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_MISSING_REQUIRED_CLAIMS)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Token missing required claims")
+      end
     end
   end
 
@@ -356,9 +393,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_audience_mismatch(expected_audience: "client-id", actual_audience: "wrong-id")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_AUDIENCE_MISMATCH)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Token audience mismatch")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_AUDIENCE_MISMATCH)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Token audience mismatch")
+      end
     end
   end
 
@@ -369,9 +408,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_issuer_mismatch(expected_issuer: "https://example.com", actual_issuer: "https://wrong.com")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_ISSUER_MISMATCH)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Token issuer mismatch")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_ISSUER_MISMATCH)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Token issuer mismatch")
+      end
     end
   end
 
@@ -382,9 +423,11 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_expired_token(exp: Time.now.to_i - 100, current_time: Time.now.to_i)
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_EXPIRED_TOKEN)
-      expect(called_with[1][:severity]).to eq(:warning)
-      expect(called_with[1][:data][:reason]).to include("Token expired")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_EXPIRED_TOKEN)
+        expect(called_with[1][:severity]).to eq(:warning)
+        expect(called_with[1][:data][:reason]).to include("Token expired")
+      end
     end
   end
 
@@ -395,14 +438,16 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       described_class.notify_invalid_nonce(expected_nonce: "nonce1", actual_nonce: "nonce2")
 
-      expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_INVALID_NONCE)
-      expect(called_with[1][:severity]).to eq(:error)
-      expect(called_with[1][:data][:reason]).to include("Nonce mismatch")
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_INVALID_NONCE)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("Nonce mismatch")
+      end
     end
   end
 
   describe ".sanitize_data" do
-    it "returns empty hash for non-hash input" do
+    it "returns empty hash for nil input" do
       result = described_class.send(:sanitize_data, nil)
       expect(result).to eq({})
     end
@@ -436,32 +481,36 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
       result = described_class.send(:sanitize_data, data)
 
-      expect(result[:token]).to eq("[REDACTED]")
-      expect(result[:access_token]).to eq("[REDACTED]")
-      expect(result[:id_token]).to eq("[REDACTED]")
-      expect(result[:refresh_token]).to eq("[REDACTED]")
-      expect(result[:private_key]).to eq("[REDACTED]")
-      expect(result[:key]).to eq("[REDACTED]")
-      expect(result[:secret]).to eq("[REDACTED]")
-      expect(result[:password]).to eq("[REDACTED]")
-      expect(result[:authorization_code]).to eq("[REDACTED]")
-      expect(result[:code]).to eq("[REDACTED]")
-      expect(result[:state]).to eq("[REDACTED]")
-      expect(result[:nonce]).to eq("[REDACTED]")
-      expect(result[:state_param]).to eq("[REDACTED]")
-      expect(result[:state_session]).to eq("[REDACTED]")
-      expect(result[:fingerprint]).to eq("[REDACTED]")
-      expect(result[:calculated_fingerprint]).to eq("[REDACTED]")
-      expect(result[:expected_fingerprint]).to eq("[REDACTED]")
-      expect(result[:safe_data]).to eq("not redacted")
+      aggregate_failures do
+        expect(result[:token]).to eq("[REDACTED]")
+        expect(result[:access_token]).to eq("[REDACTED]")
+        expect(result[:id_token]).to eq("[REDACTED]")
+        expect(result[:refresh_token]).to eq("[REDACTED]")
+        expect(result[:private_key]).to eq("[REDACTED]")
+        expect(result[:key]).to eq("[REDACTED]")
+        expect(result[:secret]).to eq("[REDACTED]")
+        expect(result[:password]).to eq("[REDACTED]")
+        expect(result[:authorization_code]).to eq("[REDACTED]")
+        expect(result[:code]).to eq("[REDACTED]")
+        expect(result[:state]).to eq("[REDACTED]")
+        expect(result[:nonce]).to eq("[REDACTED]")
+        expect(result[:state_param]).to eq("[REDACTED]")
+        expect(result[:state_session]).to eq("[REDACTED]")
+        expect(result[:fingerprint]).to eq("[REDACTED]")
+        expect(result[:calculated_fingerprint]).to eq("[REDACTED]")
+        expect(result[:expected_fingerprint]).to eq("[REDACTED]")
+        expect(result[:safe_data]).to eq("not redacted")
+      end
     end
 
     it "handles string keys" do
       data = {"token" => "secret", "safe" => "data"}
       result = described_class.send(:sanitize_data, data)
 
-      expect(result["token"]).to eq("[REDACTED]")
-      expect(result["safe"]).to eq("data")
+      aggregate_failures do
+        expect(result["token"]).to eq("[REDACTED]")
+        expect(result["safe"]).to eq("data")
+      end
     end
 
     it "handles nested hashes" do
@@ -473,8 +522,10 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
       }
       result = described_class.send(:sanitize_data, data)
 
-      expect(result[:nested][:token]).to eq("[REDACTED]")
-      expect(result[:nested][:safe]).to eq("data")
+      aggregate_failures do
+        expect(result[:nested][:token]).to eq("[REDACTED]")
+        expect(result[:nested][:safe]).to eq("data")
+      end
     end
 
     it "handles arrays with hashes" do
@@ -486,10 +537,12 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
       }
       result = described_class.send(:sanitize_data, data)
 
-      expect(result[:items][0][:token]).to eq("[REDACTED]")
-      expect(result[:items][0][:name]).to eq("item1")
-      expect(result[:items][1][:token]).to eq("[REDACTED]")
-      expect(result[:items][1][:name]).to eq("item2")
+      aggregate_failures do
+        expect(result[:items][0][:token]).to eq("[REDACTED]")
+        expect(result[:items][0][:name]).to eq("item1")
+        expect(result[:items][1][:token]).to eq("[REDACTED]")
+        expect(result[:items][1][:name]).to eq("item2")
+      end
     end
 
     it "handles arrays with non-hash values" do
@@ -499,6 +552,29 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
       result = described_class.send(:sanitize_data, data)
 
       expect(result[:items]).to eq(["value1", "value2"])
+    end
+  end
+
+  # Test line 357: notify_authenticity_error
+  describe ".notify_authenticity_error" do
+    it "calls notify with authenticity error event and error severity" do
+      called_with = nil
+      config.instrumentation = ->(event, payload) { called_with = [event, payload] }
+
+      described_class.notify_authenticity_error(
+        error_type: "csrf_token_mismatch",
+        error_message: "Token mismatch",
+        phase: "callback"
+      )
+
+      aggregate_failures do
+        expect(called_with[0]).to eq(OmniauthOpenidFederation::Instrumentation::EVENT_AUTHENTICITY_ERROR)
+        expect(called_with[1][:severity]).to eq(:error)
+        expect(called_with[1][:data][:reason]).to include("OmniAuth authenticity token validation failed")
+        expect(called_with[1][:data][:error_type]).to eq("csrf_token_mismatch")
+        expect(called_with[1][:data][:error_message]).to eq("Token mismatch")
+        expect(called_with[1][:data][:phase]).to eq("callback")
+      end
     end
   end
 end

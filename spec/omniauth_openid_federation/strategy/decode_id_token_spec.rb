@@ -263,10 +263,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Behavior: Should fall back to ID token claims when userinfo decryption fails
       result = strategy.raw_info
-      expect(result).to be_a(Hash)
-      # Should contain ID token claims (fallback behavior)
-      expect(result[:sub]).to eq("user-123")
-      expect(result[:email]).to eq("user@example.com")
+      aggregate_failures do
+        expect(result).to be_a(Hash)
+        # Should contain ID token claims (fallback behavior)
+        expect(result[:sub]).to eq("user-123")
+        expect(result[:email]).to eq("user@example.com")
+      end
     end
 
     it "handles plain JSON string userinfo" do
@@ -308,8 +310,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Behavior: Should decode plain JSON string userinfo
       result = strategy.raw_info
-      expect(result).to be_a(Hash)
-      expect(result["email"]).to eq("user@example.com")
+      aggregate_failures do
+        expect(result).to be_a(Hash)
+        expect(result["email"]).to eq("user@example.com")
+      end
     end
 
     it "handles hash userinfo" do
@@ -498,10 +502,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Behavior: Should extract instance variables when other methods not available
       result = strategy.raw_info
-      expect(result).to be_a(Hash)
-      # The code uses symbol keys (var.to_s.delete_prefix("@").to_sym)
-      expect(result[:email]).to eq("user@example.com")
-      expect(result[:name]).to eq("Test User")
+      aggregate_failures do
+        expect(result).to be_a(Hash)
+        # The code uses symbol keys (var.to_s.delete_prefix("@").to_sym)
+        expect(result[:email]).to eq("user@example.com")
+        expect(result[:name]).to eq("Test User")
+      end
     end
   end
 
@@ -547,8 +553,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should load client entity statement from file for automatic registration
       uri = strategy.authorize_uri
@@ -582,13 +587,13 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,
-          private_key: private_key
+          private_key: private_key,
+          audience: "https://provider.example.com/oauth2/token" # Provide explicit audience to avoid audience resolution error
         }
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should raise error when file not found
       expect {
@@ -631,8 +636,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should raise error when file is empty
       expect {
@@ -676,8 +680,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should raise error when JWT format is invalid
       expect {
@@ -735,8 +738,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses load_client_entity_statement_from_file
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should load client entity statement from relative path
       uri = strategy.authorize_uri
@@ -770,9 +772,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Test through public API: options accessor uses extract_client_jwk_signing_key
       result = strategy.options[:client_jwk_signing_key]
-      expect(result).to be_a(String)
       parsed = JSON.parse(result)
-      expect(parsed).to have_key("keys")
+      aggregate_failures do
+        expect(result).to be_a(String)
+        expect(parsed).to have_key("keys")
+      end
     end
 
     it "handles missing jwks in entity statement" do
@@ -841,19 +845,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should extract entity identifier from sub claim
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify the JWT payload contains sub claim as issuer
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["iss"]).to eq("https://client.example.com")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["iss"]).to eq("https://client.example.com")
+      end
     end
 
     it "falls back to iss claim if sub is missing" do
@@ -895,19 +900,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should fall back to iss claim when sub is missing
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify the JWT payload contains iss claim as issuer
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["iss"]).to eq("https://client.example.com")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["iss"]).to eq("https://client.example.com")
+      end
     end
 
     it "uses configured identifier if provided" do
@@ -951,19 +957,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should use configured entity identifier when provided
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify the JWT payload contains configured identifier
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["iss"]).to eq("configured-id")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["iss"]).to eq("configured-id")
+      end
     end
   end
 
@@ -982,19 +989,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses normalize_acr_values from request params
-      allow(strategy).to receive(:request).and_return(double(params: {"acr_values" => "level1 level3"}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {"acr_values" => "level1 level3"}), session: {})
 
       # Behavior: Should normalize ACR values from request parameters
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify ACR values are in the JWT payload
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["acr_values"]).to eq("level1 level3")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["acr_values"]).to eq("level1 level3")
+      end
     end
 
     it "handles nil ACR values" do
@@ -1011,19 +1019,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri handles nil ACR values
-      allow(strategy).to receive(:request).and_return(double(params: {}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should handle nil ACR values gracefully
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # ACR values should not be in payload when nil
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload).not_to have_key("acr_values")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload).not_to have_key("acr_values")
+      end
     end
 
     it "normalizes array ACR values from request" do
@@ -1040,19 +1049,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses normalize_acr_values
-      allow(strategy).to receive(:request).and_return(double(params: {"acr_values" => ["level1", "level2"]}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {"acr_values" => ["level1", "level2"]}), session: {})
 
       # Behavior: Should normalize array ACR values from request
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify ACR values are in the JWT payload
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["acr_values"]).to eq("level1 level2")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["acr_values"]).to eq("level1 level2")
+      end
     end
 
     it "normalizes string ACR values from request" do
@@ -1069,19 +1079,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       # Test through public API: authorize_uri uses normalize_acr_values
-      allow(strategy).to receive(:request).and_return(double(params: {"acr_values" => "level1 level2"}))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: double(params: {"acr_values" => "level1 level2"}), session: {})
 
       # Behavior: Should normalize string ACR values from request
       uri = strategy.authorize_uri
-      expect(uri).to be_present
       # Verify ACR values are in the JWT payload
       uri_obj = URI.parse(uri)
       query_params = URI.decode_www_form(uri_obj.query || "").to_h
       request_jwt = query_params["request"]
       parts = request_jwt.split(".")
       payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
-      expect(payload["acr_values"]).to eq("level1 level2")
+      aggregate_failures do
+        expect(uri).to be_present
+        expect(payload["acr_values"]).to eq("level1 level2")
+      end
     end
   end
 

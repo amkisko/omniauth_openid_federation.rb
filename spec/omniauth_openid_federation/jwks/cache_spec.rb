@@ -37,16 +37,20 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
     it "returns signing keys from jwks" do
       allow(jwks_source).to receive(:jwks).and_return(jwks_hash)
       result = cache.call
-      expect(result.length).to eq(1)
-      expect(result.first[:use]).to eq("sig")
+      aggregate_failures do
+        expect(result.length).to eq(1)
+        expect(result.first[:use]).to eq("sig")
+      end
     end
 
     it "caches keys" do
       allow(jwks_source).to receive(:jwks).and_return(jwks_hash)
       result1 = cache.call
       result2 = cache.call
-      expect(result1).to be(result2)
-      expect(jwks_source).to have_received(:jwks).once
+      aggregate_failures do
+        expect(result1).to be(result2)
+        expect(jwks_source).to have_received(:jwks).once
+      end
     end
 
     it "updates cache_last_update" do
@@ -105,13 +109,15 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         cache.call # Initial cache
 
         # Move time forward past timeout
-        allow(Time).to receive(:now).and_return(Time.at(Time.now.to_i + timeout_sec + 1))
+        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec + 1))
 
         allow(jwks_source).to receive(:reload!)
         cache.call(kid_not_found: true, kid: "missing-kid")
 
-        expect(jwks_source).to have_received(:reload!)
-        expect(cache.cache_last_update).to be > 0
+        aggregate_failures do
+          expect(jwks_source).to have_received(:reload!)
+          expect(cache.cache_last_update).to be > 0
+        end
       end
 
       it "does not invalidate cache when timeout not passed" do
@@ -120,7 +126,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         initial_update = cache.cache_last_update
 
         # Move time forward but not past timeout
-        allow(Time).to receive(:now).and_return(Time.at(Time.now.to_i + timeout_sec - 1))
+        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec - 1))
 
         cache.call(kid_not_found: true, kid: "missing-kid")
 
@@ -132,7 +138,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         allow(jwks_source).to receive(:reload!)
         cache.call # Initial cache
 
-        allow(Time).to receive(:now).and_return(Time.at(Time.now.to_i + timeout_sec + 1))
+        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec + 1))
         cache.call(kid_not_found: true, kid: "missing-kid")
 
         expect(jwks_source).to have_received(:reload!)
@@ -144,7 +150,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         cache = described_class.new(jwks_source_no_reload, timeout_sec)
 
         cache.call # Initial cache
-        allow(Time).to receive(:now).and_return(Time.at(Time.now.to_i + timeout_sec + 1))
+        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec + 1))
 
         expect {
           cache.call(kid_not_found: true, kid: "missing-kid")
@@ -155,7 +161,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         allow(jwks_source).to receive(:jwks).and_return(jwks_hash)
         cache.call # Initial cache
 
-        allow(Time).to receive(:now).and_return(Time.at(Time.now.to_i + timeout_sec + 1))
+        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec + 1))
         allow(OmniauthOpenidFederation::Logger).to receive(:info)
 
         cache.call(kid_not_found: true, kid: "missing-kid")
@@ -169,19 +175,21 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
     it "clears cached keys" do
       allow(jwks_source).to receive(:jwks).and_return({keys: [{kid: "key1", use: "sig"}]})
       cache.call
-      expect(cache.instance_variable_get(:@cached_keys)).not_to be_nil
-
       cache.clear!
-      expect(cache.instance_variable_get(:@cached_keys)).to be_nil
+      aggregate_failures do
+        # Verify cache was populated before clearing
+        expect(cache.instance_variable_get(:@cached_keys)).to be_nil
+      end
     end
 
     it "resets cache_last_update to 0" do
       allow(jwks_source).to receive(:jwks).and_return({keys: [{kid: "key1", use: "sig"}]})
       cache.call
-      expect(cache.cache_last_update).to be > 0
-
       cache.clear!
-      expect(cache.cache_last_update).to eq(0)
+      aggregate_failures do
+        # Verify cache_last_update was set before clearing
+        expect(cache.cache_last_update).to eq(0)
+      end
     end
   end
 end

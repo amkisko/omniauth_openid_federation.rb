@@ -1,6 +1,7 @@
 require "spec_helper"
 require "rake"
 
+# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Rake tasks", type: :rake do
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
   let(:public_key) { private_key.public_key }
@@ -16,6 +17,22 @@ RSpec.describe "Rake tasks", type: :rake do
       end
     end
     load "lib/tasks/omniauth_openid_federation.rake"
+  end
+
+  after do
+    # Re-enable all tasks to allow them to run again in subsequent tests
+    Rake::Task.tasks.each do |task|
+      task.reenable if task.respond_to?(:reenable)
+    end
+    # Clear any environment variables that might affect tests
+    ENV.delete("ENTITY_STATEMENT_URL")
+    ENV.delete("ENTITY_STATEMENT_FINGERPRINT")
+    ENV.delete("ENTITY_STATEMENT_OUTPUT")
+    ENV.delete("ENTITY_STATEMENT_PATH")
+    ENV.delete("JWKS_URI")
+    ENV.delete("JWKS_OUTPUT")
+    ENV.delete("KEY_TYPE")
+    ENV.delete("KEYS_OUTPUT_DIR")
   end
 
   describe "openid_federation:fetch_entity_statement" do
@@ -68,6 +85,12 @@ RSpec.describe "Rake tasks", type: :rake do
         "#{provider_issuer}/.well-known/openid-federation",
         nil,
         output_file
+      )
+
+      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:fetch_entity_statement).with(
+        url: "#{provider_issuer}/.well-known/openid-federation",
+        fingerprint: nil,
+        output_file: output_file
       )
     end
 
@@ -153,6 +176,11 @@ RSpec.describe "Rake tasks", type: :rake do
 
       Rake::Task["openid_federation:validate_entity_statement"].reenable
       Rake::Task["openid_federation:validate_entity_statement"].invoke(entity_statement_path, nil)
+
+      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:validate_entity_statement).with(
+        file_path: entity_statement_path,
+        expected_fingerprint: nil
+      )
     end
 
     it "handles configuration errors" do
@@ -208,6 +236,11 @@ RSpec.describe "Rake tasks", type: :rake do
 
       Rake::Task["openid_federation:fetch_jwks"].reenable
       Rake::Task["openid_federation:fetch_jwks"].invoke(jwks_uri, output_file)
+
+      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:fetch_jwks).with(
+        jwks_uri: jwks_uri,
+        output_file: output_file
+      )
     end
 
     it "handles fetch errors" do
@@ -223,6 +256,11 @@ RSpec.describe "Rake tasks", type: :rake do
 
       Rake::Task["openid_federation:fetch_jwks"].reenable
       Rake::Task["openid_federation:fetch_jwks"].invoke(jwks_uri, nil)
+
+      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:fetch_jwks).with(
+        jwks_uri: jwks_uri,
+        output_file: "config/provider-jwks.json"
+      )
     end
   end
 
@@ -238,6 +276,11 @@ RSpec.describe "Rake tasks", type: :rake do
 
         Rake::Task["openid_federation:prepare_client_keys"].reenable
         Rake::Task["openid_federation:prepare_client_keys"].invoke("single", output_dir)
+
+        expect(OmniauthOpenidFederation::TasksHelper).to have_received(:prepare_client_keys).with(
+          key_type: "single",
+          output_dir: output_dir
+        )
       ensure
         FileUtils.rm_rf(output_dir)
       end
@@ -251,6 +294,11 @@ RSpec.describe "Rake tasks", type: :rake do
 
       Rake::Task["openid_federation:prepare_client_keys"].reenable
       Rake::Task["openid_federation:prepare_client_keys"].invoke("single", "/tmp")
+
+      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:prepare_client_keys).with(
+        key_type: "single",
+        output_dir: "/tmp"
+      )
     end
   end
 
@@ -282,6 +330,10 @@ RSpec.describe "Rake tasks", type: :rake do
 
       Rake::Task["openid_federation:parse_entity_statement"].reenable
       Rake::Task["openid_federation:parse_entity_statement"].invoke(entity_statement_path)
+
+      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:parse_entity_statement).with(
+        file_path: entity_statement_path
+      )
     end
 
     it "handles configuration errors" do
@@ -329,6 +381,11 @@ RSpec.describe "Rake tasks", type: :rake do
 
         Rake::Task["openid_federation:prepare_client_keys"].reenable
         Rake::Task["openid_federation:prepare_client_keys"].invoke("single", output_dir)
+
+        expect(OmniauthOpenidFederation::TasksHelper).to have_received(:prepare_client_keys).with(
+          key_type: "single",
+          output_dir: output_dir
+        )
       ensure
         FileUtils.rm_rf(output_dir)
       end
@@ -381,6 +438,10 @@ RSpec.describe "Rake tasks", type: :rake do
 
       Rake::Task["openid_federation:test_local_endpoint"].reenable
       Rake::Task["openid_federation:test_local_endpoint"].invoke(base_url)
+
+      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:test_local_endpoint).with(
+        base_url: base_url
+      )
     end
 
     it "handles test_local_endpoint with warnings" do
@@ -399,6 +460,10 @@ RSpec.describe "Rake tasks", type: :rake do
 
       Rake::Task["openid_federation:test_local_endpoint"].reenable
       Rake::Task["openid_federation:test_local_endpoint"].invoke(base_url)
+
+      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:test_local_endpoint).with(
+        base_url: base_url
+      )
     end
 
     it "handles test_local_endpoint with errors" do
@@ -458,3 +523,4 @@ RSpec.describe "Rake tasks", type: :rake do
     end
   end
 end
+# rubocop:enable RSpec/DescribeClass

@@ -24,8 +24,10 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
 
       result = described_class.jwt(encoded_jwt, jwks_uri)
 
-      expect(result).to be_an(Array)
-      expect(result.first["sub"]).to eq("user123")
+      aggregate_failures do
+        expect(result).to be_an(Array)
+        expect(result.first["sub"]).to eq("user123")
+      end
     end
 
     it "handles expired JWT" do
@@ -35,7 +37,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
       expect { described_class.jwt(encoded_jwt, jwks_uri) }.to raise_error(OmniauthOpenidFederation::ValidationError, /Signature has expired/)
     end
 
-    context "security: algorithm confusion attacks" do
+    context "when handling algorithm confusion attacks" do
       it "rejects JWT with alg: none" do
         # Behavior: Should reject unsigned JWTs (security requirement)
         header = Base64.urlsafe_encode64({alg: "none", typ: "JWT"}.to_json).gsub(/=+$/, "")
@@ -72,7 +74,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
       end
     end
 
-    context "security: signature verification" do
+    context "when verifying signature" do
       it "rejects JWT with tampered signature" do
         # Behavior: Should verify signature matches payload
         payload = {sub: "user123", exp: Time.now.to_i + 3600}
@@ -116,7 +118,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
       end
     end
 
-    context "security: key confusion attacks" do
+    context "when handling key confusion attacks" do
       it "rejects JWT when kid doesn't match any key in JWKS" do
         # Behavior: Should only accept JWTs with kid that exists in JWKS
         payload = {sub: "user123", exp: Time.now.to_i + 3600}
@@ -171,7 +173,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
       expect { described_class.jwt(encoded_jwt, jwks_uri) }.to raise_error(OmniauthOpenidFederation::ValidationError, /Could not find public key for kid|Key with kid/)
     end
 
-    context "security: algorithm enforcement" do
+    context "when enforcing algorithm" do
       it "only accepts RS256 algorithm" do
         # Behavior: Should enforce RS256 algorithm, not accept others
         payload = {sub: "user123", exp: Time.now.to_i + 3600}
@@ -197,7 +199,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
       end
     end
 
-    context "security: signature verification" do
+    context "when verifying signature" do
       it "verifies signature before accepting JWT" do
         # Behavior: Signature must be valid for JWT to be accepted
         payload = {sub: "user123", exp: Time.now.to_i + 3600}
@@ -229,7 +231,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
         .to_return(status: 200, body: jwks.to_json, headers: {"Content-Type" => "application/json"})
     end
 
-    context "ArgumentError handling" do
+    context "when handling ArgumentError" do
       it "handles ArgumentError with Invalid in message (lines 89-91)" do
         # Test the specific path at lines 89-91 where ArgumentError with "Invalid" is caught
         allow(OmniauthOpenidFederation::Jwks::Fetch).to receive(:run).and_return(jwks)
@@ -273,7 +275,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
       end
     end
 
-    context "generic error handling" do
+    context "when handling generic errors" do
       it "raises ValidationError when retried is true" do
         # Test the path where retried=true and an error occurs
         allow(OmniauthOpenidFederation::Jwks::Fetch).to receive(:run).and_return(jwks)
@@ -315,9 +317,37 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
           JWT.decode(encoded_jwt, nil, true, {algorithms: ["RS256"], jwks: jwks_hash})
         end
 
-        expect(result).to be_an(Array)
-        expect(OmniauthOpenidFederation::Cache).to have_received(:delete_jwks).with(jwks_uri)
-        expect(decode_call_count).to eq(2) # Should be called twice (fail + retry)
+        aggregate_failures do
+          expect(result).to be_an(Array)
+          expect(OmniauthOpenidFederation::Cache).to have_received(:delete_jwks).with(jwks_uri)
+          expect(decode_call_count).to eq(2) # Should be called twice (fail + retry)
+        end
+      end
+    end
+  end
+
+  describe ".run without block" do
+    let(:jwks) do
+      jwk = JWT::JWK.new(public_key)
+      {
+        keys: [jwk.export]
+      }
+    end
+
+    before do
+      stub_request(:get, jwks_uri)
+        .to_return(status: 200, body: jwks.to_json, headers: {"Content-Type" => "application/json"})
+    end
+
+    it "returns JWKS when no block is given" do
+      # Test line 44: when block_given? is false, return jwks directly
+      result = described_class.run("dummy_jwt", jwks_uri)
+
+      # JWKS may have string keys after JSON serialization, so compare structure
+      aggregate_failures do
+        expect(result).to have_key(:keys).or(have_key("keys"))
+        expect(result[:keys] || result["keys"]).to be_an(Array)
+        expect((result[:keys] || result["keys"]).length).to eq(1)
       end
     end
   end

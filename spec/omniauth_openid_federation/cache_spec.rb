@@ -7,8 +7,10 @@ RSpec.describe OmniauthOpenidFederation::Cache do
       key1 = described_class.key_for_jwks(uri)
       key2 = described_class.key_for_jwks(uri)
 
-      expect(key1).to eq(key2)
-      expect(key1).to start_with("omniauth_openid_federation:jwks:")
+      aggregate_failures do
+        expect(key1).to eq(key2)
+        expect(key1).to start_with("omniauth_openid_federation:jwks:")
+      end
     end
 
     it "generates different keys for different URIs" do
@@ -27,8 +29,10 @@ RSpec.describe OmniauthOpenidFederation::Cache do
       key1 = described_class.key_for_signed_jwks(uri)
       key2 = described_class.key_for_signed_jwks(uri)
 
-      expect(key1).to eq(key2)
-      expect(key1).to start_with("omniauth_openid_federation:signed_jwks:")
+      aggregate_failures do
+        expect(key1).to eq(key2)
+        expect(key1).to start_with("omniauth_openid_federation:signed_jwks:")
+      end
     end
   end
 

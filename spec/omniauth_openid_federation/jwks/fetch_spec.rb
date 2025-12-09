@@ -24,12 +24,14 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
 
         result = described_class.run(jwks_uri)
 
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to be_present
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to be_present
+        end
       end
     end
 
-    context "with signed JWKS" do
+    context "with signed JWKS and simplified keys" do
       let(:entity_jwks) { {keys: [{kty: "RSA", kid: "entity-key", use: "sig", n: "test", e: "AQAB"}]} }
       let(:signed_jwks_jwt) { "eyJhbGciOiJSUzI1NiJ9.eyJrZXlzIjpbXX0.signature" }
 
@@ -95,6 +97,18 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
         OmniauthOpenidFederation::CacheAdapter.reset!
       end
 
+      after do
+        # Restore Rails state after tests that stub Rails
+        # RSpec should automatically restore stub_const, but we reset mocks for allow().to receive()
+
+        if defined?(Rails)
+          # Reset Rails mocks - RSpec will handle stub_const cleanup automatically
+          RSpec::Mocks.space.proxy_for(Rails)&.reset
+        end
+      rescue
+        # If restoration fails, continue - RSpec will handle stub cleanup
+      end
+
       it "rotates cache on key-related error when rotate_on_errors is true" do
         OmniauthOpenidFederation.configure do |config|
           config.rotate_on_errors = true
@@ -105,8 +119,10 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
           .then.to_return(status: 200, body: jwks_response.to_json, headers: {"Content-Type" => "application/json"})
 
         result = described_class.run(jwks_uri)
-        expect(result).to be_a(Hash)
-        expect(WebMock).to have_requested(:get, jwks_uri).twice
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(WebMock).to have_requested(:get, jwks_uri).twice
+        end
       end
 
       it "raises error when rotate_on_errors is false" do
@@ -131,8 +147,10 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
           .then.to_return(status: 200, body: jwks_response.to_json, headers: {"Content-Type" => "application/json"})
 
         result = described_class.run(jwks_uri, cache_ttl: 3600)
-        expect(result).to be_a(Hash)
-        expect(WebMock).to have_requested(:get, jwks_uri).twice
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(WebMock).to have_requested(:get, jwks_uri).twice
+        end
       end
 
       it "raises error with TTL-based cache when rotate_on_errors is false" do
@@ -161,8 +179,10 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
           .to_return(status: 200, body: jwks_response.to_json, headers: {"Content-Type" => "application/json"})
 
         result = described_class.run(jwks_uri)
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to be_present
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to be_present
+        end
       end
 
       it "fetches directly when cache adapter is not available (line 89)" do
@@ -174,9 +194,11 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
         allow(OmniauthOpenidFederation::CacheAdapter).to receive(:available?).and_return(false)
 
         result = described_class.run(jwks_uri)
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to be_present
-        expect(WebMock).to have_requested(:get, jwks_uri).once
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to be_present
+          expect(WebMock).to have_requested(:get, jwks_uri).once
+        end
       end
 
       it "raises error when rate limit is exceeded" do
@@ -190,7 +212,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
       end
     end
 
-    context "with signed JWKS" do
+    context "with signed JWKS and full key setup" do
       let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
       let(:public_key) { private_key.public_key }
       let(:entity_jwk) { JWT::JWK.new(public_key) }
@@ -221,8 +243,10 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
 
         result = described_class.run(jwks_uri, entity_statement_keys: entity_statement_keys)
 
-        expect(result).to be_a(Hash)
-        expect(result["keys"]).to be_present
+        aggregate_failures do
+          expect(result).to be_a(Hash)
+          expect(result["keys"]).to be_present
+        end
       end
     end
   end
@@ -232,10 +256,12 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
       hash = {"key" => "value"}
       result = OmniauthOpenidFederation::Utils.to_indifferent_hash(hash)
 
-      if defined?(ActiveSupport::HashWithIndifferentAccess)
-        expect(result).to be_a(ActiveSupport::HashWithIndifferentAccess)
-      else
-        expect(result).to be_a(Hash)
+      aggregate_failures do
+        if defined?(ActiveSupport::HashWithIndifferentAccess)
+          expect(result).to be_a(ActiveSupport::HashWithIndifferentAccess)
+        else
+          expect(result).to be_a(Hash)
+        end
       end
     end
   end

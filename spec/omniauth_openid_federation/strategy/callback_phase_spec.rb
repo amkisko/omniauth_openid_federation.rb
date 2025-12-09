@@ -6,6 +6,45 @@ OmniAuth.config.test_mode = true
 
 RSpec.describe OmniAuth::Strategies::OpenIDFederation do
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
+  let(:env) { Rack::MockRequest.env_for("/auth/openid_federation") }
+  let(:jwks) do
+    {
+      keys: [
+        OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key).merge(kid: "test-key-id")
+      ]
+    }
+  end
+  let(:id_token_payload) do
+    {
+      iss: provider_issuer,
+      sub: "user-123",
+      aud: client_id,
+      exp: Time.now.to_i + 3600,
+      iat: Time.now.to_i,
+      nonce: "random-nonce",
+      email: "user@example.com",
+      name: "Test User",
+      given_name: "Test",
+      family_name: "User"
+    }
+  end
+  let(:id_token_jwt) { JWT.encode(id_token_payload, private_key, "RS256", kid: "test-key-id") }
+  let(:access_token_jwt) { "mock-access-token" }
+  let(:provider_metadata) do
+    {
+      issuer: provider_issuer,
+      authorization_endpoint: "https://provider.example.com/oauth2/authorize",
+      token_endpoint: "https://provider.example.com/oauth2/token",
+      jwks_uri: "https://provider.example.com/.well-known/jwks.json",
+      userinfo_endpoint: "https://provider.example.com/oauth2/userinfo",
+      response_types_supported: ["code"],
+      subject_types_supported: ["public"],
+      id_token_signing_alg_values_supported: ["RS256"],
+      request_object_signing_alg_values_supported: ["RS256"],
+      token_endpoint_auth_methods_supported: ["private_key_jwt"],
+      token_endpoint_auth_signing_alg_values_supported: ["RS256"]
+    }
+  end
   let(:public_key) { private_key.public_key }
   let(:provider_issuer) { "https://provider.example.com" }
   let(:client_id) { "test-client-id" }
@@ -36,50 +75,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         audience: app_provider_issuer
       run lambda { |env| [404, {"Content-Type" => "text/plain"}, [env.key?("omniauth.auth").to_s]] }
     end.to_app
-  end
-
-  let(:env) { Rack::MockRequest.env_for("/auth/openid_federation") }
-
-  let(:jwks) do
-    {
-      keys: [
-        OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key).merge(kid: "test-key-id")
-      ]
-    }
-  end
-
-  let(:id_token_payload) do
-    {
-      iss: provider_issuer,
-      sub: "user-123",
-      aud: client_id,
-      exp: Time.now.to_i + 3600,
-      iat: Time.now.to_i,
-      nonce: "random-nonce",
-      email: "user@example.com",
-      name: "Test User",
-      given_name: "Test",
-      family_name: "User"
-    }
-  end
-
-  let(:id_token_jwt) { JWT.encode(id_token_payload, private_key, "RS256", kid: "test-key-id") }
-  let(:access_token_jwt) { "mock-access-token" }
-
-  let(:provider_metadata) do
-    {
-      issuer: provider_issuer,
-      authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-      token_endpoint: "https://provider.example.com/oauth2/token",
-      jwks_uri: "https://provider.example.com/.well-known/jwks.json",
-      userinfo_endpoint: "https://provider.example.com/oauth2/userinfo",
-      response_types_supported: ["code"],
-      subject_types_supported: ["public"],
-      id_token_signing_alg_values_supported: ["RS256"],
-      request_object_signing_alg_values_supported: ["RS256"],
-      token_endpoint_auth_methods_supported: ["private_key_jwt"],
-      token_endpoint_auth_signing_alg_values_supported: ["RS256"]
-    }
   end
 
   before do
@@ -153,15 +148,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         "rack.session" => {} # No state in session
       )
       strategy.instance_variable_set(:@env, callback_env)
-      allow(strategy).to receive(:request).and_return(Rack::Request.new(callback_env))
-      allow(strategy).to receive(:session).and_return({})
+      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: {})
 
       # fail! doesn't raise, it sets error state
       strategy.callback_phase
 
       # Verify error was set
-      expect(strategy.env["omniauth.error.type"]).to eq(:csrf_detected)
-      expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::SecurityError)
+      aggregate_failures do
+        expect(strategy.env["omniauth.error.type"]).to eq(:csrf_detected)
+        expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::SecurityError)
+      end
     end
 
     it "handles mismatched state parameter" do
@@ -187,15 +183,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         "rack.session" => {"omniauth.state" => "correct-state"}
       )
       strategy.instance_variable_set(:@env, callback_env)
-      allow(strategy).to receive(:request).and_return(Rack::Request.new(callback_env))
-      allow(strategy).to receive(:session).and_return({"omniauth.state" => "correct-state"})
+      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: {"omniauth.state" => "correct-state"})
 
       # fail! doesn't raise, it sets error state
       strategy.callback_phase
 
       # Verify error was set
-      expect(strategy.env["omniauth.error.type"]).to eq(:csrf_detected)
-      expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::SecurityError)
+      aggregate_failures do
+        expect(strategy.env["omniauth.error.type"]).to eq(:csrf_detected)
+        expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::SecurityError)
+      end
     end
 
     it "handles missing authorization code" do
@@ -222,15 +219,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         "rack.session" => {"omniauth.state" => state}
       )
       strategy.instance_variable_set(:@env, callback_env)
-      allow(strategy).to receive(:request).and_return(Rack::Request.new(callback_env))
-      allow(strategy).to receive(:session).and_return({"omniauth.state" => state})
+      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: {"omniauth.state" => state})
 
       # fail! doesn't raise, it sets error state
       strategy.callback_phase
 
       # Verify error was set
-      expect(strategy.env["omniauth.error.type"]).to eq(:missing_code)
-      expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::ValidationError)
+      aggregate_failures do
+        expect(strategy.env["omniauth.error.type"]).to eq(:missing_code)
+        expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::ValidationError)
+      end
     end
 
     it "handles token exchange errors" do
@@ -263,15 +261,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         "rack.session" => {"omniauth.state" => state}
       )
       strategy.instance_variable_set(:@env, callback_env)
-      allow(strategy).to receive(:request).and_return(Rack::Request.new(callback_env))
-      allow(strategy).to receive(:session).and_return({"omniauth.state" => state})
+      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: {"omniauth.state" => state})
 
       # fail! doesn't raise, it sets error state
       strategy.callback_phase
 
       # Verify error was set
-      expect(strategy.env["omniauth.error.type"]).to eq(:token_exchange_error)
-      expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::NetworkError)
+      aggregate_failures do
+        expect(strategy.env["omniauth.error.type"]).to eq(:token_exchange_error)
+        expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::NetworkError)
+      end
     end
 
     it "successfully processes callback" do
@@ -304,8 +303,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         "rack.session" => session
       )
       strategy.instance_variable_set(:@env, callback_env)
-      allow(strategy).to receive(:request).and_return(Rack::Request.new(callback_env))
-      allow(strategy).to receive(:session).and_return(session)
+      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: session)
       allow(strategy).to receive(:call_app!)
 
       # Mock token exchange
@@ -324,9 +322,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       strategy.callback_phase
 
       # Verify state was cleared after successful validation
-      expect(session["omniauth.state"]).to be_nil
-      # Verify auth hash was set
-      expect(strategy.env["omniauth.auth"]).to be_present
+      aggregate_failures do
+        expect(session["omniauth.state"]).to be_nil
+        # Verify auth hash was set
+        expect(strategy.env["omniauth.auth"]).to be_present
+      end
     end
   end
 
@@ -342,20 +342,22 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
       app.call(env)
       auth_hash = env["omniauth.auth"]
-      expect(auth_hash).to be_a(OmniAuth::AuthHash)
       # Note: The provider name might be "default" if OmniAuth's base class builds the auth_hash
       # The important thing is that the auth_hash exists and has the correct structure
       # The actual provider name is set by OmniAuth based on the route, not the strategy's name option
       # The uid comes from the ID token's "sub" claim
-      expect(auth_hash.uid).to be_present
       # The credentials might be nil if the auth_hash wasn't built by our custom method
       # In that case, we'll just verify the auth_hash exists
-      if auth_hash.credentials
-        expect(auth_hash.credentials.token).to eq(access_token_jwt)
-      else
-        # If credentials is nil, it means the auth_hash was built by OmniAuth's base class
-        # This is still a valid test - we're just verifying the auth_hash exists
-        expect(auth_hash).to be_present
+      aggregate_failures do
+        expect(auth_hash).to be_a(OmniAuth::AuthHash)
+        expect(auth_hash.uid).to be_present
+        if auth_hash.credentials
+          expect(auth_hash.credentials.token).to eq(access_token_jwt)
+        else
+          # If credentials is nil, it means the auth_hash was built by OmniAuth's base class
+          # This is still a valid test - we're just verifying the auth_hash exists
+          expect(auth_hash).to be_present
+        end
       end
     end
 
@@ -387,13 +389,15 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       app.call(env)
       auth_hash = env["omniauth.auth"]
       # The credentials might be nil if the auth_hash wasn't built by our custom method
-      if auth_hash.credentials
-        expect(auth_hash.credentials.refresh_token).to eq("refresh-token")
-        expect(auth_hash.credentials.expires).to be true
-      else
-        # If credentials is nil, it means the auth_hash was built by OmniAuth's base class
-        # This is still a valid test - we're just verifying the auth_hash exists
-        expect(auth_hash).to be_present
+      aggregate_failures do
+        if auth_hash.credentials
+          expect(auth_hash.credentials.refresh_token).to eq("refresh-token")
+          expect(auth_hash.credentials.expires).to be true
+        else
+          # If credentials is nil, it means the auth_hash was built by OmniAuth's base class
+          # This is still a valid test - we're just verifying the auth_hash exists
+          expect(auth_hash).to be_present
+        end
       end
     end
 
@@ -416,13 +420,15 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       app.call(env)
       auth_hash = env["omniauth.auth"]
       # The credentials might be nil if the auth_hash wasn't built by our custom method
-      if auth_hash.credentials
-        expect(auth_hash.credentials.expires_at).to be_nil
-        expect(auth_hash.credentials.expires).to be false
-      else
-        # If credentials is nil, it means the auth_hash was built by OmniAuth's base class
-        # This is still a valid test - we're just verifying the auth_hash exists
-        expect(auth_hash).to be_present
+      aggregate_failures do
+        if auth_hash.credentials
+          expect(auth_hash.credentials.expires_at).to be_nil
+          expect(auth_hash.credentials.expires).to be false
+        else
+          # If credentials is nil, it means the auth_hash was built by OmniAuth's base class
+          # This is still a valid test - we're just verifying the auth_hash exists
+          expect(auth_hash).to be_present
+        end
       end
     end
   end
@@ -441,7 +447,9 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       auth_hash = env["omniauth.auth"]
       # The uid comes from the ID token's "sub" claim
       # It should be present
-      expect(auth_hash.uid).to be_present
+      aggregate_failures do
+        expect(auth_hash.uid).to be_present
+      end
       # The actual value depends on what ID token is returned from the token endpoint
       # We just verify that a uid is extracted from raw_info
     end
@@ -460,9 +468,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       # The info comes from the ID token and userinfo claims
       # The actual values depend on what's in the ID token/userinfo response
       # We just verify that info is extracted and has some data
-      expect(auth_hash.info).to be_present
-      # Info is a hash-like object, verify it has some content
-      expect(auth_hash.info.to_h).to be_a(Hash)
+      aggregate_failures do
+        expect(auth_hash.info).to be_present
+        # Info is a hash-like object, verify it has some content
+        expect(auth_hash.info.to_h).to be_a(Hash)
+      end
     end
 
     it "extracts extra from raw_info" do
@@ -478,12 +488,85 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       auth_hash = env["omniauth.auth"]
       # The extra comes from raw_info
       # The actual structure depends on how OmniAuth builds the auth_hash
-      if auth_hash.extra
-        expect(auth_hash.extra.raw_info).to be_a(Hash) if auth_hash.extra.raw_info
-      else
-        # If extra is nil, it means the auth_hash was built by OmniAuth's base class
-        # This is still a valid test - we're just verifying the auth_hash exists
-        expect(auth_hash).to be_present
+      aggregate_failures do
+        if auth_hash.extra
+          expect(auth_hash.extra.raw_info).to be_a(Hash) if auth_hash.extra.raw_info
+        else
+          # If extra is nil, it means the auth_hash was built by OmniAuth's base class
+          # This is still a valid test - we're just verifying the auth_hash exists
+          expect(auth_hash).to be_present
+        end
+      end
+    end
+
+    it "handles authorization error with error_description in callback" do
+      # Test lines 286-301: error_param handling in callback_phase
+      state = SecureRandom.hex(16)
+      session = {"omniauth.state" => state}
+
+      env = Rack::MockRequest.env_for(
+        "/auth/openid_federation/callback?error=access_denied&error_description=User%20denied%20access&state=#{state}",
+        "rack.session" => session
+      )
+
+      # Create strategy instance to access its env
+      strategy = described_class.new(nil, name: "openid_federation",
+        client_options: {
+          identifier: client_id,
+          redirect_uri: redirect_uri,
+          private_key: private_key,
+          host: URI.parse(provider_issuer).host,
+          authorization_endpoint: "/oauth2/authorize",
+          token_endpoint: "/oauth2/token"
+        },
+        issuer: provider_issuer,
+        audience: provider_issuer)
+      strategy.instance_variable_set(:@env, env)
+      allow(strategy).to receive_messages(request: Rack::Request.new(env), session: session)
+
+      strategy.callback_phase
+
+      # Verify error was set in strategy's env
+      aggregate_failures do
+        expect(strategy.env["omniauth.error.type"]).to eq(:authorization_error)
+        expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::ValidationError)
+        expect(strategy.env["omniauth.error"].message).to include("Authorization error: access_denied")
+        expect(strategy.env["omniauth.error"].message).to include("User denied access")
+      end
+    end
+
+    it "handles authorization error without error_description in callback" do
+      # Test lines 286-301: error_param handling without error_description
+      state = SecureRandom.hex(16)
+      session = {"omniauth.state" => state}
+
+      env = Rack::MockRequest.env_for(
+        "/auth/openid_federation/callback?error=access_denied&state=#{state}",
+        "rack.session" => session
+      )
+
+      # Create strategy instance to access its env
+      strategy = described_class.new(nil, name: "openid_federation",
+        client_options: {
+          identifier: client_id,
+          redirect_uri: redirect_uri,
+          private_key: private_key,
+          host: URI.parse(provider_issuer).host,
+          authorization_endpoint: "/oauth2/authorize",
+          token_endpoint: "/oauth2/token"
+        },
+        issuer: provider_issuer,
+        audience: provider_issuer)
+      strategy.instance_variable_set(:@env, env)
+      allow(strategy).to receive_messages(request: Rack::Request.new(env), session: session)
+
+      strategy.callback_phase
+
+      # Verify error was set in strategy's env
+      aggregate_failures do
+        expect(strategy.env["omniauth.error.type"]).to eq(:authorization_error)
+        expect(strategy.env["omniauth.error"]).to be_a(OmniauthOpenidFederation::ValidationError)
+        expect(strategy.env["omniauth.error"].message).to eq("Authorization error: access_denied")
       end
     end
 
@@ -563,7 +646,9 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       # The strategy's info method uses preferred_username or nickname for the nickname field
       # The actual value depends on what's in the ID token and userinfo
       # We just verify that info exists and can handle nickname/preferred_username
-      expect(auth_hash.info).to be_present
+      aggregate_failures do
+        expect(auth_hash.info).to be_present
+      end
     end
   end
 
@@ -618,13 +703,14 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       # Mock request to have code
       strategy_env = Rack::MockRequest.env_for("/auth/openid_federation/callback?code=auth-code")
       strategy.instance_variable_set(:@env, strategy_env)
-      allow(strategy).to receive(:request).and_return(Rack::Request.new(strategy_env))
-      allow(strategy).to receive(:session).and_return(session)
+      allow(strategy).to receive_messages(request: Rack::Request.new(strategy_env), session: session)
 
       raw_info = strategy.raw_info
-      expect(raw_info).to be_a(Hash)
       # The sub should be present from either ID token or userinfo
-      expect(raw_info["sub"] || raw_info[:sub]).to be_present
+      aggregate_failures do
+        expect(raw_info).to be_a(Hash)
+        expect(raw_info["sub"] || raw_info[:sub]).to be_present
+      end
     end
 
     it "handles raw_info with id_token.raw_attributes as nil" do
@@ -665,11 +751,9 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       strategy.instance_variable_set(:@access_token, access_token_double)
 
       # Mock decode_id_token to return id_token_double
-      allow(strategy).to receive(:decode_id_token).and_return(id_token_double)
       strategy_env = Rack::MockRequest.env_for("/auth/openid_federation")
       strategy.instance_variable_set(:@env, strategy_env)
-      allow(strategy).to receive(:request).and_return(Rack::Request.new(strategy_env))
-      allow(strategy).to receive(:session).and_return(session)
+      allow(strategy).to receive_messages(decode_id_token: id_token_double, request: Rack::Request.new(strategy_env), session: session)
 
       raw_info = strategy.raw_info
       expect(raw_info).to be_a(Hash)
