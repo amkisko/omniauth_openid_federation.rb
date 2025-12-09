@@ -11,6 +11,7 @@ plugins:
   - rubocop-performance
   - rubocop-rails
   - rubocop-rspec
+  - rubocop-thread_safety
 
 inherit_gem:
   standard: config/base.yml
