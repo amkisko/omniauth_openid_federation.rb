@@ -66,7 +66,7 @@ class MockRPServer
   end
 
   def self.load_signing_key(key_data)
-    if key_data.nil? || key_data.empty?
+    if key_data.blank?
       OpenSSL::PKey::RSA.new(2048)
     elsif key_data.is_a?(String)
       if key_data.include?("BEGIN")
@@ -80,7 +80,7 @@ class MockRPServer
   end
 
   def self.load_encryption_key(key_data)
-    return nil if key_data.nil? || key_data.empty?
+    return nil if key_data.blank?
     load_signing_key(key_data)
   end
 
@@ -297,7 +297,7 @@ class MockRPServer
         provider_entity_id: provider_entity_id,
         redirect_uri: redirect_uri,
         nonce: nonce,
-        created_at: Time.now
+        created_at: Time.zone.now
       }
 
       # Step 5: Redirect to provider

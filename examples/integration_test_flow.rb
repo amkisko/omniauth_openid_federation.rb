@@ -319,7 +319,7 @@ class IntegrationTestFlow
       attempt = 0
       ready = false
       server_name = url.include?("9292") ? "OP" : "RP"
-      start_time = Time.now
+      start_time = Time.zone.now
 
       while attempt < max_attempts && !ready
         begin
@@ -330,7 +330,7 @@ class IntegrationTestFlow
           response = http.get(uri.path)
 
           if response.code == "200"
-            elapsed = (Time.now - start_time).round(1)
+            elapsed = (Time.zone.now - start_time).round(1)
             puts "  ✓ #{url} is ready (#{elapsed}s)"
             ready = true
           end
@@ -342,7 +342,7 @@ class IntegrationTestFlow
           attempt += 1
           # Show progress every 5 attempts (1 second)
           if attempt % 5 == 0
-            elapsed = (Time.now - start_time).round(1)
+            elapsed = (Time.zone.now - start_time).round(1)
             print "."
           end
           sleep check_interval
@@ -350,7 +350,7 @@ class IntegrationTestFlow
       end
 
       unless ready
-        elapsed = (Time.now - start_time).round(1)
+        elapsed = (Time.zone.now - start_time).round(1)
         puts "\n  ✗ #{server_name} server at #{url} did not become ready in time (#{elapsed}s)"
         err_log = File.join(@tmp_dir, "#{server_name.downcase}_server_error.log")
         log_file = File.join(@tmp_dir, "#{server_name.downcase}_server.log")
