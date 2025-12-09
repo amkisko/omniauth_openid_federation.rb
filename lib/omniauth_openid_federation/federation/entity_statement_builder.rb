@@ -4,6 +4,7 @@ require "openssl"
 require "time"
 require_relative "../logger"
 require_relative "../errors"
+require_relative "../string_helpers"
 
 # Entity Statement Builder for OpenID Federation 1.0
 # @see https://openid.net/specs/openid-federation-1_0.html OpenID Federation 1.0 Specification
@@ -82,7 +83,6 @@ module OmniauthOpenidFederation
 
         payload = build_payload
 
-        # Build JWT header
         # Per OpenID Federation 1.0 Section 3.1: typ MUST be "entity-statement+jwt"
         header = {
           alg: "RS256",
@@ -102,13 +102,13 @@ module OmniauthOpenidFederation
       private
 
       def validate_parameters
-        raise ConfigurationError, "Issuer is required" if @issuer.nil? || @issuer.empty?
-        raise ConfigurationError, "Subject is required" if @subject.nil? || @subject.empty?
+        raise ConfigurationError, "Issuer is required" if StringHelpers.blank?(@issuer)
+        raise ConfigurationError, "Subject is required" if StringHelpers.blank?(@subject)
         raise ConfigurationError, "Private key is required" if @private_key.nil?
-        raise ConfigurationError, "JWKS is required" if @jwks.nil? || @jwks.empty?
-        raise ConfigurationError, "Metadata is required" if @metadata.nil? || @metadata.empty?
-        raise ConfigurationError, "JWKS must contain at least one key" if @jwks["keys"].nil? || @jwks["keys"].empty?
-        raise ConfigurationError, "Key ID (kid) is required" if @kid.nil? || @kid.empty?
+        raise ConfigurationError, "JWKS is required" if StringHelpers.blank?(@jwks)
+        raise ConfigurationError, "Metadata is required" if StringHelpers.blank?(@metadata)
+        raise ConfigurationError, "JWKS must contain at least one key" if StringHelpers.blank?(@jwks["keys"])
+        raise ConfigurationError, "Key ID (kid) is required" if StringHelpers.blank?(@kid)
       end
 
       def build_payload
@@ -125,7 +125,6 @@ module OmniauthOpenidFederation
           metadata: @metadata
         }
 
-        # Entity Configuration specific claims
         if is_entity_configuration
           payload[:authority_hints] = @authority_hints if @authority_hints
           payload[:trust_marks] = @trust_marks if @trust_marks
@@ -133,7 +132,6 @@ module OmniauthOpenidFederation
           payload[:trust_mark_owners] = @trust_mark_owners if @trust_mark_owners
         end
 
-        # Subordinate Statement specific claims
         if is_subordinate_statement
           payload[:metadata_policy] = @metadata_policy if @metadata_policy
           payload[:metadata_policy_crit] = @metadata_policy_crit if @metadata_policy_crit
@@ -141,21 +139,17 @@ module OmniauthOpenidFederation
           payload[:source_endpoint] = @source_endpoint if @source_endpoint
         end
 
-        # Common optional claims
         payload[:crit] = @crit if @crit
 
         payload
       end
 
       def normalize_jwks(jwks)
-        # Ensure JWKS is a hash with "keys" array
         if jwks.is_a?(Hash)
-          # If it has :keys or "keys", use as-is
           if jwks.key?(:keys) || jwks.key?("keys")
             keys = jwks[:keys] || jwks["keys"]
             {"keys" => normalize_keys(keys)}
           else
-            # If it's just a hash, wrap it
             {"keys" => [jwks]}
           end
         elsif jwks.is_a?(Array)
@@ -168,7 +162,6 @@ module OmniauthOpenidFederation
       def normalize_keys(keys)
         keys.map do |key|
           if key.is_a?(Hash)
-            # Convert symbol keys to string keys
             key.transform_keys(&:to_s)
           else
             key

@@ -478,6 +478,9 @@ module OmniauthOpenidFederation
       }
 
       # HTTP client helper for custom requests
+      build_http_client = lambda do |connect_timeout: 10, read_timeout: 10|
+        HTTP.timeout(connect: connect_timeout, read: read_timeout)
+      end
 
       # Step 1: Fetch login page for CSRF token and cookies
       results[:steps_completed] << "fetch_csrf_token"
@@ -488,7 +491,8 @@ module OmniauthOpenidFederation
       cookies = []
 
       begin
-        login_response = build_http_client(connect_timeout: 10, read_timeout: 10).get(login_page_url)
+        http_client = build_http_client.call(connect_timeout: 10, read_timeout: 10)
+        login_response = http_client.get(login_page_url)
 
         unless login_response.status.success?
           raise "Failed to fetch login page: #{login_response.status.code} #{login_response.status.reason}"
@@ -590,7 +594,8 @@ module OmniauthOpenidFederation
             common_paths.each do |path|
               test_url = URI.join(base_url, path).to_s
               begin
-                test_response = build_http_client(connect_timeout: 5, read_timeout: 5).get(test_url)
+                http_client = build_http_client.call(connect_timeout: 5, read_timeout: 5)
+                test_response = http_client.get(test_url)
                 if test_response.status.code >= 300 && test_response.status.code < 400
                   auth_endpoint = test_url
                   break
@@ -625,7 +630,8 @@ module OmniauthOpenidFederation
         # Include acr_values if provided (must be configured in request_object_params to be included in JWT)
         form_data[:acr_values] = provider_acr if StringHelpers.present?(provider_acr)
 
-        auth_response = build_http_client(connect_timeout: 10, read_timeout: 10)
+        http_client = build_http_client.call(connect_timeout: 10, read_timeout: 10)
+        auth_response = http_client
           .headers(headers)
           .post(auth_endpoint, form: form_data)
 
@@ -704,7 +710,7 @@ module OmniauthOpenidFederation
       require "cgi"
       require "json"
       require "base64"
-      require_relative "../strategy"
+      require_relative "strategy"
 
       results = {
         steps_completed: [],

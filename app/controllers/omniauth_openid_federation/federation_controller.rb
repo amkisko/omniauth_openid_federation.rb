@@ -12,7 +12,7 @@
 require "omniauth_openid_federation/cache_adapter"
 
 module OmniauthOpenidFederation
-  class FederationController < ActionController::Base
+  class FederationController < ::ApplicationController
     # Serve the entity statement
     #
     # GET /.well-known/openid-federation

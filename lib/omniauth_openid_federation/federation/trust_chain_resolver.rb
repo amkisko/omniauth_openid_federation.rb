@@ -4,7 +4,7 @@ require_relative "../http_client"
 require_relative "../logger"
 require_relative "../errors"
 require_relative "../utils"
-require "set"
+require_relative "../string_helpers"
 require "cgi"
 
 # Trust Chain Resolver for OpenID Federation 1.0
@@ -59,24 +59,21 @@ module OmniauthOpenidFederation
       def resolve!
         OmniauthOpenidFederation::Logger.debug("[TrustChainResolver] Starting trust chain resolution for: #{@leaf_entity_id}")
 
-        # Step 1: Fetch Leaf Entity's Entity Configuration
         leaf_config = fetch_entity_configuration(@leaf_entity_id)
-        validate_entity_statement(leaf_config, nil) # No issuer for Entity Configuration
+        validate_entity_statement(leaf_config, nil)
         @resolved_statements << leaf_config
         @visited_entities.add(@leaf_entity_id)
 
-        # Step 2: Follow authority_hints to build the chain
         current_entity_id = @leaf_entity_id
         current_config = leaf_config
 
         while current_config && !is_trust_anchor?(current_config)
           authority_hints = extract_authority_hints(current_config)
 
-          if authority_hints.nil? || authority_hints.empty?
+          if StringHelpers.blank?(authority_hints)
             raise ValidationError, "Entity #{current_entity_id} has no authority_hints and is not a Trust Anchor"
           end
 
-          # Try each authority hint until we find a valid chain
           found_next = false
           authority_hints.each do |authority_id|
             next if @visited_entities.include?(authority_id)
@@ -86,28 +83,23 @@ module OmniauthOpenidFederation
             end
 
             begin
-              # Fetch Subordinate Statement from authority
               subordinate_statement = fetch_subordinate_statement(
                 issuer: authority_id,
                 subject: current_entity_id
               )
 
-              # Validate Subordinate Statement
               issuer_config = fetch_entity_configuration(authority_id)
               validate_entity_statement(subordinate_statement, issuer_config)
 
-              # Add to chain
               @resolved_statements << subordinate_statement
               @visited_entities.add(authority_id)
 
-              # Continue with issuer as next entity
               current_entity_id = authority_id
               current_config = issuer_config
               found_next = true
               break
             rescue ValidationError, FetchError => e
               OmniauthOpenidFederation::Logger.warn("[TrustChainResolver] Failed to resolve via #{authority_id}: #{e.message}")
-              # Instrument trust chain validation failure
               OmniauthOpenidFederation::Instrumentation.notify_trust_chain_validation_failed(
                 entity_id: current_entity_id,
                 trust_anchor: authority_id,
@@ -124,10 +116,8 @@ module OmniauthOpenidFederation
           end
         end
 
-        # Step 3: Verify we reached a Trust Anchor
         unless is_trust_anchor?(current_config)
           error_msg = "Trust chain did not terminate at a configured Trust Anchor"
-          # Instrument trust chain validation failure
           OmniauthOpenidFederation::Instrumentation.notify_trust_chain_validation_failed(
             entity_id: @leaf_entity_id,
             trust_anchor: current_entity_id,
@@ -164,7 +154,6 @@ module OmniauthOpenidFederation
       end
 
       def fetch_subordinate_statement(issuer:, subject:)
-        # Try to get fetch endpoint from issuer's Entity Configuration
         issuer_config = fetch_entity_configuration(issuer)
         fetch_endpoint = extract_fetch_endpoint(issuer_config)
 
@@ -172,7 +161,6 @@ module OmniauthOpenidFederation
           raise FetchError, "Issuer #{issuer} does not provide a fetch endpoint"
         end
 
-        # Build fetch URL with iss and sub parameters
         fetch_url = "#{fetch_endpoint}?iss=#{CGI.escape(issuer)}&sub=#{CGI.escape(subject)}"
         OmniauthOpenidFederation::Logger.debug("[TrustChainResolver] Fetching Subordinate Statement from: #{fetch_url}")
 

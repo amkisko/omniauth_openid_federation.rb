@@ -116,7 +116,7 @@ module OmniauthOpenidFederation
       subject_entity_id = request.params["sub"]
 
       unless subject_entity_id
-        return error_response(400, {error: "invalid_request", error_description: "Missing required parameter: sub"}.to_json)
+        return error_response(400, {error: "invalid_request", error_description: "Missing required parameter: sub"})
       end
 
       # Security: Validate entity identifier per OpenID Federation 1.0 spec
@@ -125,22 +125,22 @@ module OmniauthOpenidFederation
         # Validate and get trimmed value
         subject_entity_id = OmniauthOpenidFederation::Validators.validate_entity_identifier!(subject_entity_id)
       rescue SecurityError => e
-        return error_response(400, {error: "invalid_request", error_description: "Invalid subject entity ID: #{e.message}"}.to_json)
+        return error_response(400, {error: "invalid_request", error_description: "Invalid subject entity ID: #{e.message}"})
       rescue => e
-        return error_response(400, {error: "invalid_request", error_description: "Subject entity ID validation failed: #{e.message}"}.to_json)
+        return error_response(400, {error: "invalid_request", error_description: "Subject entity ID validation failed: #{e.message}"})
       end
 
       # Validate that subject is not the issuer (invalid request per spec)
       config = OmniauthOpenidFederation::FederationEndpoint.configuration
       if subject_entity_id == config.issuer
-        return error_response(400, {error: "invalid_request", error_description: "Subject cannot be the issuer"}.to_json)
+        return error_response(400, {error: "invalid_request", error_description: "Subject cannot be the issuer"})
       end
 
       # Get Subordinate Statement
       subordinate_statement = OmniauthOpenidFederation::FederationEndpoint.get_subordinate_statement(subject_entity_id)
 
       unless subordinate_statement
-        return error_response(404, {error: "not_found", error_description: "Subordinate Statement not found for subject: #{subject_entity_id}"}.to_json)
+        return error_response(404, {error: "not_found", error_description: "Subordinate Statement not found for subject: #{subject_entity_id}"})
       end
 
       headers = {
@@ -188,11 +188,23 @@ module OmniauthOpenidFederation
     # Return error response
     #
     # @param status [Integer] HTTP status code
-    # @param message [String] Error message
+    # @param message [String, Hash] Error message (string) or error hash (will be converted to JSON)
     # @return [Array] Rack response
     def error_response(status, message)
       content_type = (status == 503) ? "text/plain" : "application/json"
-      body = (status == 503) ? message : {error: message}.to_json
+      body = if status == 503
+        message
+      elsif message.is_a?(Hash)
+        message.to_json
+      else
+        # If message is already JSON string, parse and re-encode to ensure proper format
+        begin
+          parsed = JSON.parse(message)
+          parsed.to_json
+        rescue JSON::ParserError
+          {error: message}.to_json
+        end
+      end
 
       [status, {"Content-Type" => content_type}, [body]]
     end

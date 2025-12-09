@@ -262,8 +262,8 @@ namespace :openid_federation do
       end
       puts "   Issuer: #{metadata[:issuer]}"
       puts "   Subject: #{metadata[:sub]}"
-      puts "   Expires: #{Time.at(metadata[:exp])}" if metadata[:exp]
-      puts "   Issued At: #{Time.at(metadata[:iat])}" if metadata[:iat]
+      puts "   Expires: #{Time.zone.at(metadata[:exp])}" if metadata[:exp]
+      puts "   Issued At: #{Time.zone.at(metadata[:iat])}" if metadata[:iat]
       puts
 
       # Key status information
@@ -594,7 +594,7 @@ namespace :openid_federation do
           if value
             if [:exp, :iat, :auth_time].include?(key)
               time_value = begin
-                Time.at(value)
+                Time.zone.at(value)
               rescue
                 value
               end

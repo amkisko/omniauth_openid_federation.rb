@@ -2,6 +2,7 @@ require_relative "federation/entity_statement_builder"
 require_relative "logger"
 require_relative "errors"
 require_relative "utils"
+require_relative "string_helpers"
 require "jwt"
 require "base64"
 require "digest"
@@ -123,16 +124,13 @@ module OmniauthOpenidFederation
         auto_provision_keys: true,
         key_rotation_period: nil
       )
-        raise ConfigurationError, "Issuer is required" if issuer.nil? || issuer.empty?
+        raise ConfigurationError, "Issuer is required" if StringHelpers.blank?(issuer)
 
-        # Priority 1: Validate key configuration - exception if all three are set
         if signing_key && encryption_key && private_key
           raise ConfigurationError, "Cannot specify signing_key, encryption_key, and private_key simultaneously. " \
             "Use either (signing_key + encryption_key) OR private_key, not both."
         end
 
-        # If auto_provision_keys is enabled and no keys are provided, allow automatic generation
-        # Keys will be generated in provision_jwks if needed
         unless auto_provision_keys
           if signing_key.nil? && encryption_key.nil? && private_key.nil? && jwks.nil?
             raise ConfigurationError, "At least one key source is required: signing_key, encryption_key, private_key, or jwks"
@@ -149,11 +147,9 @@ module OmniauthOpenidFederation
 
         config = configuration
 
-        # Set issuer and subject
         config.issuer = issuer
         config.subject = subject || issuer
 
-        # Automatic key provisioning
         if auto_provision_keys && jwks.nil?
           jwks = provision_jwks(
             signing_key: signing_key,
@@ -166,85 +162,60 @@ module OmniauthOpenidFederation
             entity_statement_path_provided: !entity_statement_path.nil?
           )
 
-          # After provisioning, check if we have keys available
-          # If provisioning failed and no keys were provided, raise appropriate error
           if jwks.nil? && signing_key.nil? && encryption_key.nil? && private_key.nil? && config.signing_key.nil?
             raise ConfigurationError, "Signing key is required. Provide signing_key, encryption_key, or private_key, or enable auto_provision_keys with entity_statement_path."
           end
         end
 
-        # Use provided jwks if available, otherwise use provisioned jwks
         config.jwks = jwks || raise(ConfigurationError, "JWKS is required. Provide jwks parameter or enable auto_provision_keys.")
 
-        # Set keys in configuration following priority:
-        # 1. Use provided keys (signing_key + encryption_key, or private_key)
-        # 2. Use keys loaded from disk (if entity statement was loaded)
-        # 3. Use keys from generated keys (if auto-generated)
         if signing_key && encryption_key
-          # Priority 1: Use provided separate keys
           config.signing_key = signing_key
           config.encryption_key = encryption_key
           config.private_key = signing_key
         elsif signing_key
-          # Priority 1b: Use provided signing_key for both signing and encryption
           config.signing_key = signing_key
           config.encryption_key = signing_key
           config.private_key = signing_key
         elsif private_key
-          # Priority 2: Use provided single private_key
           config.private_key = private_key
           config.signing_key = private_key
           config.encryption_key = private_key
         elsif config.signing_key && config.encryption_key
-          # Priority 3: Keys were loaded from disk in provision_jwks
           config.private_key = config.signing_key
         elsif config.signing_key
-          # Priority 4: Only signing_key was set (from auto-generation or fallback)
-          # Use it for both signing and encryption
           config.private_key = config.signing_key
           config.encryption_key = config.signing_key
         else
           raise ConfigurationError, "Signing key is required. Provide signing_key, encryption_key, or private_key, or enable auto_provision_keys with entity_statement_path."
         end
 
-        # Set kid from first signing key in JWKS
         keys = config.jwks[:keys] || config.jwks["keys"] || []
         signing_key_jwk = keys.find { |k| (k[:use] || k["use"]) == "sig" } || keys.first
         config.kid = signing_key_jwk&.dig(:kid) || signing_key_jwk&.dig("kid")
 
-        # Set metadata
-        # Detect entity type from metadata or default based on provided keys
         entity_type = detect_entity_type(metadata)
 
         if metadata
-          # Automatically add required jwks_uri and signed_jwks_uri if not present
-          # These are required by OpenID Federation 1.0 spec and the library provides these endpoints
           metadata = ensure_jwks_endpoints(metadata, issuer, entity_type)
           config.metadata = metadata
-          # Ensure entity type is consistent
           entity_type = detect_entity_type(config.metadata)
         else
-          # Auto-generate minimal metadata with only standard well-known endpoints
-          # Default to openid_relying_party (RP) entity type for clients
           base_metadata = {
             issuer: issuer
           }
 
-          # Only add federation_fetch_endpoint for openid_provider (OP) entities
-          # RPs typically don't have subordinates, so they don't need fetch endpoint
           if entity_type == :openid_provider
             base_metadata[:federation_fetch_endpoint] = "#{issuer}/.well-known/openid-federation/fetch"
             config.metadata = {
               openid_provider: base_metadata
             }
           else
-            # Default to openid_relying_party (RP)
             config.metadata = {
               openid_relying_party: base_metadata
             }
           end
 
-          # Ensure jwks_uri and signed_jwks_uri are added (same as when metadata is provided)
           config.metadata = ensure_jwks_endpoints(config.metadata, issuer, entity_type)
 
           OmniauthOpenidFederation::Logger.warn(
@@ -255,25 +226,19 @@ module OmniauthOpenidFederation
           )
         end
 
-        # Store entity type for later use
         config.entity_type = entity_type
 
-        # Set optional configuration
         config.expiration_seconds = expiration_seconds if expiration_seconds
         config.jwks_cache_ttl = jwks_cache_ttl if jwks_cache_ttl
         config.key_rotation_period = key_rotation_period if key_rotation_period
         config.entity_statement_path = entity_statement_path if entity_statement_path
 
-        # If keys were provided in config, regenerate entity statement and save keys to disk
-        # This ensures the entity statement signature matches the provided keys
         if entity_statement_path && (signing_key || private_key)
           begin
-            # Save provided keys to disk for persistence
             keys_dir = File.dirname(entity_statement_path)
             FileUtils.mkdir_p(keys_dir) unless File.directory?(keys_dir)
 
             if signing_key && encryption_key
-              # Save separate keys
               signing_key_path = File.join(keys_dir, ".federation-signing-key.pem")
               encryption_key_path = File.join(keys_dir, ".federation-encryption-key.pem")
               File.write(signing_key_path, signing_key.to_pem)
@@ -282,7 +247,6 @@ module OmniauthOpenidFederation
               File.chmod(0o600, encryption_key_path)
               OmniauthOpenidFederation::Logger.debug("[FederationEndpoint] Saved provided signing and encryption keys to disk")
             elsif private_key
-              # Save single key (for transition period / dev/testing)
               signing_key_path = File.join(keys_dir, ".federation-signing-key.pem")
               encryption_key_path = File.join(keys_dir, ".federation-encryption-key.pem")
               File.write(signing_key_path, private_key.to_pem)
@@ -292,7 +256,6 @@ module OmniauthOpenidFederation
               OmniauthOpenidFederation::Logger.debug("[FederationEndpoint] Saved provided private_key to disk (used for both signing and encryption)")
             end
 
-            # Regenerate entity statement with provided keys to ensure signature matches
             entity_statement = generate_entity_statement
             FileUtils.mkdir_p(File.dirname(entity_statement_path)) if File.dirname(entity_statement_path) != "."
             File.write(entity_statement_path, entity_statement)
@@ -303,7 +266,6 @@ module OmniauthOpenidFederation
           end
         end
 
-        # Handle automatic key rotation if enabled
         if auto_provision_keys && entity_statement_path && config.key_rotation_period
           rotate_keys_if_needed(config)
         end
@@ -313,12 +275,6 @@ module OmniauthOpenidFederation
       end
 
       # Automatic key provisioning: Extract or generate JWKS from available sources
-      #
-      # Priority order:
-      # 1. Extract from entity_statement_path (cached, supports key rotation)
-      # 2. Generate from separate signing_key and encryption_key (RECOMMENDED)
-      # 3. Generate from single private_key (DEV/TESTING ONLY)
-      # 4. Auto-generate new keys if no keys provided and auto_provision_keys is enabled
       #
       # @param signing_key [OpenSSL::PKey::RSA, nil] Signing private key
       # @param encryption_key [OpenSSL::PKey::RSA, nil] Encryption private key
@@ -330,37 +286,27 @@ module OmniauthOpenidFederation
       # @param entity_statement_path_provided [Boolean] Whether entity_statement_path was provided as parameter (not auto-generated)
       # @return [Hash, nil] JWKS hash with keys array, or nil if provisioning fails
       def provision_jwks(signing_key: nil, encryption_key: nil, private_key: nil, entity_statement_path: nil, issuer: nil, subject: nil, metadata: nil, entity_statement_path_provided: false)
-        # Priority 1-3: Use provided keys from config (highest priority)
         if encryption_key
-          # Generate from separate signing_key and encryption_key (RECOMMENDED for production)
           signing_key_for_jwk = signing_key || private_key
           raise ConfigurationError, "Signing key is required when encryption_key is provided. Provide signing_key or private_key." unless signing_key_for_jwk
 
-          # Check if signing and encryption keys are the same (compare public key PEM)
           # If same, generate single JWK to avoid duplicate kid values
           if signing_key_for_jwk.public_key.to_pem == encryption_key.public_key.to_pem
-            # Same key used for both signing and encryption - generate single JWK
             single_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(signing_key_for_jwk, use: nil)
             return {keys: [single_jwk]}
           else
-            # Different keys - generate separate JWKs
             signing_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(signing_key_for_jwk, use: "sig")
             encryption_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(encryption_key, use: "enc")
             return {keys: [signing_jwk, encryption_jwk]}
           end
         elsif private_key || signing_key
-          # Use single key (private_key or signing_key) for both signing and encryption
-          # When using a single key, include only ONE JWK (not two with duplicate kid)
           single_key = private_key || signing_key
 
-          # Generate JWK without 'use' field to indicate it can be used for both purposes
-          # This avoids duplicate kid values which violate the spec
+          # Generate JWK without 'use' field to avoid duplicate kid values which violate the spec
           single_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(single_key, use: nil)
           return {keys: [single_jwk]}
         end
 
-        # Priority 4: Extract from entity statement file (cached, supports automatic key rotation)
-        # Only if no keys were provided in config (keys from config take priority)
         extraction_failed = false
         if entity_statement_path&.then { |path| File.exist?(path) }
           begin
@@ -369,8 +315,6 @@ module OmniauthOpenidFederation
             if jwks&.dig(:keys)&.any?
               OmniauthOpenidFederation::Logger.debug("[FederationEndpoint] Extracted JWKS from entity statement file: #{entity_statement_path}")
 
-              # Only load private keys from disk if no keys were provided in config
-              # This ensures provided keys take priority over cached keys
               keys_dir = File.dirname(entity_statement_path)
               signing_key_path = File.join(keys_dir, ".federation-signing-key.pem")
               encryption_key_path = File.join(keys_dir, ".federation-encryption-key.pem")
@@ -409,16 +353,11 @@ module OmniauthOpenidFederation
           end
         end
 
-        # Priority 5: Auto-generate new keys (when auto_provision_keys is enabled and no keys provided)
-        # This generates separate signing and encryption keys
-        # Only auto-generate if entity_statement_path was not provided as parameter (or extraction succeeded)
-        # If entity_statement_path was provided but extraction failed, don't auto-generate
         if issuer && (!entity_statement_path_provided || !extraction_failed)
-          # Generate a default entity_statement_path if not provided
           entity_statement_path ||= begin
             configuration
             if defined?(Rails) && Rails.root
-              default_path = Rails.root.join("config", ".federation-entity-statement.jwt").to_s
+              default_path = Rails.root.join("config/.federation-entity-statement.jwt").to_s
               OmniauthOpenidFederation::Logger.info("[FederationEndpoint] No entity_statement_path provided, using default: #{OmniauthOpenidFederation::Utils.sanitize_path(default_path)}")
               default_path
             end
@@ -441,17 +380,10 @@ module OmniauthOpenidFederation
         nil
       end
 
-      # Get the current configuration
-      #
-      # @return [Configuration] Current configuration
       def configuration
         @configuration ||= Configuration.new
       end
 
-      # Generate the entity statement JWT
-      #
-      # @return [String] The signed entity statement JWT
-      # @raise [ConfigurationError] If configuration is incomplete
       def generate_entity_statement
         config = configuration
         validate_configuration(config)
@@ -470,22 +402,15 @@ module OmniauthOpenidFederation
         builder.build
       end
 
-      # Generate signed JWKS JWT
-      #
-      # @return [String] The signed JWKS JWT
-      # @raise [ConfigurationError] If configuration is incomplete
       def generate_signed_jwks
         config = configuration
         validate_configuration(config)
 
-        # Get JWKS to include in payload (current keys, not entity statement keys)
         jwks_payload = resolve_signed_jwks_payload(config)
 
-        # Sign with entity statement key
         signing_kid = config.signed_jwks_signing_kid || config.kid || extract_kid_from_jwks(config.jwks)
         expiration_seconds = config.signed_jwks_expiration_seconds || 86400
 
-        # Build JWT payload with JWKS
         now = Time.now.to_i
         payload = {
           iss: config.issuer,
@@ -495,7 +420,6 @@ module OmniauthOpenidFederation
           jwks: jwks_payload
         }
 
-        # Sign JWT using jwt gem
         header = {
           alg: "RS256",
           typ: "JWT",
@@ -511,11 +435,9 @@ module OmniauthOpenidFederation
         end
       end
 
-      # Get current JWKS for serving
-      #
-      # @return [Hash] Current JWKS hash
       def current_jwks
         config = configuration
+        validate_configuration(config)
         resolve_current_jwks(config)
       end
 
@@ -566,7 +488,6 @@ module OmniauthOpenidFederation
       # @param keys_output_dir [String, nil] Directory to store private keys (optional, defaults to same dir as entity_statement_path)
       # @return [Hash, nil] JWKS hash with keys array, or nil if generation fails
       def generate_fresh_keys(entity_statement_path:, issuer: nil, subject: nil, metadata: nil, keys_output_dir: nil)
-        # Generate separate signing and encryption keys
         signing_key = OpenSSL::PKey::RSA.new(2048)
         encryption_key = OpenSSL::PKey::RSA.new(2048)
 
@@ -574,13 +495,11 @@ module OmniauthOpenidFederation
         encryption_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(encryption_key, use: "enc")
         jwks = {keys: [signing_jwk, encryption_jwk]}
 
-        # Get configuration for issuer, subject, and metadata
         config = configuration
         issuer ||= config.issuer
         subject ||= config.subject || issuer
         metadata ||= config.metadata
 
-        # Generate minimal metadata if none provided
         unless metadata
           if issuer
             # Default to openid_relying_party (RP) entity type for clients
@@ -598,7 +517,6 @@ module OmniauthOpenidFederation
           end
         end
 
-        # Generate entity statement with new keys
         if issuer
           builder = Federation::EntityStatementBuilder.new(
             issuer: issuer,
@@ -612,11 +530,9 @@ module OmniauthOpenidFederation
 
           entity_statement = builder.build
 
-          # Determine keys output directory (default to same directory as entity statement)
           keys_dir = keys_output_dir || File.dirname(entity_statement_path)
           FileUtils.mkdir_p(keys_dir) unless File.directory?(keys_dir)
 
-          # Write private keys to disk (secure storage)
           signing_key_path = File.join(keys_dir, ".federation-signing-key.pem")
           encryption_key_path = File.join(keys_dir, ".federation-encryption-key.pem")
 
@@ -625,12 +541,10 @@ module OmniauthOpenidFederation
           File.chmod(0o600, signing_key_path)
           File.chmod(0o600, encryption_key_path)
 
-          # Write entity statement to file
           FileUtils.mkdir_p(File.dirname(entity_statement_path)) if File.dirname(entity_statement_path) != "."
           File.write(entity_statement_path, entity_statement)
           File.chmod(0o600, entity_statement_path) if File.exist?(entity_statement_path)
 
-          # Update configuration with new keys
           config.signing_key = signing_key
           config.encryption_key = encryption_key
           config.private_key = signing_key
@@ -651,19 +565,15 @@ module OmniauthOpenidFederation
         nil
       end
 
-      # Rotate keys if rotation period has elapsed
-      #
-      # @param config [Configuration] Configuration object
       def rotate_keys_if_needed(config)
         return unless config.key_rotation_period && config.entity_statement_path
 
         entity_statement_path = config.entity_statement_path
         return unless File.exist?(entity_statement_path)
 
-        # Check if file needs rotation based on modification time
         file_mtime = File.mtime(entity_statement_path)
         rotation_period_seconds = config.key_rotation_period.to_i
-        time_since_rotation = Time.now - file_mtime
+        time_since_rotation = Time.zone.now - file_mtime
 
         if time_since_rotation >= rotation_period_seconds
           OmniauthOpenidFederation::Logger.info(
@@ -671,7 +581,6 @@ module OmniauthOpenidFederation
             "generating new keys"
           )
 
-          # Generate fresh keys and update entity statement
           keys_dir = File.dirname(entity_statement_path)
           jwks = generate_fresh_keys(
             entity_statement_path: entity_statement_path,
@@ -683,7 +592,6 @@ module OmniauthOpenidFederation
 
           if jwks
             config.jwks = jwks
-            # Update kid from new signing key
             keys = jwks[:keys] || jwks["keys"] || []
             signing_key_jwk = keys.find { |k| (k[:use] || k["use"]) == "sig" } || keys.first
             config.kid = signing_key_jwk&.dig(:kid) || signing_key_jwk&.dig("kid")
@@ -700,38 +608,25 @@ module OmniauthOpenidFederation
         end
       end
 
-      # Ensure jwks_uri and signed_jwks_uri are present in metadata
-      # These are required by OpenID Federation 1.0 specification
-      # Also ensures federation_fetch_endpoint is present for openid_provider entities
-      #
-      # @param metadata [Hash] Metadata hash
-      # @param issuer [String] Issuer URL
-      # @param entity_type [Symbol] Entity type (:openid_provider or :openid_relying_party)
-      # @return [Hash] Metadata with jwks endpoints added if missing
       def ensure_jwks_endpoints(metadata, issuer, entity_type)
-        metadata = metadata.dup # Don't modify original
+        metadata = metadata.dup
         entity_type ||= detect_entity_type(metadata)
 
-        # Determine which metadata section to update
         section = if entity_type == :openid_provider
           metadata[:openid_provider] || metadata["openid_provider"] || {}
         else
           metadata[:openid_relying_party] || metadata["openid_relying_party"] || {}
         end
 
-        # Convert to symbol keys for consistency
         section = section.each_with_object({}) { |(k, v), h| h[k.to_sym] = v }
 
-        # Add jwks_uri and signed_jwks_uri if not present
         section[:jwks_uri] ||= "#{issuer}/.well-known/jwks.json"
         section[:signed_jwks_uri] ||= "#{issuer}/.well-known/signed-jwks.json"
 
-        # Add federation_fetch_endpoint for openid_provider entities if not present
         if entity_type == :openid_provider
           section[:federation_fetch_endpoint] ||= "#{issuer}/.well-known/openid-federation/fetch"
         end
 
-        # Update metadata with modified section
         if entity_type == :openid_provider
           metadata[:openid_provider] = section
           metadata.delete("openid_provider") if metadata.key?("openid_provider")
@@ -743,34 +638,54 @@ module OmniauthOpenidFederation
         metadata
       end
 
+      def get_subordinate_statement(subject_entity_id)
+        config = configuration
+        validate_configuration(config)
+
+        entity_type = detect_entity_type(config.metadata)
+        unless entity_type == :openid_provider
+          OmniauthOpenidFederation::Logger.debug("[FederationEndpoint] Fetch endpoint called for non-OP entity (#{entity_type}), returning nil")
+          return nil
+        end
+
+        if config.subordinate_statements_proc
+          return config.subordinate_statements_proc.call(subject_entity_id)
+        end
+
+        if config.subordinate_statements && config.subordinate_statements[subject_entity_id]
+          subordinate_config = config.subordinate_statements[subject_entity_id]
+          return generate_subordinate_statement(
+            subject_entity_id: subject_entity_id,
+            subject_metadata: subordinate_config[:metadata] || subordinate_config["metadata"],
+            metadata_policy: subordinate_config[:metadata_policy] || subordinate_config["metadata_policy"],
+            constraints: subordinate_config[:constraints] || subordinate_config["constraints"]
+          )
+        end
+
+        nil
+      end
+
       private
 
-      # Detect entity type from metadata
-      #
-      # @param metadata [Hash, nil] Entity metadata
-      # @return [Symbol] Entity type: :openid_provider or :openid_relying_party
       def detect_entity_type(metadata)
-        return :openid_relying_party if metadata.nil? || metadata.empty?
+        return :openid_relying_party if StringHelpers.blank?(metadata)
 
-        # Check for openid_relying_party first (primary use case)
         if metadata.key?(:openid_relying_party) || metadata.key?("openid_relying_party")
           return :openid_relying_party
         end
 
-        # Check for openid_provider
         if metadata.key?(:openid_provider) || metadata.key?("openid_provider")
           return :openid_provider
         end
 
-        # Default to openid_relying_party (primary use case for clients)
         :openid_relying_party
       end
 
       def validate_configuration(config)
-        raise ConfigurationError, "Issuer is required. Configure with OmniauthOpenidFederation::FederationEndpoint.configure" if config.issuer.nil? || config.issuer.empty?
+        raise ConfigurationError, "Issuer is required. Configure with OmniauthOpenidFederation::FederationEndpoint.configure" if StringHelpers.blank?(config.issuer)
         raise ConfigurationError, "Private key is required. Configure with OmniauthOpenidFederation::FederationEndpoint.configure" if config.private_key.nil?
-        raise ConfigurationError, "JWKS is required. Configure with OmniauthOpenidFederation::FederationEndpoint.configure" if config.jwks.nil? || config.jwks.empty?
-        raise ConfigurationError, "Metadata is required. Configure with OmniauthOpenidFederation::FederationEndpoint.configure" if config.metadata.nil? || config.metadata.empty?
+        raise ConfigurationError, "JWKS is required. Configure with OmniauthOpenidFederation::FederationEndpoint.configure" if StringHelpers.blank?(config.jwks)
+        raise ConfigurationError, "Metadata is required. Configure with OmniauthOpenidFederation::FederationEndpoint.configure" if StringHelpers.blank?(config.metadata)
       end
 
       def resolve_current_jwks(config)
@@ -792,32 +707,19 @@ module OmniauthOpenidFederation
         first_key["kid"] || first_key[:kid]
       end
 
-      # Generate Subordinate Statement for a subject entity
-      # Only available for openid_provider (OP) entities that have subordinates
-      #
-      # @param subject_entity_id [String] Entity Identifier of the subject
-      # @param subject_metadata [Hash, nil] Optional: Subject entity metadata to include
-      # @param metadata_policy [Hash, nil] Optional: Metadata policy to apply
-      # @param constraints [Hash, nil] Optional: Trust Chain constraints
-      # @param source_endpoint [String, nil] Optional: Fetch endpoint URL
-      # @return [String] The signed Subordinate Statement JWT
-      # @raise [ConfigurationError] If configuration is incomplete or entity is not an OP
       def generate_subordinate_statement(subject_entity_id:, subject_metadata: nil, metadata_policy: nil, constraints: nil, source_endpoint: nil)
         config = configuration
         validate_configuration(config)
 
-        # Only OPs can generate subordinate statements
         entity_type = detect_entity_type(config.metadata)
         unless entity_type == :openid_provider
           raise ConfigurationError, "Subordinate statements can only be generated by openid_provider entities. Current entity type: #{entity_type}"
         end
 
-        # Get federation_fetch_endpoint from metadata or use default
         op_metadata = config.metadata[:openid_provider] || config.metadata["openid_provider"] || {}
         fetch_endpoint = op_metadata[:federation_fetch_endpoint] || op_metadata["federation_fetch_endpoint"] ||
           "#{config.issuer}/.well-known/openid-federation/fetch"
 
-        # Build metadata for subject if provided
         metadata = subject_metadata || {}
 
         builder = Federation::EntityStatementBuilder.new(
@@ -834,41 +736,6 @@ module OmniauthOpenidFederation
         )
 
         builder.build
-      end
-
-      # Get Subordinate Statement for a subject (for Fetch Endpoint)
-      # Only available for openid_provider (OP) entities
-      #
-      # @param subject_entity_id [String] Entity Identifier of the subject
-      # @return [String, nil] The Subordinate Statement JWT or nil if not found
-      # @raise [ConfigurationError] If configuration is incomplete or entity is not an OP
-      def get_subordinate_statement(subject_entity_id)
-        config = configuration
-
-        # Only OPs can serve subordinate statements
-        entity_type = detect_entity_type(config.metadata)
-        unless entity_type == :openid_provider
-          OmniauthOpenidFederation::Logger.debug("[FederationEndpoint] Fetch endpoint called for non-OP entity (#{entity_type}), returning nil")
-          return nil
-        end
-
-        # Use subordinate_statements_proc if configured
-        if config.subordinate_statements_proc
-          return config.subordinate_statements_proc.call(subject_entity_id)
-        end
-
-        # Use subordinate_statements hash if configured
-        if config.subordinate_statements && config.subordinate_statements[subject_entity_id]
-          subordinate_config = config.subordinate_statements[subject_entity_id]
-          return generate_subordinate_statement(
-            subject_entity_id: subject_entity_id,
-            subject_metadata: subordinate_config[:metadata] || subordinate_config["metadata"],
-            metadata_policy: subordinate_config[:metadata_policy] || subordinate_config["metadata_policy"],
-            constraints: subordinate_config[:constraints] || subordinate_config["constraints"]
-          )
-        end
-
-        nil
       end
 
       # Configuration class for FederationEndpoint

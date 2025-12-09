@@ -1,4 +1,6 @@
 # Utility functions for omniauth_openid_federation
+require_relative "string_helpers"
+
 module OmniauthOpenidFederation
   module Utils
     # Convert hash to HashWithIndifferentAccess if available
@@ -18,7 +20,7 @@ module OmniauthOpenidFederation
     # @param path [String, nil] The file path
     # @return [String] Sanitized path (filename only)
     def self.sanitize_path(path)
-      return "[REDACTED]" if path.nil? || path.empty?
+      return "[REDACTED]" if StringHelpers.blank?(path)
       File.basename(path)
     end
 
@@ -27,7 +29,7 @@ module OmniauthOpenidFederation
     # @param uri [String, nil] The URI
     # @return [String] Sanitized URI
     def self.sanitize_uri(uri)
-      return "[REDACTED]" if uri.nil? || uri.empty?
+      return "[REDACTED]" if StringHelpers.blank?(uri)
       begin
         parsed = URI.parse(uri)
         "#{parsed.scheme}://#{parsed.host}/[REDACTED]"
@@ -70,16 +72,13 @@ module OmniauthOpenidFederation
     def self.validate_file_path!(path, allowed_dirs: nil)
       raise SecurityError, "File path cannot be nil" if path.nil?
 
-      # Convert Pathname to string if needed
       path_str = path.to_s
       raise SecurityError, "File path cannot be empty" if path_str.empty?
 
-      # Check for path traversal attempts
       if path_str.include?("..") || path_str.include?("~")
         raise SecurityError, "Path traversal detected in: #{sanitize_path(path_str)}"
       end
 
-      # Resolve to absolute path
       resolved = File.expand_path(path_str)
 
       # Validate it's within allowed directories if specified
@@ -120,7 +119,6 @@ module OmniauthOpenidFederation
       n = Base64.urlsafe_encode64(key.n.to_s(2), padding: false)
       e = Base64.urlsafe_encode64(key.e.to_s(2), padding: false)
 
-      # Generate kid (key ID) from public key
       public_key_pem = key.public_key.to_pem
       kid = Digest::SHA256.hexdigest(public_key_pem)[0, 16]
 
@@ -131,7 +129,6 @@ module OmniauthOpenidFederation
         e: e
       }
 
-      # Add use field if specified
       jwk[:use] = use if use
 
       jwk
