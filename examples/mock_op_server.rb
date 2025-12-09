@@ -111,7 +111,7 @@ class MockOPServer
   end
 
   def self.load_signing_key(key_data)
-    if key_data.nil? || key_data.empty?
+    if key_data.blank?
       # Generate a new key for testing
       OpenSSL::PKey::RSA.new(2048)
     elsif key_data.is_a?(String)
@@ -126,7 +126,7 @@ class MockOPServer
   end
 
   def self.load_encryption_key(key_data)
-    return nil if key_data.nil? || key_data.empty?
+    return nil if key_data.blank?
     load_signing_key(key_data)
   end
 
@@ -478,7 +478,7 @@ class MockOPServer
         redirect_uri: redirect_uri,
         state: state,
         nonce: nonce,
-        created_at: Time.now
+        created_at: Time.zone.now
       }
 
       # Redirect back to RP with authorization code
