@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 1.3.1 (2025-12-09)
+
+- Enhanced SSL configuration for HTTPS requests in tasks_helper.rb
+- Updated federation controller to use ApplicationController
+- Updated routes to have semaphore if it is already loaded
+- Updated gemfiles and workflows for Rails 8 compatibility
+- Improved time handling in integration and mock server classes using Time.zone.now
+
 ## 1.3.0 (2025-11-28)
 
 - Added `prepare_request_object_params` proc option to customize request parameters before signing
