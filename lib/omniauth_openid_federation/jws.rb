@@ -222,7 +222,7 @@ module OmniauthOpenidFederation
         response_type: @response_type,
         scope: @scope,
         state: state,
-        exp: (Time.now + (defined?(ActiveSupport) ? REQUEST_OBJECT_EXPIRATION_MINUTES.minutes : REQUEST_OBJECT_EXPIRATION_SECONDS)).to_i,
+        exp: (Time.zone.now + (defined?(ActiveSupport) ? REQUEST_OBJECT_EXPIRATION_MINUTES.minutes : REQUEST_OBJECT_EXPIRATION_SECONDS)).to_i,
         jti: SecureRandom.uuid # JWT ID to prevent replay
       }
 
