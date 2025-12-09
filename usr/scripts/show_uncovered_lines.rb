@@ -249,7 +249,7 @@ sorted_files.each do |file|
   groups = []
   current_group = [lines.first]
 
-  lines[1..-1].each do |line_num|
+  lines[1..].each do |line_num|
     last_in_group = current_group.last
     if line_num - last_in_group <= options[:threshold]
       # Add to current group
