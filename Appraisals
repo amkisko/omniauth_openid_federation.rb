@@ -1,3 +1,12 @@
+appraise "ruby" do
+  ruby ">= 3.4.0"
+  gem "omniauth", "~> 2.0"
+end
+
+appraise "truffleruby" do
+  gem "omniauth", "~> 2.0"
+end
+
 appraise "rails6" do
   gem "activesupport", "~> 6.1"
   gem "railties", "~> 6.1"
