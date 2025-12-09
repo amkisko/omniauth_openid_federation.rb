@@ -1103,7 +1103,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
     it "handles missing both sub and iss" do
       # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
+      provider_tempfile = Tempfile.new(["provider_entity", ".jwt"])
+      provider_entity_statement_path = provider_tempfile.path
       provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       provider_entity_statement = {
         iss: provider_issuer,
@@ -1120,7 +1121,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
       File.write(provider_entity_statement_path, provider_jwt)
 
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_tempfile = Tempfile.new(["entity", ".jwt"])
+      entity_statement_path = entity_tempfile.path
       entity_statement = {}
       jwt = JWT.encode(entity_statement, private_key, "RS256")
       File.write(entity_statement_path, jwt)
