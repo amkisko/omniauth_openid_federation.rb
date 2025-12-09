@@ -109,7 +109,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         cache.call # Initial cache
 
         # Move time forward past timeout
-        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec + 1))
+        allow(Time).to receive(:now).and_return(OmniauthOpenidFederation::TimeHelpers.at(Time.now.to_i + timeout_sec + 1))
 
         allow(jwks_source).to receive(:reload!)
         cache.call(kid_not_found: true, kid: "missing-kid")
@@ -126,7 +126,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         initial_update = cache.cache_last_update
 
         # Move time forward but not past timeout
-        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec - 1))
+        allow(Time).to receive(:now).and_return(OmniauthOpenidFederation::TimeHelpers.at(Time.now.to_i + timeout_sec - 1))
 
         cache.call(kid_not_found: true, kid: "missing-kid")
 
@@ -138,7 +138,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         allow(jwks_source).to receive(:reload!)
         cache.call # Initial cache
 
-        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec + 1))
+        allow(Time).to receive(:now).and_return(OmniauthOpenidFederation::TimeHelpers.at(Time.now.to_i + timeout_sec + 1))
         cache.call(kid_not_found: true, kid: "missing-kid")
 
         expect(jwks_source).to have_received(:reload!)
@@ -150,7 +150,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         cache = described_class.new(jwks_source_no_reload, timeout_sec)
 
         cache.call # Initial cache
-        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec + 1))
+        allow(Time).to receive(:now).and_return(OmniauthOpenidFederation::TimeHelpers.at(Time.now.to_i + timeout_sec + 1))
 
         expect {
           cache.call(kid_not_found: true, kid: "missing-kid")
@@ -161,7 +161,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Cache do
         allow(jwks_source).to receive(:jwks).and_return(jwks_hash)
         cache.call # Initial cache
 
-        allow(Time).to receive(:now).and_return(Time.zone.at(Time.now.to_i + timeout_sec + 1))
+        allow(Time).to receive(:now).and_return(OmniauthOpenidFederation::TimeHelpers.at(Time.now.to_i + timeout_sec + 1))
         allow(OmniauthOpenidFederation::Logger).to receive(:info)
 
         cache.call(kid_not_found: true, kid: "missing-kid")

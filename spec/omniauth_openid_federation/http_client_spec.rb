@@ -109,9 +109,9 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           config.retry_delay = 0.1
         end
 
-        start_time = Time.zone.now
+        start_time = OmniauthOpenidFederation::TimeHelpers.now
         response = described_class.get(uri)
-        elapsed = Time.zone.now - start_time
+        elapsed = OmniauthOpenidFederation::TimeHelpers.now - start_time
 
         aggregate_failures do
           expect(response.status).to eq(200)
@@ -172,9 +172,9 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           {status: 200, body: "success"}
         end
 
-        start_time = Time.zone.now
+        start_time = OmniauthOpenidFederation::TimeHelpers.now
         response = described_class.get(uri, max_retries: 2, retry_delay: 0.2)
-        elapsed = Time.zone.now - start_time
+        elapsed = OmniauthOpenidFederation::TimeHelpers.now - start_time
 
         aggregate_failures do
           expect(response.status).to eq(200)

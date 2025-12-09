@@ -3,6 +3,7 @@ require_relative "logger"
 require_relative "errors"
 require_relative "utils"
 require_relative "string_helpers"
+require_relative "time_helpers"
 require "jwt"
 require "base64"
 require "digest"
@@ -573,7 +574,7 @@ module OmniauthOpenidFederation
 
         file_mtime = File.mtime(entity_statement_path)
         rotation_period_seconds = config.key_rotation_period.to_i
-        time_since_rotation = Time.zone.now - file_mtime
+        time_since_rotation = TimeHelpers.now - file_mtime
 
         if time_since_rotation >= rotation_period_seconds
           OmniauthOpenidFederation::Logger.info(

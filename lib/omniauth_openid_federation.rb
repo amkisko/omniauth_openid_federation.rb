@@ -28,6 +28,7 @@ end
 
 require_relative "omniauth_openid_federation/version"
 require_relative "omniauth_openid_federation/string_helpers"
+require_relative "omniauth_openid_federation/time_helpers"
 require_relative "omniauth_openid_federation/logger"
 require_relative "omniauth_openid_federation/configuration"
 require_relative "omniauth_openid_federation/errors"

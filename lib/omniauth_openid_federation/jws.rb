@@ -3,6 +3,7 @@ require "jwe"
 require "securerandom"
 require "base64"
 require_relative "string_helpers"
+require_relative "time_helpers"
 require_relative "logger"
 require_relative "errors"
 require_relative "validators"
@@ -222,7 +223,7 @@ module OmniauthOpenidFederation
         response_type: @response_type,
         scope: @scope,
         state: state,
-        exp: (Time.zone.now + (defined?(ActiveSupport) ? REQUEST_OBJECT_EXPIRATION_MINUTES.minutes : REQUEST_OBJECT_EXPIRATION_SECONDS)).to_i,
+        exp: (TimeHelpers.now + (defined?(ActiveSupport) ? REQUEST_OBJECT_EXPIRATION_MINUTES.minutes : REQUEST_OBJECT_EXPIRATION_SECONDS)).to_i,
         jti: SecureRandom.uuid # JWT ID to prevent replay
       }
 

@@ -183,6 +183,12 @@ module OmniauthOpenidFederation
     def self.blank?: (untyped value) -> bool
   end
 
+  module TimeHelpers
+    def self.now: () -> Time
+    def self.at: (Integer | Float timestamp) -> Time
+    def self.parse: (String time_string) -> Time
+  end
+
   module Validators
     def self.validate_private_key!: (untyped private_key) -> void
     def self.normalize_hash: (untyped hash) -> Hash[Symbol, untyped]
