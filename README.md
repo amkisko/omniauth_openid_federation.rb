@@ -310,6 +310,96 @@ config.omniauth :openid_federation,
 
 The proc will combine this with config values before adding to the signed JWT.
 
+## Rodauth Integration
+
+This strategy can be used with the Rodauth authentication framework via the
+[`rodauth-omniauth` feature](https://github.com/janko/rodauth-omniauth).
+
+### Minimal Roda/Rodauth setup
+
+```ruby
+require "roda"
+require "rodauth"
+require "rodauth/omniauth"
+require "omniauth_openid_federation"
+
+DB = Sequel.sqlite # or your production database
+
+DB.create_table? :accounts do
+  primary_key :id
+  String :email, null: false
+end
+
+DB.create_table? :account_identities do
+  primary_key :id
+  foreign_key :account_id, :accounts, null: false
+  String :provider, null: false
+  String :uid, null: false
+  index [:provider, :uid], unique: true
+end
+
+class App < Roda
+  plugin :sessions, secret: ENV.fetch("SESSION_SECRET") { SecureRandom.hex(32) }
+  plugin :json
+
+  plugin :rodauth, json: true do
+    db DB
+    enable :omniauth
+
+    # Mount OmniAuth under /auth, as recommended by rodauth-omniauth
+    omniauth_prefix "/auth"
+
+    omniauth_provider :openid_federation,
+      nil,
+      nil,
+      strategy_class: OmniAuth::Strategies::OpenIDFederation,
+      name: :openid_federation,
+      issuer: ENV.fetch("OPENID_ISSUER", "https://provider.example.com"),
+      audience: ENV.fetch("OPENID_AUDIENCE", "https://provider.example.com"),
+      client_options: {
+        identifier: ENV["OPENID_CLIENT_ID"],
+        redirect_uri: ENV["OPENID_REDIRECT_URI"] || "https://your-app.example.com/auth/openid_federation/callback",
+        host: URI.parse(ENV.fetch("OPENID_ISSUER", "https://provider.example.com")).host,
+        scheme: URI.parse(ENV.fetch("OPENID_ISSUER", "https://provider.example.com")).scheme,
+        authorization_endpoint: "/oauth2/authorize",
+        token_endpoint: "/oauth2/token",
+        userinfo_endpoint: "/oauth2/userinfo",
+        jwks_uri: "/.well-known/jwks.json",
+        private_key: OpenSSL::PKey::RSA.new(
+          Base64.decode64(ENV.fetch("OPENID_CLIENT_PRIVATE_KEY_BASE64"))
+        )
+      },
+      entity_statement_url: ENV["OPENID_ENTITY_STATEMENT_URL"],
+      entity_statement_fingerprint: ENV["OPENID_ENTITY_STATEMENT_FINGERPRINT"]
+  end
+
+  route do |r|
+    # Rodauth authentication + OmniAuth endpoints
+    # r.rodauth automatically handles omniauth routes based on omniauth_prefix setting
+    r.rodauth
+
+    r.root do
+      if rodauth.logged_in?
+        {logged_in: true, account_id: rodauth.session_value}
+      else
+        {logged_in: false}
+      end
+    end
+  end
+end
+```
+
+With this configuration, the Rodauth `:omniauth` feature:
+
+- uses `OmniAuth::Strategies::OpenIDFederation` as the strategy implementation,
+- calls the strategy's request and callback phases under `/auth/openid_federation`,
+- persists external identities into the `account_identities` table following the
+  [`rodauth-omniauth` schema](https://github.com/janko/rodauth-omniauth),
+- and exposes helper methods like `rodauth.omniauth_auth`, `rodauth.omniauth_email`,
+  and `rodauth.omniauth_name` as documented in the
+  [Rodauth documentation](https://rodauth.jeremyevans.net/documentation.html)
+  and [`rodauth-omniauth` README](https://github.com/janko/rodauth-omniauth).
+
 ## Rake Tasks
 
 ### Prepare Client Keys

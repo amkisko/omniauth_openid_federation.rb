@@ -51,4 +51,12 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "memory_profiler", "~> 1.1"
   spec.add_development_dependency "rbs", "~> 3.9"
   spec.add_development_dependency "webrick", "~> 1.9"
+  # Rodauth + rodauth-omniauth for integration testing with OpenID Federation strategy
+  spec.add_development_dependency "rodauth", "~> 2.0"
+  spec.add_development_dependency "rodauth-omniauth", "~> 0.6"
+  spec.add_development_dependency "sequel", "~> 5.0"
+  spec.add_development_dependency "sqlite3", "~> 2.0"
+  spec.add_development_dependency "rack-test", "~> 2.0"
+  spec.add_development_dependency "tilt", "~> 2.0" # Required by Rodauth for rendering
+  spec.add_development_dependency "bcrypt", "~> 3.1" # Required by Rodauth for password hashing
 end
