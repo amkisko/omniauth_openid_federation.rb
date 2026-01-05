@@ -473,9 +473,10 @@ rake openid_federation:test_authentication_flow[
 ## Example Files
 
 See `examples/` directory for complete configuration examples:
-- `examples/config/initializers/devise.rb.example`
-- `examples/config/initializers/omniauth_openid_federation.rb.example`
-- `examples/config/open_id_connect_config.rb.example`
+- `examples/standalone_multiple_endpoints_example.rb` - Standalone Sinatra app with multiple auth endpoints and entrance point-based redirects
+- `examples/config/initializers/devise.rb.example` - Devise integration example (Rails)
+- `examples/config/initializers/omniauth_openid_federation.rb.example` - Federation endpoint configuration
+- `examples/config/open_id_connect_config.rb.example` - Configuration class example
 
 ## Development
 
