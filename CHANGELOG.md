@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Refactor `OmniAuth::Strategies::OpenIDFederation` into concern modules under `lib/omniauth_openid_federation/strategy/`
+- Use `Jwe.encrypted?` for JWE detection in `AccessToken#resource_request` and `TasksHelper`
+- Deduplicate entity statement loading in `access_token.rb` via `load_entity_statement_content`
+- Fix flaky `test_local_endpoint` spec when `SSL_CERT_FILE` is set in the environment
+- Replace internal `decode_id_token` stubs in strategy specs with JWKS-backed setup
 - Verify subordinate entity statement signatures in trust chain resolution
 - Validate ID token `iss`, `aud`, and session `nonce` in `callback_phase`
 - Reject `alg: none` in access token JWT handling

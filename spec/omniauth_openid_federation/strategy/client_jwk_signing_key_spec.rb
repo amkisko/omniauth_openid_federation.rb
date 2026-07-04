@@ -384,105 +384,124 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
   end
 
   describe "raw_info edge cases" do
+    let(:provider_issuer) { "https://provider.example.com" }
+    let(:jwks) do
+      {
+        keys: [
+          OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key).merge(kid: "test-key-id")
+        ]
+      }
+    end
+
+    before do
+      stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
+        .to_return(status: 200, body: jwks.to_json, headers: {"Content-Type" => "application/json"})
+    end
+
+    let(:entity_statement_path) do
+      path = entity_statement_path_under_config
+      entity_statement = {
+        iss: provider_issuer,
+        sub: provider_issuer,
+        jwks: jwks,
+        metadata: {
+          openid_provider: {
+            jwks_uri: "#{provider_issuer}/.well-known/jwks.json"
+          }
+        }
+      }
+      File.write(path, encode_entity_statement(entity_statement))
+      path
+    end
+
     it "handles fetch_userinfo disabled (line 610-611)" do
-      # Test lines 610-611: fetch_userinfo disabled path
       strategy = described_class.new(
         nil,
         fetch_userinfo: false,
-        audience: "https://provider.example.com",
+        send_nonce: false,
+        issuer: provider_issuer,
+        audience: provider_issuer,
+        entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,
           private_key: private_key,
-          authorization_endpoint: "https://provider.example.com/authorize",
-          token_endpoint: "https://provider.example.com/oauth2/token",
-          host: "provider.example.com"
+          authorization_endpoint: "#{provider_issuer}/authorize",
+          token_endpoint: "#{provider_issuer}/oauth2/token",
+          jwks_uri: "#{provider_issuer}/.well-known/jwks.json",
+          host: URI.parse(provider_issuer).host
         }
       )
 
-      # Mock request and session
       env = Rack::MockRequest.env_for("/auth/openid_federation/callback?code=test")
       strategy.instance_variable_set(:@env, env)
       allow(strategy).to receive_messages(request: Rack::Request.new(env), session: {})
 
-      # Mock ID token claims and access token
-      id_token_claims = {sub: "user-123", email: "user@example.com"}
-      id_token_jwt = JWT.encode(id_token_claims, private_key, "RS256", {kid: "test-key-id"})
-      id_token_double = double("IDToken", raw_attributes: id_token_claims.stringify_keys)
+      id_token_claims = {
+        iss: provider_issuer,
+        sub: "user-123",
+        aud: client_id,
+        exp: Time.now.to_i + 3600,
+        iat: Time.now.to_i,
+        email: "user@example.com"
+      }
+      id_token_jwt = JWT.encode(id_token_claims, private_key, "RS256", kid: "test-key-id")
       access_token = double("AccessToken", id_token: id_token_jwt)
-
-      # Mock oidc_client
-      oidc_client = double("OidcClient")
-      allow(oidc_client).to receive(:authorization_code=)
-      allow(oidc_client).to receive(:redirect_uri=)
-      allow(oidc_client).to receive(:access_token!).and_return(access_token)
-
-      allow(strategy).to receive_messages(
-        id_token_claims: id_token_claims,
-        access_token: access_token,
-        oidc_client: oidc_client
-      )
-      # Mock decode_id_token to avoid JWKS validation issues
-      allow(strategy).to receive(:decode_id_token).with(id_token_jwt).and_return(id_token_double)
-
-      # Stub token endpoint to avoid WebMock errors
-      stub_request(:post, "https://provider.example.com/oauth2/token").to_return(status: 200, body: "")
+      strategy.instance_variable_set(:@access_token, access_token)
 
       allow(OmniauthOpenidFederation::Logger).to receive(:debug)
 
       result = strategy.raw_info
       aggregate_failures do
-        expect(result).to eq(id_token_claims.stringify_keys)
+        expect(result["sub"] || result[:sub]).to eq("user-123")
+        expect(result["email"] || result[:email]).to eq("user@example.com")
         expect(OmniauthOpenidFederation::Logger).to have_received(:debug).with(/Userinfo fetching disabled/)
       end
     end
 
     it "handles userinfo fetch error with fallback (lines 605-608)" do
-      # Test lines 605-608: userinfo error fallback
       strategy = described_class.new(
         nil,
         fetch_userinfo: true,
-        audience: "https://provider.example.com",
+        send_nonce: false,
+        issuer: provider_issuer,
+        audience: provider_issuer,
+        entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,
           private_key: private_key,
-          authorization_endpoint: "https://provider.example.com/authorize",
-          token_endpoint: "https://provider.example.com/oauth2/token",
-          host: "provider.example.com"
+          authorization_endpoint: "#{provider_issuer}/authorize",
+          token_endpoint: "#{provider_issuer}/oauth2/token",
+          jwks_uri: "#{provider_issuer}/.well-known/jwks.json",
+          host: URI.parse(provider_issuer).host
         }
       )
 
-      # Mock request and session
       env = Rack::MockRequest.env_for("/auth/openid_federation/callback?code=test")
       strategy.instance_variable_set(:@env, env)
+      allow(strategy).to receive_messages(request: Rack::Request.new(env), session: {})
 
-      id_token_claims = {sub: "user-123", email: "user@example.com"}
-      allow(strategy).to receive_messages(request: Rack::Request.new(env), session: {}, id_token_claims: id_token_claims)
-
-      # Mock oidc_client to avoid exchange_authorization_code errors
-      oidc_client = double("OidcClient")
-      id_token_jwt = JWT.encode(id_token_claims, private_key, "RS256", {kid: "test-key-id"})
-      id_token_double = double("IDToken", raw_attributes: id_token_claims.stringify_keys)
+      id_token_claims = {
+        iss: provider_issuer,
+        sub: "user-123",
+        aud: client_id,
+        exp: Time.now.to_i + 3600,
+        iat: Time.now.to_i,
+        email: "user@example.com"
+      }
+      id_token_jwt = JWT.encode(id_token_claims, private_key, "RS256", kid: "test-key-id")
       access_token = double("AccessToken")
       allow(access_token).to receive(:userinfo!).and_raise(StandardError.new("Userinfo fetch failed"))
       allow(access_token).to receive(:id_token).and_return(id_token_jwt)
-      allow(oidc_client).to receive(:access_token!).and_return(access_token)
-      allow(oidc_client).to receive(:authorization_code=)
-      allow(oidc_client).to receive(:redirect_uri=)
-      allow(strategy).to receive_messages(
-        oidc_client: oidc_client,
-        access_token: access_token
-      )
-      # Mock decode_id_token to avoid JWKS validation issues
-      allow(strategy).to receive(:decode_id_token).with(id_token_jwt).and_return(id_token_double)
+      strategy.instance_variable_set(:@access_token, access_token)
 
       allow(OmniauthOpenidFederation::Logger).to receive(:error)
       allow(OmniauthOpenidFederation::Logger).to receive(:warn)
 
       result = strategy.raw_info
       aggregate_failures do
-        expect(result).to eq(id_token_claims.stringify_keys)
+        expect(result["sub"] || result[:sub]).to eq("user-123")
         expect(OmniauthOpenidFederation::Logger).to have_received(:error).with(/Failed to fetch or decode userinfo/)
         expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Falling back to ID token claims only/)
       end
