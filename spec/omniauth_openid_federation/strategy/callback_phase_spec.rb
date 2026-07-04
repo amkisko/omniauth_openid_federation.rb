@@ -722,18 +722,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       end
     end
 
-    it "handles raw_info with id_token.raw_attributes as nil" do
+    it "returns id token claims when userinfo fetching is disabled" do
       state = SecureRandom.hex(16)
       session = build_callback_session(state: state)
 
-      env = Rack::MockRequest.env_for(
-        "/auth/openid_federation/callback?code=auth-code&state=#{state}",
-        "rack.session" => session
-      )
-
-      app.call(env)
-
-      # Create a strategy instance directly instead of trying to extract from Rack response
       strategy = described_class.new(
         nil,
         client_options: {
@@ -747,25 +739,25 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
           jwks_uri: "https://provider.example.com/.well-known/jwks.json"
         },
         issuer: provider_issuer,
-        audience: provider_issuer
+        audience: provider_issuer,
+        fetch_userinfo: false
       )
 
-      # Mock id_token to return nil raw_attributes
-      id_token_double = double(raw_attributes: nil)
       access_token_double = double(
         access_token: access_token_jwt,
-        id_token: id_token_jwt,
-        userinfo!: double(raw_attributes: {})
+        id_token: id_token_jwt
       )
-      strategy.instance_variable_set(:@access_token, access_token_double)
-
-      # Mock decode_id_token to return id_token_double
-      strategy_env = Rack::MockRequest.env_for("/auth/openid_federation")
+      strategy_env = Rack::MockRequest.env_for("/auth/openid_federation", "rack.session" => session)
       strategy.instance_variable_set(:@env, strategy_env)
-      allow(strategy).to receive_messages(decode_id_token: id_token_double, request: Rack::Request.new(strategy_env), session: session)
+      strategy.instance_variable_set(:@access_token, access_token_double)
+      allow(strategy).to receive_messages(request: Rack::Request.new(strategy_env), session: session)
 
       raw_info = strategy.raw_info
-      expect(raw_info).to be_a(Hash)
+
+      aggregate_failures do
+        expect(raw_info).to be_a(Hash)
+        expect(raw_info["sub"] || raw_info[:sub]).to eq("user-123")
+      end
     end
   end
 

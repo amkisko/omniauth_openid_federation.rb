@@ -880,7 +880,7 @@ module OmniauthOpenidFederation
         "ID Token Encryption" => {
           status: "✅ MANDATORY",
           description: "ID tokens are encrypted (RSA-OAEP + A128CBC-HS256)",
-          verified: id_token_raw.split(".").length == 5 # JWE has 5 parts
+          verified: OmniauthOpenidFederation::Jwe.encrypted?(id_token_raw)
         },
         "Client Assertion (private_key_jwt)" => {
           status: "✅ MANDATORY",

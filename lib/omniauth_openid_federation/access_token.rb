@@ -6,6 +6,7 @@ require_relative "logger"
 require_relative "validators"
 require_relative "utils"
 require_relative "key_extractor"
+require_relative "jwe"
 
 # AccessToken extension for OpenID Federation ID token decryption and signed JWKS support
 # @see https://openid.net/specs/openid-federation-1_0.html OpenID Federation 1.0 Specification
@@ -30,8 +31,7 @@ module OpenIDConnect
       when 200
         # Simple check if the response looks like a JWT string (could be ID token or encrypted userinfo)
         if /\A[\w\-.]+\z/.match?(res.body)
-          # Check if it's encrypted (JWE format has 5 parts separated by dots)
-          is_encrypted = res.body.split(".").length == 5
+          is_encrypted = OmniauthOpenidFederation::Jwe.encrypted?(res.body)
 
           if is_encrypted
             # Decrypt if encrypted (ID token or userinfo encryption)
@@ -225,61 +225,7 @@ module OpenIDConnect
     end
 
     def fetch_signed_jwks(strategy_options)
-      # Support entity_statement_path, entity_statement_url, or issuer (like strategy does)
-      entity_statement_path = strategy_options[:entity_statement_path] || strategy_options["entity_statement_path"]
-      entity_statement_url = strategy_options[:entity_statement_url] || strategy_options["entity_statement_url"]
-      issuer = strategy_options[:issuer] || strategy_options["issuer"]
-      entity_statement_fingerprint = strategy_options[:entity_statement_fingerprint] || strategy_options["entity_statement_fingerprint"]
-
-      # Load entity statement from path, URL, or issuer
-      entity_statement_content = nil
-
-      # Priority 1: File path (if provided)
-      if OmniauthOpenidFederation::StringHelpers.present?(entity_statement_path)
-        begin
-          validated_path = OmniauthOpenidFederation::Utils.validate_file_path!(
-            entity_statement_path,
-            allowed_dirs: defined?(Rails) ? [Rails.root.join("config").to_s] : nil
-          )
-          if File.exist?(validated_path)
-            entity_statement_content = File.read(validated_path)
-          else
-            OmniauthOpenidFederation::Logger.debug("[AccessToken] Entity statement file not found: #{OmniauthOpenidFederation::Utils.sanitize_path(validated_path)}")
-          end
-        rescue OmniauthOpenidFederation::SecurityError => e
-          OmniauthOpenidFederation::Logger.error("[AccessToken] #{e.message}")
-        end
-      end
-
-      # Priority 2: Fetch from URL (if provided)
-      if entity_statement_content.nil? && OmniauthOpenidFederation::StringHelpers.present?(entity_statement_url)
-        begin
-          OmniauthOpenidFederation::Logger.debug("[AccessToken] Fetching entity statement from URL for signed JWKS")
-          entity_statement_instance = OmniauthOpenidFederation::Federation::EntityStatement.fetch!(
-            entity_statement_url,
-            fingerprint: entity_statement_fingerprint
-          )
-          # fetch! returns EntityStatement instance, extract JWT string from it
-          entity_statement_content = entity_statement_instance.entity_statement
-        rescue => e
-          OmniauthOpenidFederation::Logger.warn("[AccessToken] Failed to fetch entity statement from URL: #{e.message}")
-        end
-      end
-
-      # Priority 3: Fetch from issuer (if provided)
-      if entity_statement_content.nil? && OmniauthOpenidFederation::StringHelpers.present?(issuer)
-        begin
-          OmniauthOpenidFederation::Logger.debug("[AccessToken] Fetching entity statement from issuer for signed JWKS")
-          entity_statement_instance = OmniauthOpenidFederation::Federation::EntityStatement.fetch_from_issuer!(
-            issuer,
-            fingerprint: entity_statement_fingerprint
-          )
-          # fetch_from_issuer! returns EntityStatement instance, extract JWT string from it
-          entity_statement_content = entity_statement_instance.entity_statement
-        rescue => e
-          OmniauthOpenidFederation::Logger.warn("[AccessToken] Failed to fetch entity statement from issuer: #{e.message}")
-        end
-      end
+      entity_statement_content = load_entity_statement_content(strategy_options)
 
       if OmniauthOpenidFederation::StringHelpers.blank?(entity_statement_content)
         OmniauthOpenidFederation::Logger.debug("[AccessToken] Entity statement not available (path, URL, or issuer not configured), skipping signed JWKS")
@@ -300,78 +246,24 @@ module OpenIDConnect
           return nil
         end
 
-        # Get entity JWKS for validation
         entity_jwks = parsed[:entity_jwks]
 
-        # Fetch and validate signed JWKS
         sanitized_uri = OmniauthOpenidFederation::Utils.sanitize_uri(signed_jwks_uri)
         OmniauthOpenidFederation::Logger.debug("[AccessToken] Fetching signed JWKS from #{sanitized_uri}")
         signed_jwks = OmniauthOpenidFederation::Federation::SignedJWKS.fetch!(signed_jwks_uri, entity_jwks)
         OmniauthOpenidFederation::Logger.debug("[AccessToken] Successfully fetched and validated signed JWKS")
         signed_jwks
       rescue OmniauthOpenidFederation::SecurityError => e
-        # Security errors should not be silently ignored
         OmniauthOpenidFederation::Logger.error("[AccessToken] Security error: #{e.message}")
         nil
       rescue
         OmniauthOpenidFederation::Logger.warn("[AccessToken] Failed to fetch signed JWKS, falling back to standard JWKS")
-        # Return nil to allow fallback to standard JWKS, but log the error
         nil
       end
     end
 
     def load_entity_statement_keys_for_jwks_validation(strategy_options)
-      # Support entity_statement_path, entity_statement_url, or issuer (like strategy does)
-      entity_statement_path = strategy_options[:entity_statement_path] || strategy_options["entity_statement_path"]
-      entity_statement_url = strategy_options[:entity_statement_url] || strategy_options["entity_statement_url"]
-      issuer = strategy_options[:issuer] || strategy_options["issuer"]
-      entity_statement_fingerprint = strategy_options[:entity_statement_fingerprint] || strategy_options["entity_statement_fingerprint"]
-
-      # Load entity statement from path, URL, or issuer
-      entity_statement_content = nil
-
-      # Priority 1: File path (if provided)
-      if OmniauthOpenidFederation::StringHelpers.present?(entity_statement_path)
-        begin
-          validated_path = OmniauthOpenidFederation::Utils.validate_file_path!(
-            entity_statement_path,
-            allowed_dirs: defined?(Rails) ? [Rails.root.join("config").to_s] : nil
-          )
-          if File.exist?(validated_path)
-            entity_statement_content = File.read(validated_path)
-          end
-        rescue OmniauthOpenidFederation::SecurityError => e
-          OmniauthOpenidFederation::Logger.error("[AccessToken] #{e.message}")
-        end
-      end
-
-      # Priority 2: Fetch from URL (if provided)
-      if entity_statement_content.nil? && OmniauthOpenidFederation::StringHelpers.present?(entity_statement_url)
-        begin
-          entity_statement_instance = OmniauthOpenidFederation::Federation::EntityStatement.fetch!(
-            entity_statement_url,
-            fingerprint: entity_statement_fingerprint
-          )
-          # fetch! returns EntityStatement instance, extract JWT string from it
-          entity_statement_content = entity_statement_instance.entity_statement
-        rescue => e
-          OmniauthOpenidFederation::Logger.warn("[AccessToken] Failed to fetch entity statement from URL: #{e.message}")
-        end
-      end
-
-      # Priority 3: Fetch from issuer (if provided)
-      if entity_statement_content.nil? && OmniauthOpenidFederation::StringHelpers.present?(issuer)
-        begin
-          entity_statement_instance = OmniauthOpenidFederation::Federation::EntityStatement.fetch_from_issuer!(
-            issuer,
-            fingerprint: entity_statement_fingerprint
-          )
-          # fetch_from_issuer! returns EntityStatement instance, extract JWT string from it
-          entity_statement_content = entity_statement_instance.entity_statement
-        rescue => e
-          OmniauthOpenidFederation::Logger.warn("[AccessToken] Failed to fetch entity statement from issuer: #{e.message}")
-        end
-      end
+      entity_statement_content = load_entity_statement_content(strategy_options)
 
       if OmniauthOpenidFederation::StringHelpers.blank?(entity_statement_content)
         OmniauthOpenidFederation::Logger.warn("[AccessToken] Entity statement not available for federation")
@@ -379,13 +271,10 @@ module OpenIDConnect
       end
 
       begin
-        # Parse entity statement to extract keys
-        # entity_statement_content is now always a string (JWT)
         entity_statement = OmniauthOpenidFederation::Federation::EntityStatement.new(entity_statement_content)
         parsed = entity_statement.parse
         entity_jwks = parsed[:jwks] if parsed
 
-        # Extract keys from entity JWKS
         keys = if entity_jwks.is_a?(Hash) && entity_jwks.key?("keys")
           entity_jwks["keys"]
         elsif entity_jwks.is_a?(Hash) && entity_jwks.key?(:keys)
@@ -400,7 +289,6 @@ module OpenIDConnect
           return nil
         end
 
-        # Convert to format expected by JWT gem (HashWithIndifferentAccess with keys array)
         jwks_hash = {
           keys: keys.map { |jwk| jwk.is_a?(Hash) ? jwk : JSON.parse(jwk.to_json) }
         }
@@ -408,7 +296,6 @@ module OpenIDConnect
       rescue => e
         error_msg = "Failed to load entity statement keys for JWKS validation: #{e.class} - #{e.message}"
         OmniauthOpenidFederation::Logger.error("[AccessToken] #{error_msg}")
-        # Return nil to allow fallback, but log the error
         nil
       end
     end
@@ -418,75 +305,23 @@ module OpenIDConnect
     # @param strategy_options [Hash] Strategy options hash
     # @return [String, nil] JWKS URI or nil if not available
     def resolve_jwks_uri_from_entity_statement(strategy_options)
-      # Try both symbol and string keys (OmniAuth options can be either)
-      entity_statement_path = strategy_options[:entity_statement_path] || strategy_options["entity_statement_path"]
-      entity_statement_url = strategy_options[:entity_statement_url] || strategy_options["entity_statement_url"]
-      issuer = strategy_options[:issuer] || strategy_options["issuer"]
-      entity_statement_fingerprint = strategy_options[:entity_statement_fingerprint] || strategy_options["entity_statement_fingerprint"]
-
-      # Debug logging to help diagnose issues
-      if OmniauthOpenidFederation::StringHelpers.blank?(entity_statement_path) &&
-          OmniauthOpenidFederation::StringHelpers.blank?(entity_statement_url) &&
-          OmniauthOpenidFederation::StringHelpers.blank?(issuer)
+      if OmniauthOpenidFederation::StringHelpers.blank?(strategy_options[:entity_statement_path]) &&
+          OmniauthOpenidFederation::StringHelpers.blank?(strategy_options["entity_statement_path"]) &&
+          OmniauthOpenidFederation::StringHelpers.blank?(strategy_options[:entity_statement_url]) &&
+          OmniauthOpenidFederation::StringHelpers.blank?(strategy_options["entity_statement_url"]) &&
+          OmniauthOpenidFederation::StringHelpers.blank?(strategy_options[:issuer]) &&
+          OmniauthOpenidFederation::StringHelpers.blank?(strategy_options["issuer"])
         OmniauthOpenidFederation::Logger.debug("[AccessToken] No entity statement source configured (path, URL, or issuer) in strategy options. Available keys: #{strategy_options.keys.join(", ")}")
       end
 
-      # Load entity statement from path, URL, or issuer
-      entity_statement_content = nil
-
-      # Priority 1: File path (if provided)
-      if OmniauthOpenidFederation::StringHelpers.present?(entity_statement_path)
-        begin
-          validated_path = OmniauthOpenidFederation::Utils.validate_file_path!(
-            entity_statement_path,
-            allowed_dirs: defined?(Rails) ? [Rails.root.join("config").to_s] : nil
-          )
-          if File.exist?(validated_path)
-            entity_statement_content = File.read(validated_path)
-          end
-        rescue OmniauthOpenidFederation::SecurityError => e
-          OmniauthOpenidFederation::Logger.debug("[AccessToken] Could not load entity statement from path: #{e.message}")
-        end
-      end
-
-      # Priority 2: Fetch from URL (if provided)
-      if entity_statement_content.nil? && OmniauthOpenidFederation::StringHelpers.present?(entity_statement_url)
-        begin
-          entity_statement_instance = OmniauthOpenidFederation::Federation::EntityStatement.fetch!(
-            entity_statement_url,
-            fingerprint: entity_statement_fingerprint
-          )
-          # fetch! returns EntityStatement instance, extract JWT string from it
-          entity_statement_content = entity_statement_instance.entity_statement
-        rescue => e
-          OmniauthOpenidFederation::Logger.debug("[AccessToken] Could not fetch entity statement from URL: #{e.message}")
-        end
-      end
-
-      # Priority 3: Fetch from issuer (if provided)
-      if entity_statement_content.nil? && OmniauthOpenidFederation::StringHelpers.present?(issuer)
-        begin
-          entity_statement_instance = OmniauthOpenidFederation::Federation::EntityStatement.fetch_from_issuer!(
-            issuer,
-            fingerprint: entity_statement_fingerprint
-          )
-          # fetch_from_issuer! returns EntityStatement instance, extract JWT string from it
-          entity_statement_content = entity_statement_instance.entity_statement
-        rescue => e
-          OmniauthOpenidFederation::Logger.debug("[AccessToken] Could not fetch entity statement from issuer: #{e.message}")
-        end
-      end
-
+      entity_statement_content = load_entity_statement_content(strategy_options, log_fetch_errors: :debug)
       return nil if OmniauthOpenidFederation::StringHelpers.blank?(entity_statement_content)
 
       begin
-        # Parse entity statement to extract JWKS URI
-        # entity_statement_content is now always a string (JWT)
         entity_statement = OmniauthOpenidFederation::Federation::EntityStatement.new(entity_statement_content)
         parsed = entity_statement.parse
         return nil unless parsed
 
-        # Extract JWKS URI from provider metadata
         jwks_uri = parsed.dig(:metadata, :openid_provider, :jwks_uri) ||
           parsed.dig("metadata", "openid_provider", "jwks_uri")
 
@@ -496,6 +331,75 @@ module OpenIDConnect
       end
 
       nil
+    end
+
+    # Load entity statement JWT from path, URL, or issuer (path → URL → issuer).
+    #
+    # @param strategy_options [Hash] Strategy options hash
+    # @param log_fetch_errors [Symbol] :warn or :debug for fetch failure logs
+    # @return [String, nil] Entity statement JWT content
+    def load_entity_statement_content(strategy_options, log_fetch_errors: :warn)
+      normalized_options = OmniauthOpenidFederation::Validators.normalize_hash(strategy_options)
+      entity_statement_path = normalized_options[:entity_statement_path]
+      entity_statement_url = normalized_options[:entity_statement_url]
+      issuer = normalized_options[:issuer]
+      entity_statement_fingerprint = normalized_options[:entity_statement_fingerprint]
+
+      entity_statement_content = nil
+
+      if OmniauthOpenidFederation::StringHelpers.present?(entity_statement_path)
+        begin
+          validated_path = OmniauthOpenidFederation::Utils.validate_file_path!(
+            entity_statement_path,
+            allowed_dirs: defined?(Rails) ? [Rails.root.join("config").to_s] : nil
+          )
+          if File.exist?(validated_path)
+            entity_statement_content = File.read(validated_path)
+          else
+            OmniauthOpenidFederation::Logger.debug(
+              "[AccessToken] Entity statement file not found: #{OmniauthOpenidFederation::Utils.sanitize_path(validated_path)}"
+            )
+          end
+        rescue OmniauthOpenidFederation::SecurityError => e
+          OmniauthOpenidFederation::Logger.error("[AccessToken] #{e.message}")
+        end
+      end
+
+      if entity_statement_content.nil? && OmniauthOpenidFederation::StringHelpers.present?(entity_statement_url)
+        begin
+          entity_statement_instance = OmniauthOpenidFederation::Federation::EntityStatement.fetch!(
+            entity_statement_url,
+            fingerprint: entity_statement_fingerprint
+          )
+          entity_statement_content = entity_statement_instance.entity_statement
+        rescue => e
+          log_entity_statement_fetch_failure(log_fetch_errors, "URL", e)
+        end
+      end
+
+      if entity_statement_content.nil? && OmniauthOpenidFederation::StringHelpers.present?(issuer)
+        begin
+          entity_statement_instance = OmniauthOpenidFederation::Federation::EntityStatement.fetch_from_issuer!(
+            issuer,
+            fingerprint: entity_statement_fingerprint
+          )
+          entity_statement_content = entity_statement_instance.entity_statement
+        rescue => e
+          log_entity_statement_fetch_failure(log_fetch_errors, "issuer", e)
+        end
+      end
+
+      entity_statement_content
+    end
+
+    def log_entity_statement_fetch_failure(level, source, error)
+      message = "[AccessToken] Failed to fetch entity statement from #{source}: #{error.message}"
+      case level
+      when :debug
+        OmniauthOpenidFederation::Logger.debug(message)
+      else
+        OmniauthOpenidFederation::Logger.warn(message)
+      end
     end
   end
 end

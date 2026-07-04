@@ -840,6 +840,9 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
 
     it "handles HTTPS with DEFAULT_CERT_FILE (lines 295-296)" do
       # Test lines 295-296: DEFAULT_CERT_FILE fallback
+      original_ssl_cert_file = ENV["SSL_CERT_FILE"]
+      ENV.delete("SSL_CERT_FILE")
+
       entity_statement = double("EntityStatement")
       metadata = {
         issuer: "https://localhost:3000",
@@ -872,6 +875,12 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       result = described_class.test_local_endpoint(base_url: "https://localhost:3000")
 
       expect(http).to have_received(:ca_file=).with(default_cert_file)
+    ensure
+      if original_ssl_cert_file
+        ENV["SSL_CERT_FILE"] = original_ssl_cert_file
+      else
+        ENV.delete("SSL_CERT_FILE")
+      end
     end
   end
 
