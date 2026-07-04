@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Unreleased
+
+- Fix OAuth callback failures in `callback_phase` to return the Rack response from `fail!` instead of `nil`; avoids `Rack::ETag` `NoMethodError` and HTTP 500 on auth failure
+
 ## 1.3.2 (2025-12-09)
 
 - Added `TimeHelpers` module for compatibility with non-Rails environments

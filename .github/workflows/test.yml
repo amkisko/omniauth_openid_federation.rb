@@ -13,7 +13,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -26,24 +26,28 @@ jobs:
             ruby_version: "3.4"
           - gemfile: ruby
             ruby_version: "3.4"
-    
+
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/${{ matrix.gemfile }}.gemfile
-    
+
     steps:
     - uses: actions/checkout@v6
-    
+
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ matrix.ruby_version }}
         bundler-cache: true
-    
-    - name: Run tests
-      run: bundle exec rspec
 
-  coverage:
+    - name: Run tests (parallel OS processes via polyrun)
+      run: |
+        bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml
+
+  # One job: 5 RSpec processes on one runner + merged coverage + per-shard JSON for JUnit
+  coverage-shard:
     runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/rails8.gemfile
     steps:
       - uses: actions/checkout@v6
         with:
@@ -52,7 +56,42 @@ jobs:
         with:
           ruby-version: "3.4"
           bundler-cache: true
-      - run: bundle exec appraisal install && bundle exec appraisal rails8 rspec
+      - name: Install deps + spec paths
+        run: bundle exec appraisal install
+      - name: Run parallel RSpec with Polyrun coverage
+        run: |
+          bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml -- bundle exec rspec --format documentation
+      - uses: actions/upload-artifact@v4
+        with:
+          name: polyrun-coverage-parallel
+          path: |
+            coverage/merged.json
+            coverage/polyrun-fragment-*.json
+            tmp/rspec-*.json
+
+  coverage-merge:
+    needs: coverage-shard
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/rails8.gemfile
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - run: bundle exec appraisal install
+      - uses: actions/download-artifact@v4
+        with:
+          name: polyrun-coverage-parallel
+          path: _artifacts
+      - name: Merge coverage + JUnit
+        run: |
+          set -euo pipefail
+          test -f _artifacts/coverage/merged.json
+          cp _artifacts/coverage/merged.json coverage/polyrun-merged.json
+          bundle exec polyrun report-coverage -i coverage/polyrun-merged.json -o coverage --basename coverage --format cobertura,json
+          bundle exec polyrun report-junit -i "_artifacts/tmp/rspec-*.json" -o coverage/junit-coverage.xml
       - uses: SonarSource/sonarqube-scan-action@v6
         continue-on-error: true
         env:
@@ -69,4 +108,3 @@ jobs:
           files: coverage/junit-coverage.xml
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-

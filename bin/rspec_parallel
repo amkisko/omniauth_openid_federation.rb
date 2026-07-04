@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Thin wrapper: Polyrun default (no args) or parallel-rspec + merge-coverage. See polyrun.yml.
+# POLYRUN_SERIAL — set to 1/true/yes on bin/rspec for plain `bundle exec rspec` (no polyrun).
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+W="${POLYRUN_WORKERS:-5}"
+case "$W" in
+  ''|*[!0-9]*) W=5 ;;
+esac
+if [ "$W" -gt 10 ]; then W=10; fi
+if [ "$W" -lt 1 ]; then W=1; fi
+if [ "$#" -eq 0 ]; then
+  export POLYRUN_WORKERS="$W"
+  exec bundle exec polyrun -c polyrun.yml
+fi
+exec bundle exec polyrun -c polyrun.yml parallel-rspec --workers "$W" -- bundle exec rspec "$@"

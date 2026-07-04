@@ -1,11 +1,21 @@
 require "spec_helper"
 require "rake"
+require "stringio"
 
 # rubocop:disable RSpec/DescribeClass
 RSpec.describe "Rake tasks", type: :rake do
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
   let(:public_key) { private_key.public_key }
   let(:provider_issuer) { "https://provider.example.com" }
+
+  # Rake tasks print banners and status with `puts`; keep them off the real terminal.
+  around do |example|
+    original_stdout = $stdout
+    $stdout = StringIO.new
+    example.run
+  ensure
+    $stdout = original_stdout
+  end
 
   before do
     # Load rake tasks
@@ -500,26 +510,28 @@ RSpec.describe "Rake tasks", type: :rake do
 
     it "handles validation errors in test_local_endpoint" do
       base_url = "http://localhost:3000"
-      allow(OmniauthOpenidFederation::TasksHelper).to receive(:test_local_endpoint).and_raise(
-        OmniauthOpenidFederation::Federation::EntityStatement::ValidationError.new("Validation failed")
-      )
+      # Raise from this file so any printed backtrace does not start inside rspec-mocks
+      # (and_raise(Exception.new) leaves the exception origin inside rspec-mocks).
+      allow(OmniauthOpenidFederation::TasksHelper).to receive(:test_local_endpoint) do
+        raise OmniauthOpenidFederation::ValidationError, "Validation failed"
+      end
 
       Rake::Task["openid_federation:test_local_endpoint"].reenable
       expect {
         Rake::Task["openid_federation:test_local_endpoint"].invoke(base_url)
-      }.to raise_error(SystemExit)
+      }.to output(/Unexpected error: Validation failed/).to_stdout.and raise_error(SystemExit)
     end
 
     it "handles unexpected errors in test_local_endpoint" do
       base_url = "http://localhost:3000"
-      allow(OmniauthOpenidFederation::TasksHelper).to receive(:test_local_endpoint).and_raise(
-        StandardError.new("Unexpected error")
-      )
+      allow(OmniauthOpenidFederation::TasksHelper).to receive(:test_local_endpoint) do
+        raise StandardError, "Unexpected error"
+      end
 
       Rake::Task["openid_federation:test_local_endpoint"].reenable
       expect {
         Rake::Task["openid_federation:test_local_endpoint"].invoke(base_url)
-      }.to raise_error(SystemExit)
+      }.to output(/Unexpected error: Unexpected error/).to_stdout.and raise_error(SystemExit)
     end
   end
 end

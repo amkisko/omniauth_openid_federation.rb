@@ -707,7 +707,6 @@ module OmniauthOpenidFederation
       client_entity_statement_path: nil
     )
       require "uri"
-      require "cgi"
       require "json"
       require "base64"
       require_relative "strategy"
@@ -729,7 +728,8 @@ module OmniauthOpenidFederation
         rescue URI::InvalidURIError => e
           raise "Invalid callback URL: #{e.message}"
         end
-        params = CGI.parse(uri.query || "")
+        pairs = URI.decode_www_form(uri.query || "")
+        params = pairs.group_by(&:first).transform_values { |vs| vs.map(&:last) }
 
         auth_code = params["code"]&.first
         state = params["state"]&.first

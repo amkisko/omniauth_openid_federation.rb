@@ -484,8 +484,10 @@ See `examples/` directory for complete configuration examples:
 git clone https://github.com/amkisko/omniauth_openid_federation.rb.git
 cd omniauth_openid_federation.rb
 bundle install
-bin/rspec
+bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml
 ```
+
+Same flow as CI; optional wrappers [`bin/rspec_parallel`](bin/rspec_parallel) and [`bin/appraisals`](bin/appraisals) (runs **`polyrun parallel-rspec`** per Appraisal gemfile). Details: **[POLYRUN.md](POLYRUN.md)**.
 
 ## Contributing
 

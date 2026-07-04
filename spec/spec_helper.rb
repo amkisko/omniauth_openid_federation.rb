@@ -1,17 +1,67 @@
-require "simplecov"
-require "simplecov-cobertura"
-require "simplecov_json_formatter"
+require "logger"
 
-SimpleCov.start do
-  track_files "{lib,app}/**/*.rb"
-  add_filter "/lib/tasks/"
-  add_filter "/lib/omniauth_openid_federation/version.rb"
-  add_filter "/spec/"
-  formatter SimpleCov::Formatter::MultiFormatter.new([
-    SimpleCov::Formatter::HTMLFormatter,
-    SimpleCov::Formatter::CoberturaFormatter,
-    SimpleCov::Formatter::JSONFormatter
-  ])
+# Default: quiet SQL/schema/migration/Rails chatter, OmniAuth, and gem [OpenIDFederation] logs.
+# Set SPEC_VERBOSE=1 to restore loggers and schema output.
+module SpecTestLogging
+  NULL = Logger.new(File::NULL)
+
+  def self.enabled?
+    !%w[1 true yes].include?(ENV["SPEC_VERBOSE"]&.to_s&.downcase)
+  end
+
+  # Per-example so specs that reset OmniauthOpenidFederation::Logger (e.g. logger_spec) cannot
+  # leave the next example on OmniAuth/Rails loggers. Also silences OmniAuth's own strategy logs.
+  def self.silence_loggers_for_example!
+    return unless enabled?
+
+    if defined?(OmniauthOpenidFederation::Logger)
+      OmniauthOpenidFederation::Logger.logger = OmniauthOpenidFederation::Logger::NullLogger.new
+    end
+    if defined?(OmniAuth) && OmniAuth.config.respond_to?(:logger=)
+      OmniAuth.config.logger = NULL
+    end
+  end
+
+  def self.silence!
+    return unless enabled?
+
+    if defined?(ActiveRecord::Base)
+      ActiveRecord::Base.logger = NULL
+      ActiveRecord.verbose_query_logs = false if ActiveRecord.respond_to?(:verbose_query_logs=)
+    end
+    if defined?(ActiveRecord::Migration) && ActiveRecord::Migration.respond_to?(:verbose=)
+      ActiveRecord::Migration.verbose = false
+    end
+    if defined?(ActiveRecord::Schema) && ActiveRecord::Schema.respond_to?(:verbose=)
+      ActiveRecord::Schema.verbose = false
+    end
+    if defined?(ActiveRecord::LogSubscriber)
+      ActiveRecord::LogSubscriber.logger = NULL
+    end
+    if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
+      Rails.logger.level = Logger::WARN
+    end
+  end
+end
+
+unless %w[1 true yes].include?(ENV["POLYRUN_COVERAGE_DISABLE"]&.downcase)
+  require "polyrun"
+  root = File.expand_path("..", __dir__)
+  Polyrun::Coverage::Collector.start!(
+    root: root,
+    track_files: "{lib,app}/**/*.rb",
+    reject_patterns: [
+      "/lib/tasks/",
+      "/lib/omniauth_openid_federation/version.rb",
+      "/spec/"
+    ],
+    formatter: Polyrun::Coverage::Formatter.multi(
+      :json, :html, :cobertura, :console,
+      output_dir: File.expand_path("../coverage", __dir__),
+      basename: "coverage"
+    ),
+    meta: {"title" => "omniauth_openid_federation coverage"}
+  )
 end
 
 require "rspec"
@@ -32,6 +82,9 @@ Dir[File.expand_path("support/**/*.rb", __dir__)].sort.each { |f| require_relati
 
 # Include HTTP stubbing helpers in all specs
 RSpec.configure do |config|
+  config.before(:suite) { SpecTestLogging.silence! }
+  config.before(:each) { SpecTestLogging.silence_loggers_for_example! }
+
   config.include HttpStubbing
 
   # Use defined order for reproducible test runs
@@ -169,16 +222,6 @@ RSpec.configure do |config|
     end
   end
 end
+require "polyrun/rspec"
+Polyrun::RSpec.install_failure_fragments!
 
-# Run coverage analyzer after SimpleCov finishes writing coverage.xml
-# Use SimpleCov.at_exit to ensure our hook runs after the formatter writes files
-# We need to call the formatter first, then run our analyzer
-if ENV["SHOW_ZERO_COVERAGE"] == "1"
-  SimpleCov.at_exit do
-    # First, ensure the formatter runs (this writes coverage.xml)
-    SimpleCov.result.format!
-    # Then run our analyzer
-    require_relative "support/coverage_analyzer"
-    CoverageAnalyzer.run
-  end
-end

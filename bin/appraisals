@@ -1,11 +1,11 @@
 #!/usr/bin/env ruby
 
-# Run appraisal tests locally
+# Run appraisal tests locally (default: Polyrun parallel-rspec, same idea as CI).
 # Usage:
-#   bin/appraisals                    # Run tests for all Rails versions
-#   bin/appraisals rails6             # Run tests for Rails 6
-#   bin/appraisals rails6 rails72     # Run tests for specific versions
-#   bin/appraisals rails6 rspec       # Run rspec for Rails 6
+#   bin/appraisals                    # parallel-rspec for all appraisal gemfiles
+#   bin/appraisals rails6             # parallel-rspec for Rails 6 only
+#   bin/appraisals rails6 rails72     # parallel-rspec for specific versions
+#   bin/appraisals rails6 rspec       # serial RSpec for Rails 6 (focused/debug)
 #   bin/appraisals rails6 rake spec   # Run rake spec for Rails 6
 
 require "bundler/setup"
@@ -22,15 +22,18 @@ AVAILABLE_APPRAISALS = File.read(APPRAISALS_FILE, encoding: "UTF-8")
   .flatten
   .freeze
 
+# Default suite: polyrun parallel-rspec (run-shards + merge-coverage) under each appraisal gemfile.
+DEFAULT_POLYRUN_CMD = ["--", "bundle", "exec", "polyrun", "parallel-rspec", "--workers", "5", "-c", "polyrun.yml"].freeze
+
 def usage
   puts <<~USAGE
     Usage: bin/appraisals [appraisal_name...] [command]
 
     Examples:
-      bin/appraisals                          # Run rspec for all Rails versions
-      bin/appraisals rails6                   # Run rspec for Rails 6
-      bin/appraisals rails6 rails72           # Run rspec for Rails 6 and 7.2
-      bin/appraisals rails6 rspec             # Run rspec for Rails 6
+      bin/appraisals                          # Run polyrun parallel-rspec for all appraisals
+      bin/appraisals rails6                   # parallel-rspec for Rails 6
+      bin/appraisals rails6 rails72           # parallel-rspec for Rails 6 and 7.2
+      bin/appraisals rails6 rspec             # serial RSpec for Rails 6
       bin/appraisals rails6 rake spec         # Run rake spec for Rails 6
 
     Available appraisals: #{AVAILABLE_APPRAISALS.join(', ')}
@@ -40,13 +43,13 @@ end
 
 def parse_args
   args = ARGV.dup
-  
+
   # Handle help flags
   if args.include?("--help") || args.include?("-h")
     usage
   end
-  
-  return [AVAILABLE_APPRAISALS, ["rspec"]] if args.empty?
+
+  return [AVAILABLE_APPRAISALS, DEFAULT_POLYRUN_CMD.dup] if args.empty?
 
   appraisals = []
   command = []
@@ -60,7 +63,7 @@ def parse_args
   end
 
   appraisals = AVAILABLE_APPRAISALS if appraisals.empty?
-  command = ["rspec"] if command.empty?
+  command = DEFAULT_POLYRUN_CMD.dup if command.empty?
 
   [appraisals, command]
 end
@@ -70,8 +73,13 @@ def run_appraisal(appraisal, command)
   puts "Running #{appraisal} with: #{command.join(' ')}"
   puts "=" * 80
 
-  cmd = ["bundle", "exec", "appraisal", appraisal] + command
-  system(*cmd)
+  root = File.expand_path(File.join(__dir__, ".."))
+  Dir.chdir(root) do
+    return false unless system("bundle", "exec", "polyrun", "build-paths", "-c", "polyrun.yml")
+
+    cmd = ["bundle", "exec", "appraisal", appraisal] + command
+    system(*cmd)
+  end
 end
 
 appraisals, command = parse_args
@@ -96,4 +104,3 @@ end
 
 exit 0 if results.values.all?
 exit 1
-

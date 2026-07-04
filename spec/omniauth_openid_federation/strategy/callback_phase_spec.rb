@@ -759,4 +759,79 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       expect(raw_info).to be_a(Hash)
     end
   end
+
+  describe "callback_phase failure Rack response" do
+    let(:failure_response) { [302, {"location" => "/failure"}, ["Redirect"]] }
+    let(:strategy_options) do
+      {
+        client_options: {
+          identifier: client_id,
+          secret: "client-secret-123",
+          redirect_uri: redirect_uri,
+          private_key: private_key,
+          host: URI.parse(provider_issuer).host,
+          authorization_endpoint: "/oauth2/authorize",
+          token_endpoint: "/oauth2/token",
+          jwks_uri: "https://provider.example.com/.well-known/jwks.json"
+        },
+        issuer: provider_issuer,
+        audience: provider_issuer
+      }
+    end
+
+    def strategy_for_callback(path, session)
+      callback_env = Rack::MockRequest.env_for(path, "rack.session" => session)
+      strategy = described_class.new(nil, **strategy_options)
+      strategy.instance_variable_set(:@env, callback_env)
+      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: session)
+      allow(strategy).to receive(:fail!).and_return(failure_response)
+      strategy
+    end
+
+    it "returns fail! response for authorization_error" do
+      state = SecureRandom.hex(16)
+      session = {"omniauth.state" => state}
+      strategy = strategy_for_callback(
+        "/auth/openid_federation/callback?error=access_denied&state=#{state}",
+        session
+      )
+
+      expect(strategy.callback_phase).to eq(failure_response)
+    end
+
+    it "returns fail! response for csrf_detected" do
+      strategy = strategy_for_callback(
+        "/auth/openid_federation/callback?code=auth-code",
+        {}
+      )
+
+      expect(strategy.callback_phase).to eq(failure_response)
+    end
+
+    it "returns fail! response for missing_code" do
+      state = SecureRandom.hex(16)
+      session = {"omniauth.state" => state}
+      strategy = strategy_for_callback(
+        "/auth/openid_federation/callback?state=#{state}",
+        session
+      )
+
+      expect(strategy.callback_phase).to eq(failure_response)
+    end
+
+    it "returns fail! response for token_exchange_error" do
+      state = SecureRandom.hex(16)
+      session = {"omniauth.state" => state}
+      strategy = strategy_for_callback(
+        "/auth/openid_federation/callback?code=auth-code&state=#{state}",
+        session
+      )
+      oidc_client = strategy.client
+      allow(oidc_client).to receive(:authorization_code=)
+      allow(oidc_client).to receive(:redirect_uri=)
+      allow(oidc_client).to receive(:access_token!).and_raise(StandardError.new("Token exchange failed"))
+
+      expect(strategy.callback_phase).to eq(failure_response)
+    end
+  end
 end

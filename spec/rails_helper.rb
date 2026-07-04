@@ -69,6 +69,7 @@ begin
     # Ensure routes are finalized after initialization
     Rails.application.routes.finalize! if Rails.application.routes.respond_to?(:finalize!)
   end
+  SpecTestLogging.silence! if defined?(SpecTestLogging)
 rescue LoadError => e
   # Rails or ActionController not available - skip Rails tests
   # This allows the file to be required even when Rails isn't available
