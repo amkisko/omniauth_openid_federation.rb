@@ -4,12 +4,6 @@
 
 OmniAuth strategy for OpenID Federation providers with comprehensive security features, supporting signed request objects, ID token encryption, and full OpenID Federation 1.0 compliance.
 
-Sponsored by [Kisko Labs](https://www.kiskolabs.com).
-
-<a href="https://www.kiskolabs.com">
-  <img src="kisko.svg" width="200" alt="Sponsored by Kisko Labs" />
-</a>
-
 ## Installation
 
 ```ruby
@@ -515,3 +509,11 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidel
 ## License
 
 MIT License. See [LICENSE.md](LICENSE.md) for details.
+
+## Sponsors
+
+Sponsored by [Kisko Labs](https://www.kiskolabs.com).
+
+<a href="https://www.kiskolabs.com">
+  <img src="kisko.svg" width="200" alt="Sponsored by Kisko Labs" />
+</a>
