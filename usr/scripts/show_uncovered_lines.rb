@@ -166,7 +166,7 @@ end
 # Load coverage data
 unless File.exist?(options[:coverage_path])
   warn "Error: Coverage file not found: #{options[:coverage_path]}"
-  warn "Run tests first to generate coverage report: bin/rspec"
+  warn "Run tests first to generate coverage: bundle exec appraisal rails8 -- bundle exec polyrun parallel-rspec -c polyrun.yml"
   exit 1
 end
 

@@ -34,11 +34,9 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency "rack", ">= 2.0", "< 4"
 
   spec.add_development_dependency "rspec", "~> 3.13"
+  spec.add_development_dependency "polyrun", "~> 2"
   spec.add_development_dependency "webmock", "~> 3.26"
   spec.add_development_dependency "rake", "~> 13.3"
-  spec.add_development_dependency "simplecov", "~> 0.22"
-  spec.add_development_dependency "rspec_junit_formatter", "~> 0.6"
-  spec.add_development_dependency "simplecov-cobertura", "~> 3.1"
   spec.add_development_dependency "standard", "~> 1.52"
   spec.add_development_dependency "standard-custom", "~> 1.0"
   spec.add_development_dependency "standard-performance", "~> 1.8"

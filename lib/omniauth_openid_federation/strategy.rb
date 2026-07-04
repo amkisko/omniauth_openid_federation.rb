@@ -297,8 +297,7 @@ module OmniAuth
             }
           )
           env["omniauth_openid_federation.instrumented"] = true
-          fail!(:authorization_error, OmniauthOpenidFederation::ValidationError.new(error_msg))
-          return
+          return fail!(:authorization_error, OmniauthOpenidFederation::ValidationError.new(error_msg))
         end
 
         # CSRF protection: constant-time state comparison
@@ -319,8 +318,7 @@ module OmniAuth
           )
           # Mark as instrumented to prevent double instrumentation in fail!
           env["omniauth_openid_federation.instrumented"] = true
-          fail!(:csrf_detected, OmniauthOpenidFederation::SecurityError.new("CSRF detected"))
-          return
+          return fail!(:csrf_detected, OmniauthOpenidFederation::SecurityError.new("CSRF detected"))
         end
 
         # Clear state from session
@@ -340,8 +338,7 @@ module OmniAuth
           )
           # Mark as instrumented to prevent double instrumentation in fail!
           env["omniauth_openid_federation.instrumented"] = true
-          fail!(:missing_code, OmniauthOpenidFederation::ValidationError.new("Missing authorization code"))
-          return
+          return fail!(:missing_code, OmniauthOpenidFederation::ValidationError.new("Missing authorization code"))
         end
 
         begin
@@ -360,8 +357,7 @@ module OmniAuth
           )
           # Mark as instrumented to prevent double instrumentation in fail!
           env["omniauth_openid_federation.instrumented"] = true
-          fail!(:token_exchange_error, e)
-          return
+          return fail!(:token_exchange_error, e)
         end
 
         env["omniauth.auth"] = auth_hash

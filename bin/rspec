@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Default: Polyrun parallel RSpec (+ merged coverage path). See bin/rspec_parallel, polyrun.yml.
+# Serial (single process, no polyrun): POLYRUN_SERIAL=1 or true or yes
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+_s="$(echo "${POLYRUN_SERIAL:-}" | tr '[:upper:]' '[:lower:]')"
+case "$_s" in
+  1|true|yes)
+    exec bundle exec rspec "$@"
+    ;;
+esac
+exec "$(dirname "$0")/rspec_parallel" "$@"

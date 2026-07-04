@@ -1,0 +1,13 @@
+# Parallel RSpec: spec/spec_paths.txt is generated from paths_build before plan/run-shards (or: bundle exec polyrun build-paths).
+
+partition:
+  suite: rspec
+  paths_file: spec/spec_paths.txt
+  shard_total: 5
+  shard_index: 0
+  strategy: round_robin
+  paths_build:
+    all_glob: spec/**/*_spec.rb
+    stages:
+      - regex: federation_controller|railtie
+        ignore_case: true

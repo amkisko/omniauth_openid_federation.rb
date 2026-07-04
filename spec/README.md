@@ -1,13 +1,19 @@
 # Running Tests
 
-## Using rspec
+## Using RSpec (default: Polyrun parallel)
 
-All tests should be run using `bundle exec appraisal rails8 rspec`
+Full-suite runs match CI: **`bundle exec polyrun parallel-rspec`** under an Appraisal gemfile (here **rails8**, same as the coverage job). **`polyrun.yml`** **`partition.paths_build`** refreshes **`spec/spec_paths.txt`** automatically; to regenerate only: **`bundle exec polyrun build-paths -c polyrun.yml`**.
 
 ```bash
-# Run all tests
-bundle exec appraisal rails8 rspec
+bundle exec appraisal install   # once / after Appraisals change
+bundle exec appraisal rails8 -- bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml
+```
 
+Optional wrapper (same command): **`bin/rspec_parallel`**. See **[POLYRUN.md](../POLYRUN.md)**.
+
+For **focused** or **serial** runs (single file, line, `--fail-fast`), use Appraisal + plain RSpec so the suite is not sharded:
+
+```bash
 # Run with fail-fast (stop on first failure)
 bundle exec appraisal rails8 rspec --fail-fast
 
