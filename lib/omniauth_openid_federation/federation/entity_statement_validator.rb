@@ -319,10 +319,8 @@ module OmniauthOpenidFederation
         unknown_claims = crit - standard_claims
 
         if unknown_claims.any?
-          # For now, we'll log a warning but not reject
-          # In a strict implementation, we should reject if we don't understand the claims
-          # Future enhancement: Add strict_mode option to reject unknown crit claims
-          OmniauthOpenidFederation::Logger.warn("[EntityStatementValidator] Entity statement contains crit claim with unknown claims: #{unknown_claims.join(", ")}. These claims MUST be understood and processed.")
+          raise ValidationError,
+            "Entity statement crit claim contains unknown claims that MUST be understood: #{unknown_claims.join(", ")}"
         end
       end
 

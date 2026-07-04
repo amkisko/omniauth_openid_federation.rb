@@ -223,6 +223,9 @@ RSpec.describe "Rodauth integration with omniauth_openid_federation", type: :int
       state_param = session["omniauth.state"]
       expect(state_param).to be_present, "Expected 'state' in session after request phase. Session keys: #{session.keys.inspect}"
 
+      session_nonce = session["omniauth.nonce"]
+      expect(session_nonce).to be_present, "Expected 'nonce' in session after request phase. Session keys: #{session.keys.inspect}"
+
       authorization_code = "test-auth-code-123"
       id_token_payload = {
         iss: provider_issuer,
@@ -230,7 +233,7 @@ RSpec.describe "Rodauth integration with omniauth_openid_federation", type: :int
         aud: client_id,
         exp: Time.now.to_i + 3600,
         iat: Time.now.to_i,
-        nonce: "test-nonce",
+        nonce: session_nonce,
         email: "user@example.com",
         name: "Test User"
       }

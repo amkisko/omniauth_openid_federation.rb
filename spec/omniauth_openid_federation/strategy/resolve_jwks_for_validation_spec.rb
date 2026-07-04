@@ -18,6 +18,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     it "covers client initialization with all endpoint building paths" do
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,
@@ -37,7 +38,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers client initialization with string keys in merged_options" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -48,11 +49,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           "identifier" => client_id,
@@ -66,7 +68,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers resolve_endpoints_from_metadata with all endpoint types" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -80,11 +82,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -98,7 +101,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers resolve_endpoints_from_metadata with issuer resolution" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -110,11 +113,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         issuer: provider_issuer,
         client_options: {
@@ -131,6 +135,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     it "covers resolve_audience with all fallback paths" do
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,
@@ -147,7 +152,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers resolve_jwks_for_validation with signed JWKS path" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -161,15 +166,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
-      signed_jwks_jwt = JWT.encode({jwks: {keys: [jwk]}}, private_key, "RS256")
+      signed_jwks_jwt = encode_rs256({jwks: {keys: [jwk]}})
       stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
         .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -200,7 +206,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers resolve_jwks_for_validation error handling" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -211,11 +217,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -232,7 +239,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers decode_id_token with symbol kid in header" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -245,11 +252,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -281,7 +289,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers decode_id_token with JWKS format validation" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -294,11 +302,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -315,7 +324,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers decode_id_token JWT decode error handling with wrong signature" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -328,11 +337,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -352,7 +362,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers decode_id_token error handling with available kids logging" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -365,11 +375,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -389,7 +400,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "covers decode_id_token general error handling" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -402,11 +413,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -437,6 +449,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,
@@ -473,6 +486,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,

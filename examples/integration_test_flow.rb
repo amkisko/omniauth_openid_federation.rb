@@ -42,7 +42,7 @@ require "securerandom"
 require "fileutils"
 require "timeout"
 require "open3"
-require "jwe"
+require_relative "../lib/omniauth_openid_federation"
 require "jwt"
 
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
@@ -272,7 +272,7 @@ class IntegrationTestFlow
     script_path = File.expand_path(script, __dir__)
     project_root = File.expand_path("..", __dir__)
 
-    # Use bundle exec to ensure all dependencies (jwt, jwe, etc.) are available
+    # Use bundle exec to ensure all dependencies (jwt, json-jwt, etc.) are available
     pid = Process.spawn(
       {
         "RUBYOPT" => "-W0", # Suppress warnings
@@ -679,7 +679,7 @@ class IntegrationTestFlow
 
       # Encrypt with wrong key (provider won't be able to decrypt with its key)
       signed_jwt = jws.sign
-      encrypted_request = JWE.encrypt(signed_jwt, wrong_key)
+      encrypted_request = OmniauthOpenidFederation::Jwe.encrypt(signed_jwt, wrong_key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
 
       # Verify it's encrypted (JWE has 5 parts)
       parts = encrypted_request.split(".")

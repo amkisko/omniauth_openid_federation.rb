@@ -59,6 +59,9 @@ begin
 
         # Ensure session middleware is available (required for federation)
         config.session_store :cookie_store, key: "_test_session"
+
+        # FileStore under tmp/cache races when polyrun runs multiple OS workers.
+        config.cache_store = :memory_store
       end
     end
   end
@@ -66,8 +69,9 @@ begin
   # Initialize Rails app if not already initialized
   unless defined?(Rails) && Rails.application&.initialized?
     TestApp::Application.initialize!
-    # Ensure routes are finalized after initialization
+    # Ensure session middleware is available (required for federation)
     Rails.application.routes.finalize! if Rails.application.routes.respond_to?(:finalize!)
+    OmniauthOpenidFederation::CacheAdapter.reset! if defined?(OmniauthOpenidFederation::CacheAdapter)
   end
   SpecTestLogging.silence! if defined?(SpecTestLogging)
 rescue LoadError => e

@@ -614,17 +614,19 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementValidator do
         )
       end
 
-      it "logs warning for unknown crit claims" do
+      it "raises ValidationError for unknown crit claims" do
         payload = {iss: issuer, sub: entity_subject, iat: Time.now.to_i, exp: Time.now.to_i + 3600, jwks: {keys: [jwk_export]}, crit: ["unknown_claim"]}
         header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
         jwt_string = JWT.encode(payload, private_key, "RS256", header)
 
         validator = described_class.new(jwt_string: jwt_string)
 
-        allow(OmniauthOpenidFederation::Logger).to receive(:warn).with(/contains crit claim with unknown claims/)
-
-        validator.validate!
-        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/contains crit claim with unknown claims/)
+        expect {
+          validator.validate!
+        }.to raise_error(
+          OmniauthOpenidFederation::ValidationError,
+          /crit claim contains unknown claims/
+        )
       end
     end
 

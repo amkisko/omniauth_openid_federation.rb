@@ -37,7 +37,6 @@ require "webrick"
 require "yaml"
 require "json"
 require "jwt"
-require "jwe"
 require "openssl"
 require "base64"
 require "uri"
@@ -566,7 +565,7 @@ class MockOPServer
 
         # Try to decrypt - will fail if wrong key was used
         begin
-          request_jwt = JWE.decrypt(request_jwt, MockOPServer::ENCRYPTION_KEY)
+          request_jwt = OmniauthOpenidFederation::Jwe.decrypt(request_jwt, MockOPServer::ENCRYPTION_KEY)
         rescue => e
           raise OmniauthOpenidFederation::DecryptionError, "Failed to decrypt request object: #{e.message}"
         end

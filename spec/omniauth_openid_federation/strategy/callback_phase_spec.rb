@@ -21,12 +21,20 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       aud: client_id,
       exp: Time.now.to_i + 3600,
       iat: Time.now.to_i,
-      nonce: "random-nonce",
+      nonce: callback_session_nonce,
       email: "user@example.com",
       name: "Test User",
       given_name: "Test",
       family_name: "User"
     }
+  end
+  let(:callback_session_nonce) { "random-nonce" }
+
+  def build_callback_session(state: nil, nonce: callback_session_nonce)
+    session = {}
+    session["omniauth.state"] = state if state
+    session["omniauth.nonce"] = nonce if nonce
+    session
   end
   let(:id_token_jwt) { JWT.encode(id_token_payload, private_key, "RS256", kid: "test-key-id") }
   let(:access_token_jwt) { "mock-access-token" }
@@ -216,10 +224,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       # Create callback request without code
       callback_env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?state=#{state}",
-        "rack.session" => {"omniauth.state" => state}
+        "rack.session" => build_callback_session(state: state)
       )
       strategy.instance_variable_set(:@env, callback_env)
-      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: {"omniauth.state" => state})
+      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: build_callback_session(state: state))
 
       # fail! doesn't raise, it sets error state
       strategy.callback_phase
@@ -258,10 +266,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       # Create callback request with valid state and code
       callback_env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
-        "rack.session" => {"omniauth.state" => state}
+        "rack.session" => build_callback_session(state: state)
       )
       strategy.instance_variable_set(:@env, callback_env)
-      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: {"omniauth.state" => state})
+      allow(strategy).to receive_messages(request: Rack::Request.new(callback_env), session: build_callback_session(state: state))
 
       # fail! doesn't raise, it sets error state
       strategy.callback_phase
@@ -275,7 +283,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
     it "successfully processes callback" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       strategy = described_class.new(
         nil,
@@ -333,7 +341,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
   describe "auth_hash" do
     it "builds auth hash with access token" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
@@ -363,7 +371,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
     it "handles access token with refresh_token" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       double(
         access_token: access_token_jwt,
@@ -403,7 +411,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
     it "handles access token without expires_in" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       WebMock.stub_request(:post, "https://provider.example.com/oauth2/token")
         .to_return(status: 200, body: {
@@ -436,7 +444,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
   describe "uid, info, extra" do
     it "extracts uid from raw_info" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
@@ -456,7 +464,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
     it "extracts info from raw_info" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
@@ -477,7 +485,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
     it "extracts extra from raw_info" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
@@ -502,7 +510,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     it "handles authorization error with error_description in callback" do
       # Test lines 286-301: error_param handling in callback_phase
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?error=access_denied&error_description=User%20denied%20access&state=#{state}",
@@ -538,7 +546,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     it "handles authorization error without error_description in callback" do
       # Test lines 286-301: error_param handling without error_description
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?error=access_denied&state=#{state}",
@@ -593,7 +601,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         }.to_json, headers: {"Content-Type" => "application/json"})
 
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
@@ -634,7 +642,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         }.to_json, headers: {"Content-Type" => "application/json"})
 
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
@@ -655,7 +663,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
   describe "raw_info - all branches" do
     it "handles raw_info with exchange_authorization_code fallback" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
@@ -669,6 +677,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       # Create a strategy instance directly instead of trying to extract from Rack response
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         client_options: {
           identifier: client_id,
           secret: "client-secret-123",
@@ -715,7 +724,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
     it "handles raw_info with id_token.raw_attributes as nil" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
 
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
@@ -790,7 +799,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
     it "returns fail! response for authorization_error" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
       strategy = strategy_for_callback(
         "/auth/openid_federation/callback?error=access_denied&state=#{state}",
         session
@@ -810,7 +819,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
     it "returns fail! response for missing_code" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
       strategy = strategy_for_callback(
         "/auth/openid_federation/callback?state=#{state}",
         session
@@ -821,7 +830,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
 
     it "returns fail! response for token_exchange_error" do
       state = SecureRandom.hex(16)
-      session = {"omniauth.state" => state}
+      session = build_callback_session(state: state)
       strategy = strategy_for_callback(
         "/auth/openid_federation/callback?code=auth-code&state=#{state}",
         session

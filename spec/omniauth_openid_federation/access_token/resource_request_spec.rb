@@ -81,7 +81,7 @@ RSpec.describe OpenIDConnect::AccessToken do
       expect(result).to eq({"test" => "data"})
     end
 
-    it "raises ArgumentError when encrypted JWT response has invalid base64 encoding" do
+    it "raises DecryptionError when encrypted JWT response has invalid base64 encoding" do
       encrypted_jwt = "header.encrypted_key.iv.ciphertext.tag"
       response = double(status: 200, body: encrypted_jwt)
       client = create_client_with_strategy_options
@@ -89,12 +89,12 @@ RSpec.describe OpenIDConnect::AccessToken do
 
       expect {
         token.resource_request { response }
-      }.to raise_error(ArgumentError, /invalid base64/)
+      }.to raise_error(OmniauthOpenidFederation::DecryptionError, /Failed to decrypt JWE/)
     end
 
     it "processes signed JWT response by fetching JWKS from configured URI" do
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -110,7 +110,7 @@ RSpec.describe OpenIDConnect::AccessToken do
       expect(result).to be_a(Hash)
     end
 
-    it "handles unsigned JWT (alg: none)" do
+    it "rejects unsigned JWT (alg: none)" do
       header = {alg: "none"}
       payload = {iss: provider_issuer, sub: "user-123"}
       unsigned_jwt = JWT.encode(payload, nil, "none", header)
@@ -123,12 +123,9 @@ RSpec.describe OpenIDConnect::AccessToken do
       )
       token = described_class.new(access_token: "token", client: client)
 
-      result = token.resource_request { response }
-      aggregate_failures do
-        expect(result).to be_a(Hash)
-        expect(result["iss"]).to eq(provider_issuer)
-        expect(result["sub"]).to eq("user-123")
-      end
+      expect {
+        token.resource_request { response }
+      }.to raise_error(OmniauthOpenidFederation::ValidationError, /not permitted/)
     end
 
     it "handles JSON response (not JWT)" do
@@ -142,7 +139,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     it "processes signed JWT response using openid_connect config fallback when JWKS URI is not configured" do
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -160,7 +157,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     it "handles jwks_uri as path (not full URL)" do
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -184,7 +181,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     it "handles string keys in client_options" do
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -242,11 +239,11 @@ RSpec.describe OpenIDConnect::AccessToken do
 
       expect {
         token.resource_request { response }
-      }.to raise_error(JWT::Base64DecodeError, /Invalid base64/)
+      }.to raise_error(OmniauthOpenidFederation::ValidationError, /invalid base64/)
     end
 
     it "handles fetch_signed_jwks with entity statement" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -258,15 +255,15 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
-      signed_jwks_jwt = JWT.encode({jwks: {keys: [jwk]}}, private_key, "RS256")
+      signed_jwks_jwt = encode_rs256({jwks: {keys: [jwk]}})
       stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
         .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
       client = create_client_with_strategy_options(
         entity_statement_path: entity_statement_path
@@ -280,7 +277,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     it "raises SecurityError when entity statement path contains path traversal attempt in fetch_signed_jwks" do
       entity_statement_path = "../../../etc/passwd"
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -301,7 +298,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     it "handles missing entity statement file path error in fetch_signed_jwks" do
       entity_statement_path = "/nonexistent/path.jwt"
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -320,7 +317,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "successfully loads entity statement keys for JWKS validation when entity statement contains valid JWKS" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -332,11 +329,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -352,7 +349,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "handles load_entity_statement_keys_for_jwks_validation when entity statement has empty keys array" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -363,11 +360,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -386,11 +383,11 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "handles load_entity_statement_keys with errors" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       File.write(entity_statement_path, "invalid")
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -425,16 +422,15 @@ RSpec.describe OpenIDConnect::AccessToken do
       client = create_client_with_strategy_options
       token = described_class.new(access_token: "token", client: client)
 
-      # Mock JWE.decrypt to return invalid JSON
-      allow(JWE).to receive(:decrypt).and_return("invalid json")
+      allow(OmniauthOpenidFederation::Jwe).to receive(:decrypt).and_return("invalid json")
 
       expect {
         token.resource_request { response }
-      }.to raise_error(JWT::DecodeError, /Not enough or too many segments/)
+      }.to raise_error(OmniauthOpenidFederation::ValidationError, /invalid base64/)
     end
 
     it "handles signed JWT with signed JWKS" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -447,15 +443,15 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
-      signed_jwks_jwt = JWT.encode({jwks: {keys: [jwk]}}, private_key, "RS256")
+      signed_jwks_jwt = encode_rs256({jwks: {keys: [jwk]}})
       stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
         .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600, aud: "test"}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
       client = create_client_with_strategy_options(
         entity_statement_path: entity_statement_path
@@ -467,7 +463,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "extracts encryption key for decryption by reading metadata from entity statement file" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -477,7 +473,7 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       encrypted_jwt = "header.encrypted_key.iv.ciphertext.tag"
@@ -489,7 +485,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
       expect {
         token.resource_request { response }
-      }.to raise_error(ArgumentError, /invalid base64/)
+      }.to raise_error(OmniauthOpenidFederation::DecryptionError, /Failed to decrypt JWE/)
     end
 
     it "handles extract_encryption_key_for_decryption using client private key" do
@@ -508,7 +504,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
       expect {
         token.resource_request { response }
-      }.to raise_error(ArgumentError, /invalid base64/)
+      }.to raise_error(OmniauthOpenidFederation::DecryptionError, /Failed to decrypt JWE/)
     end
 
     it "handles extract_encryption_key_for_decryption error loading metadata" do
@@ -522,11 +518,11 @@ RSpec.describe OpenIDConnect::AccessToken do
 
       expect {
         token.resource_request { response }
-      }.to raise_error(ArgumentError, /invalid base64/)
+      }.to raise_error(OmniauthOpenidFederation::DecryptionError, /Failed to decrypt JWE/)
     end
 
     it "handles fetch_signed_jwks with nil parsed" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -534,11 +530,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           openid_provider: {}
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600, aud: "test"}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -558,7 +554,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     it "handles load_entity_statement_keys with blank path" do
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600, aud: "test"}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -596,11 +592,11 @@ RSpec.describe OpenIDConnect::AccessToken do
             }
           }
         }
-        jwt = JWT.encode(entity_statement, private_key, "RS256")
+        jwt = encode_entity_statement(entity_statement)
         File.write(full_path, jwt)
 
         payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600, aud: "test"}
-        signed_jwt = JWT.encode(payload, private_key, "RS256")
+        signed_jwt = encode_rs256(payload)
         response = double(status: 200, body: signed_jwt)
 
         stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -631,7 +627,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     # Test line 79: client.host fallback when jwks_uri is a path
     it "uses client.host when jwks_uri is a path and host not in client_options" do
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -659,7 +655,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test line 105: JWT.decode with signed JWKS
     it "decodes and validates JWT response using signed JWKS keys extracted from entity statement" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -671,16 +667,16 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       signed_jwks_payload = {jwks: {keys: [jwk]}}
-      signed_jwks_jwt = JWT.encode(signed_jwks_payload, private_key, "RS256")
+      signed_jwks_jwt = encode_rs256(signed_jwks_payload)
       stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
         .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
       client = create_client_with_strategy_options(
         entity_statement_path: entity_statement_path
@@ -693,7 +689,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test lines 118, 120: Successfully resolved JWKS URI from entity statement
     it "resolves JWKS URI from entity statement metadata when missing from client_options" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -705,11 +701,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwks = {keys: [jwk]}
@@ -749,7 +745,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test lines 211-212: File.exist? and JSON.parse for metadata
     it "loads entity statement file and parses JSON metadata to extract encryption key for decryption" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -759,7 +755,7 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       encrypted_jwt = "header.encrypted_key.iv.ciphertext.tag"
@@ -771,14 +767,14 @@ RSpec.describe OpenIDConnect::AccessToken do
 
       expect {
         token.resource_request { response }
-      }.to raise_error(ArgumentError, /invalid base64/)
+      }.to raise_error(OmniauthOpenidFederation::DecryptionError, /Failed to decrypt JWE/)
     end
 
     # Test lines 250, 253: Entity statement file not found and SecurityError
     it "handles FileNotFoundError when entity statement file is missing in fetch_signed_jwks" do
       entity_statement_path = "/nonexistent/path.jwt"
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -799,7 +795,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     it "catches and handles SecurityError exception raised during entity statement file loading in fetch_signed_jwks" do
       entity_statement_path = "../../../etc/passwd"
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -831,16 +827,16 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       stub_request(:get, entity_statement_url)
         .to_return(status: 200, body: jwt, headers: {"Content-Type" => "application/jwt"})
 
-      signed_jwks_jwt = JWT.encode({jwks: {keys: [jwk]}}, private_key, "RS256")
+      signed_jwks_jwt = encode_rs256({jwks: {keys: [jwk]}})
       stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
         .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
       client = create_client_with_strategy_options(
         entity_statement_url: entity_statement_url
@@ -857,7 +853,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         .to_return(status: 500, body: "Internal Server Error")
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -888,16 +884,16 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       stub_request(:get, "#{provider_issuer}/.well-known/openid-federation")
         .to_return(status: 200, body: jwt, headers: {"Content-Type" => "application/jwt"})
 
-      signed_jwks_jwt = JWT.encode({jwks: {keys: [jwk]}}, private_key, "RS256")
+      signed_jwks_jwt = encode_rs256({jwks: {keys: [jwk]}})
       stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
         .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
       client = create_client_with_strategy_options(
         issuer: provider_issuer
@@ -913,7 +909,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         .to_return(status: 500, body: "Internal Server Error")
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -933,11 +929,11 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test line 297: return nil when parsed is nil
     it "returns nil when parsed entity statement is nil in fetch_signed_jwks" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       File.write(entity_statement_path, "invalid jwt")
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -957,7 +953,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test lines 307, 310-314, 317-318, 320, 322: fetch_signed_jwks with entity_jwks
     it "fetches signed JWKS endpoint and validates response using entity_jwks keys from entity statement" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -969,16 +965,16 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       signed_jwks_payload = {jwks: {keys: [jwk]}}
-      signed_jwks_jwt = JWT.encode(signed_jwks_payload, private_key, "RS256")
+      signed_jwks_jwt = encode_rs256(signed_jwks_payload)
       stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
         .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
       client = create_client_with_strategy_options(
         entity_statement_path: entity_statement_path
@@ -990,7 +986,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "handles SecurityError in fetch_signed_jwks" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -1002,18 +998,18 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       # Use a different key for signed JWKS to cause validation failure
       other_key = OpenSSL::PKey::RSA.new(2048)
       signed_jwks_payload = {jwks: {keys: [OmniauthOpenidFederation::Utils.rsa_key_to_jwk(other_key.public_key)]}}
-      signed_jwks_jwt = JWT.encode(signed_jwks_payload, other_key, "RS256")
+      signed_jwks_jwt = encode_rs256(signed_jwks_payload, key: other_key)
       stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
         .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwks = {keys: [jwk]}
@@ -1030,7 +1026,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "handles general error in fetch_signed_jwks" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -1042,14 +1038,14 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       stub_request(:get, "https://provider.example.com/.well-known/signed-jwks.json")
         .to_raise(StandardError.new("Network error"))
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwks = {keys: [jwk]}
@@ -1067,7 +1063,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test lines 394-399, 402-403: load_entity_statement_keys_for_jwks_validation edge cases
     it "processes entity_jwks when formatted as Hash with symbol keys during load_entity_statement_keys_for_jwks_validation" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -1079,11 +1075,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -1099,7 +1095,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "handles entity_jwks as Array format when loading entity statement keys" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       # Create entity statement with jwks as array (not standard but should be handled)
       entity_statement = {
@@ -1112,11 +1108,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -1132,7 +1128,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "handles empty keys array in entity_jwks when loading entity statement keys" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -1143,11 +1139,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -1167,12 +1163,12 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test lines 412-415: Error handling in load_entity_statement_keys_for_jwks_validation
     it "handles errors in load_entity_statement_keys_for_jwks_validation" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       # Create invalid entity statement that will cause parse errors
       File.write(entity_statement_path, "invalid jwt content")
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -1192,7 +1188,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test lines 447-448, 451: resolve_jwks_uri_from_entity_statement file path handling
     it "resolves JWKS URI by reading entity statement file path and extracting metadata" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -1204,11 +1200,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwks = {keys: [jwk]}
@@ -1234,7 +1230,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     it "handles SecurityError when resolving JWKS URI from file path" do
       entity_statement_path = "../../../etc/passwd"
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -1273,12 +1269,12 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       stub_request(:get, entity_statement_url)
         .to_return(status: 200, body: jwt, headers: {"Content-Type" => "application/jwt"})
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwks = {keys: [jwk]}
@@ -1307,7 +1303,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         .to_return(status: 500, body: "Internal Server Error")
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -1345,12 +1341,12 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       stub_request(:get, "#{provider_issuer}/.well-known/openid-federation")
         .to_return(status: 200, body: jwt, headers: {"Content-Type" => "application/jwt"})
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwks = {keys: [jwk]}
@@ -1378,7 +1374,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         .to_return(status: 500, body: "Internal Server Error")
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -1405,11 +1401,11 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test lines 488-490, 496-498, 501: resolve_jwks_uri_from_entity_statement parsing
     it "handles parsing error when resolving JWKS URI from entity statement" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       File.write(entity_statement_path, "invalid jwt")
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -1435,7 +1431,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "handles entity statement without jwks_uri in metadata" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -1448,11 +1444,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       jwks = {keys: [jwk]}
@@ -1487,7 +1483,7 @@ RSpec.describe OpenIDConnect::AccessToken do
       kid = jwk[:kid] || jwk["kid"]
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256", kid: kid)
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -1521,7 +1517,7 @@ RSpec.describe OpenIDConnect::AccessToken do
       kid = jwk[:kid] || jwk["kid"]
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256", kid: kid)
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -1546,7 +1542,7 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     # Test lines 394-399, 402-403: load_entity_statement_keys_for_jwks_validation key extraction
     it "handles entity_jwks with string keys (line 394)" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -1558,11 +1554,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -1578,7 +1574,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "handles entity_jwks with symbol keys format for JWKS validation (line 395)" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -1590,11 +1586,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -1610,7 +1606,7 @@ RSpec.describe OpenIDConnect::AccessToken do
     end
 
     it "handles entity_jwks as array format during JWKS validation process (line 396-397)" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -1622,11 +1618,11 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256")
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -1663,7 +1659,7 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -1671,7 +1667,7 @@ RSpec.describe OpenIDConnect::AccessToken do
       kid = jwk[:kid] || jwk["kid"]
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256", kid: kid)
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")
@@ -1719,7 +1715,7 @@ RSpec.describe OpenIDConnect::AccessToken do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = encode_entity_statement(entity_statement)
       File.write(entity_statement_path, jwt)
 
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
@@ -1727,7 +1723,7 @@ RSpec.describe OpenIDConnect::AccessToken do
       kid = jwk[:kid] || jwk["kid"]
 
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
-      signed_jwt = JWT.encode(payload, private_key, "RS256", kid: kid)
+      signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
 
       stub_request(:get, "#{provider_issuer}/.well-known/jwks.json")

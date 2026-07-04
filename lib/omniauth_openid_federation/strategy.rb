@@ -1,7 +1,6 @@
 require "omniauth-oauth2"
 require "openid_connect"
 require "jwt"
-require "jwe"
 require "base64"
 require "securerandom"
 require "rack/utils"
@@ -53,8 +52,6 @@ module OmniAuth
 
       # Constants for token format validation
       JWT_PARTS_COUNT = 3 # Standard JWT has 3 parts: header.payload.signature
-      JWE_PARTS_COUNT = 5 # Encrypted JWT (JWE) has 5 parts
-
       # Constants for random value generation
       STATE_BYTES = 32 # Number of hex bytes for state parameter (CSRF protection)
       NONCE_BYTES = 32 # Number of hex bytes for nonce parameter (replay protection)
@@ -611,6 +608,10 @@ module OmniAuth
 
       private
 
+      def omniauth_rack_session
+        env.is_a?(Hash) ? env["rack.session"] : nil
+      end
+
       # Exchange authorization code for access token
       def exchange_authorization_code(authorization_code)
         client_options_hash = options.client_options || {}
@@ -642,7 +643,9 @@ module OmniAuth
 
       # Generate a new nonce for replay attack protection
       def new_nonce
-        SecureRandom.hex(NONCE_BYTES)
+        nonce = SecureRandom.hex(NONCE_BYTES)
+        session["omniauth.nonce"] = nonce if options.send_nonce
+        nonce
       end
 
       # Resolve endpoints and issuer from entity statement metadata automatically
@@ -1327,8 +1330,7 @@ module OmniAuth
           OmniauthOpenidFederation::Validators.validate_private_key!(encryption_key)
 
           begin
-            # Decrypt using JWE gem
-            decrypted_token = JWE.decrypt(id_token, encryption_key)
+            decrypted_token = OmniauthOpenidFederation::Jwe.decrypt(id_token, encryption_key)
             OmniauthOpenidFederation::Logger.debug("[Strategy] Successfully decrypted ID token using encryption key")
 
             # Verify decrypted token is a valid JWT (3 parts: header.payload.signature)
@@ -1449,6 +1451,9 @@ module OmniAuth
             raise OmniauthOpenidFederation::ValidationError, error_msg
           end
 
+          validate_id_token_claims!(normalized_payload, normalized_options)
+          omniauth_rack_session&.delete("omniauth.nonce") if options.send_nonce
+
           # Create IdToken object from decoded payload
           # IdToken.new expects symbol keys based on openid_connect gem implementation
           payload_with_symbols = normalized_payload.each_with_object({}) do |(k, v), h|
@@ -1486,9 +1491,86 @@ module OmniAuth
       end
 
       def encrypted_token?(token)
-        # Check if token is encrypted (JWE format has 5 parts separated by dots)
-        parts = token.to_s.split(".")
-        parts.length == JWE_PARTS_COUNT
+        OmniauthOpenidFederation::Jwe.encrypted?(token)
+      end
+
+      def validate_id_token_claims!(payload, normalized_options)
+        expected_issuer = expected_id_token_issuer(normalized_options)
+        token_issuer = payload["iss"]
+
+        if OmniauthOpenidFederation::StringHelpers.present?(expected_issuer) &&
+            token_issuer != expected_issuer
+          OmniauthOpenidFederation::Instrumentation.notify_issuer_mismatch(
+            expected_issuer: expected_issuer,
+            actual_issuer: token_issuer
+          )
+          raise OmniauthOpenidFederation::ValidationError,
+            "ID token issuer mismatch: expected '#{expected_issuer}', got '#{token_issuer}'"
+        end
+
+        expected_client_id = expected_id_token_client_id(normalized_options)
+        token_audiences = Array(payload["aud"]).map(&:to_s)
+
+        if OmniauthOpenidFederation::StringHelpers.present?(expected_client_id) &&
+            !token_audiences.include?(expected_client_id.to_s)
+          OmniauthOpenidFederation::Instrumentation.notify_audience_mismatch(
+            expected_audience: expected_client_id,
+            actual_audience: payload["aud"]
+          )
+          raise OmniauthOpenidFederation::ValidationError,
+            "ID token audience mismatch: expected '#{expected_client_id}' in aud, got '#{payload["aud"]}'"
+        end
+
+        return unless options.send_nonce
+
+        rack_session = omniauth_rack_session
+        unless rack_session
+          raise OmniauthOpenidFederation::ValidationError,
+            "ID token nonce validation failed: no nonce in session"
+        end
+
+        session_nonce = rack_session["omniauth.nonce"]
+        token_nonce = payload["nonce"]
+
+        if OmniauthOpenidFederation::StringHelpers.blank?(session_nonce)
+          raise OmniauthOpenidFederation::ValidationError,
+            "ID token nonce validation failed: no nonce in session"
+        end
+
+        if OmniauthOpenidFederation::StringHelpers.blank?(token_nonce) ||
+            !Rack::Utils.secure_compare(token_nonce.to_s, session_nonce.to_s)
+          OmniauthOpenidFederation::Instrumentation.notify_invalid_nonce(
+            expected_nonce: "[PRESENT]",
+            actual_nonce: token_nonce ? "[PRESENT]" : "[MISSING]"
+          )
+          raise OmniauthOpenidFederation::SecurityError, "ID token nonce mismatch"
+        end
+      end
+
+      def expected_id_token_issuer(normalized_options)
+        options.issuer ||
+          normalized_options[:issuer] ||
+          resolve_issuer_from_metadata
+      end
+
+      def expected_id_token_client_id(normalized_options)
+        if (options.client_registration_type || :explicit) == :automatic
+          client_entity_statement = load_client_entity_statement(
+            options.client_entity_statement_path,
+            options.client_entity_statement_url
+          )
+          entity_identifier = extract_entity_identifier_from_statement(
+            client_entity_statement,
+            options.client_entity_identifier
+          )
+          return entity_identifier if OmniauthOpenidFederation::StringHelpers.present?(entity_identifier)
+        end
+
+        if client.respond_to?(:identifier) && OmniauthOpenidFederation::StringHelpers.present?(client.identifier)
+          client.identifier
+        else
+          normalized_options[:identifier]
+        end
       end
 
       # Decode userinfo response, handling both encrypted (JWE) and plain JSON formats
@@ -1527,8 +1609,7 @@ module OmniAuth
             OmniauthOpenidFederation::Validators.validate_private_key!(encryption_key)
 
             begin
-              # Decrypt using JWE gem
-              userinfo_string = JWE.decrypt(userinfo, encryption_key)
+              userinfo_string = OmniauthOpenidFederation::Jwe.decrypt(userinfo, encryption_key)
               OmniauthOpenidFederation::Logger.debug("[Strategy] Successfully decrypted userinfo using encryption key")
 
               # Parse the decrypted JSON
@@ -1681,42 +1762,31 @@ module OmniAuth
       def resolve_endpoints_from_trust_chain(issuer_entity_id, client_options_hash)
         OmniauthOpenidFederation::Logger.debug("[Strategy] Resolving endpoints from trust chain for: #{issuer_entity_id}")
 
-        begin
-          # Resolve trust chain
-          resolver = OmniauthOpenidFederation::Federation::TrustChainResolver.new(
-            leaf_entity_id: issuer_entity_id,
-            trust_anchors: normalize_trust_anchors(options.trust_anchors)
-          )
-          trust_chain = resolver.resolve!
+        resolver = OmniauthOpenidFederation::Federation::TrustChainResolver.new(
+          leaf_entity_id: issuer_entity_id,
+          trust_anchors: normalize_trust_anchors(options.trust_anchors)
+        )
+        trust_chain = resolver.resolve!
 
-          # Extract metadata from leaf entity configuration
-          leaf_statement = trust_chain.first
-          leaf_parsed = leaf_statement.is_a?(Hash) ? leaf_statement : leaf_statement.parse
-          leaf_metadata = extract_metadata_from_parsed(leaf_parsed)
+        leaf_statement = trust_chain.first
+        leaf_parsed = leaf_statement.is_a?(Hash) ? leaf_statement : leaf_statement.parse
+        leaf_metadata = extract_metadata_from_parsed(leaf_parsed)
 
-          # Merge metadata policies
-          merger = OmniauthOpenidFederation::Federation::MetadataPolicyMerger.new(trust_chain: trust_chain)
-          effective_metadata = merger.merge_and_apply(leaf_metadata)
+        merger = OmniauthOpenidFederation::Federation::MetadataPolicyMerger.new(trust_chain: trust_chain)
+        effective_metadata = merger.merge_and_apply(leaf_metadata)
 
-          # Extract OP metadata from effective metadata
-          op_metadata = effective_metadata[:openid_provider] || effective_metadata["openid_provider"] || {}
+        op_metadata = effective_metadata[:openid_provider] || effective_metadata["openid_provider"] || {}
 
-          # Build resolved endpoints hash
-          resolved = {}
-          resolved[:authorization_endpoint] = op_metadata[:authorization_endpoint] || op_metadata["authorization_endpoint"]
-          resolved[:token_endpoint] = op_metadata[:token_endpoint] || op_metadata["token_endpoint"]
-          resolved[:userinfo_endpoint] = op_metadata[:userinfo_endpoint] || op_metadata["userinfo_endpoint"]
-          resolved[:jwks_uri] = op_metadata[:jwks_uri] || op_metadata["jwks_uri"]
-          resolved[:issuer] = op_metadata[:issuer] || op_metadata["issuer"] || issuer_entity_id
-          resolved[:audience] = resolved[:issuer] # Audience is typically the issuer
+        resolved = {}
+        resolved[:authorization_endpoint] = op_metadata[:authorization_endpoint] || op_metadata["authorization_endpoint"]
+        resolved[:token_endpoint] = op_metadata[:token_endpoint] || op_metadata["token_endpoint"]
+        resolved[:userinfo_endpoint] = op_metadata[:userinfo_endpoint] || op_metadata["userinfo_endpoint"]
+        resolved[:jwks_uri] = op_metadata[:jwks_uri] || op_metadata["jwks_uri"]
+        resolved[:issuer] = op_metadata[:issuer] || op_metadata["issuer"] || issuer_entity_id
+        resolved[:audience] = resolved[:issuer]
 
-          OmniauthOpenidFederation::Logger.debug("[Strategy] Resolved endpoints from trust chain: #{resolved.keys.join(", ")}")
-          resolved
-        rescue OmniauthOpenidFederation::ValidationError, OmniauthOpenidFederation::FetchError => e
-          OmniauthOpenidFederation::Logger.error("[Strategy] Trust chain resolution failed: #{e.message}")
-          # Fall back to direct entity statement
-          {}
-        end
+        OmniauthOpenidFederation::Logger.debug("[Strategy] Resolved endpoints from trust chain: #{resolved.keys.join(", ")}")
+        resolved
       end
 
       # Extract metadata from parsed entity statement

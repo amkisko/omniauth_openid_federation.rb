@@ -20,6 +20,22 @@ module OmniauthOpenidFederation
       "omniauth_openid_federation:signed_jwks:#{Digest::SHA256.hexdigest(signed_jwks_uri)}"
     end
 
+    # Generate cache key for locally served JWKS (federation endpoint)
+    #
+    # @param issuer [String] Federation endpoint issuer entity identifier
+    # @return [String] Cache key
+    def self.key_for_served_jwks(issuer)
+      "federation:jwks:#{Digest::SHA256.hexdigest(issuer)}"
+    end
+
+    # Generate cache key for locally served signed JWKS (federation endpoint)
+    #
+    # @param issuer [String] Federation endpoint issuer entity identifier
+    # @return [String] Cache key
+    def self.key_for_served_signed_jwks(issuer)
+      "federation:signed_jwks:#{Digest::SHA256.hexdigest(issuer)}"
+    end
+
     # Delete JWKS cache
     #
     # @param jwks_uri [String] The JWKS URI

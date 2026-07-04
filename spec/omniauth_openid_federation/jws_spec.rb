@@ -340,8 +340,7 @@ RSpec.describe OmniauthOpenidFederation::Jws do
         private_key: private_key
       )
 
-      # Stub JWE.encrypt to raise an error
-      allow(JWE).to receive(:encrypt).and_raise(StandardError.new("Encryption failed"))
+      allow(OmniauthOpenidFederation::Jwe).to receive(:encrypt).and_raise(StandardError.new("Encryption failed"))
       allow(OmniauthOpenidFederation::Logger).to receive(:error)
 
       aggregate_failures do

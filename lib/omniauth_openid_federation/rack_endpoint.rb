@@ -88,7 +88,7 @@ module OmniauthOpenidFederation
       jwks_to_serve = OmniauthOpenidFederation::FederationEndpoint.current_jwks
 
       # Apply server-side caching if available
-      cache_key = "federation:jwks:#{Digest::SHA256.hexdigest(jwks_to_serve.to_json)}"
+      cache_key = OmniauthOpenidFederation::Cache.key_for_served_jwks(config.issuer)
       cache_ttl = config.jwks_cache_ttl || 3600
 
       jwks_json = if CacheAdapter.available?
@@ -159,7 +159,7 @@ module OmniauthOpenidFederation
       signed_jwks_jwt = OmniauthOpenidFederation::FederationEndpoint.generate_signed_jwks
 
       # Apply server-side caching if available
-      cache_key = "federation:signed_jwks:#{Digest::SHA256.hexdigest(signed_jwks_jwt)}"
+      cache_key = OmniauthOpenidFederation::Cache.key_for_served_signed_jwks(config.issuer)
       cache_ttl = config.jwks_cache_ttl || 3600
 
       cached_jwt = if CacheAdapter.available?

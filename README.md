@@ -506,7 +506,7 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidel
 - [omniauth](https://github.com/omniauth/omniauth) - Authentication framework
 - [devise](https://github.com/heartcombo/devise) - Rails authentication solution
 - [jwt](https://github.com/jwt/ruby-jwt) - JSON Web Token implementation
-- [jwe](https://github.com/nov/jwe) - JSON Web Encryption
+- [json-jwt](https://github.com/nov/json-jwt) - JSON Web Encryption (via `OmniauthOpenidFederation::Jwe`)
 - [openid_connect](https://github.com/nov/openid_connect) - OpenID Connect client
 - [http](https://github.com/httprb/http) - HTTP client
 - [anyway_config](https://github.com/palkan/anyway_config) - Configuration management

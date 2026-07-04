@@ -72,8 +72,9 @@ class FederationFilesGenerationJob < ApplicationJob
       Rails.logger.info "[FederationFilesGenerationJob] Cleared federation caches"
     else
       # Fallback: clear known cache keys
-      Rails.cache.delete("federation:jwks")
-      Rails.cache.delete("federation:signed_jwks")
+      issuer = OmniauthOpenidFederation::FederationEndpoint.configuration.issuer
+      Rails.cache.delete(OmniauthOpenidFederation::Cache.key_for_served_jwks(issuer))
+      Rails.cache.delete(OmniauthOpenidFederation::Cache.key_for_served_signed_jwks(issuer))
       Rails.logger.info "[FederationFilesGenerationJob] Cleared federation caches (fallback)"
     end
 

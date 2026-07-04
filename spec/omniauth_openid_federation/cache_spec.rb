@@ -36,6 +36,39 @@ RSpec.describe OmniauthOpenidFederation::Cache do
     end
   end
 
+  describe ".key_for_served_jwks" do
+    it "generates consistent issuer-scoped cache key for served JWKS" do
+      issuer = "https://rp.example.com"
+      key1 = described_class.key_for_served_jwks(issuer)
+      key2 = described_class.key_for_served_jwks(issuer)
+
+      aggregate_failures do
+        expect(key1).to eq(key2)
+        expect(key1).to start_with("federation:jwks:")
+      end
+    end
+
+    it "generates different keys for different issuers" do
+      key1 = described_class.key_for_served_jwks("https://rp.example.com")
+      key2 = described_class.key_for_served_jwks("https://other.example.com")
+
+      expect(key1).not_to eq(key2)
+    end
+  end
+
+  describe ".key_for_served_signed_jwks" do
+    it "generates consistent issuer-scoped cache key for served signed JWKS" do
+      issuer = "https://rp.example.com"
+      key1 = described_class.key_for_served_signed_jwks(issuer)
+      key2 = described_class.key_for_served_signed_jwks(issuer)
+
+      aggregate_failures do
+        expect(key1).to eq(key2)
+        expect(key1).to start_with("federation:signed_jwks:")
+      end
+    end
+  end
+
   describe ".delete_jwks" do
     it "deletes JWKS cache when cache adapter is available" do
       if OmniauthOpenidFederation::CacheAdapter.available?

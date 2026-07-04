@@ -1,5 +1,4 @@
 require "jwt"
-require "jwe"
 require "securerandom"
 require "base64"
 require_relative "string_helpers"
@@ -393,11 +392,7 @@ module OmniauthOpenidFederation
         # Convert JWK to OpenSSL public key
         public_key = KeyExtractor.jwk_to_openssl_key(encryption_key_data)
 
-        # Encrypt the signed JWT using JWE gem
-        # For JWE, we encrypt the signed JWT string as plaintext
-        # The pattern is: sign first, then encrypt (nested JWT)
-        # JWE.encrypt(plaintext, key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
-        JWE.encrypt(
+        OmniauthOpenidFederation::Jwe.encrypt(
           signed_jwt,
           public_key,
           alg: encryption_alg,

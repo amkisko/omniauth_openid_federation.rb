@@ -113,19 +113,6 @@ module OmniauthOpenidFederation
           else
             raise e
           end
-        rescue => e
-          # Other errors might be due to key rotation
-          if retried
-            # If already re-tried to fetch, raise error
-            error_msg = "JWT decode failed after cache refresh: #{e.class} - #{e.message}"
-            OmniauthOpenidFederation::Logger.error("[Jwks::Decode] #{error_msg}")
-            raise ValidationError, error_msg, e.backtrace
-          else
-            OmniauthOpenidFederation::Logger.warn("[Jwks::Decode] JWT decode error (clearing cache and retrying - possible key rotation): #{e.class} - #{e.message}")
-            # Reset cache to force re-fetching of keys
-            OmniauthOpenidFederation::Cache.delete_jwks(jwks_uri)
-            run(encoded_jwt, jwks_uri, retried: true, entity_statement_keys: entity_statement_keys, &block)
-          end
         end
       end
 

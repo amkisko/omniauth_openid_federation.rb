@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Verify subordinate entity statement signatures in trust chain resolution
+- Validate ID token `iss`, `aud`, and session `nonce` in `callback_phase`
+- Reject `alg: none` in access token JWT handling
+- Fail closed on trust chain resolution errors instead of returning empty metadata
+- Wire `verify_ssl` into `HttpClient` SSL options
+- Use `CacheAdapter` in `RateLimiter` instead of `Rails.cache` directly
+- Remove broad JWKS decode retry on non-signature errors
+- Reject unknown `crit` claims in entity statement validation
+- Use issuer-scoped cache keys for federation JWKS and signed JWKS endpoints
 - Fix OAuth callback failures in `callback_phase` to return the Rack response from `fail!` instead of `nil`; avoids `Rack::ETag` `NoMethodError` and HTTP 500 on auth failure
 
 ## 1.3.2 (2025-12-09)

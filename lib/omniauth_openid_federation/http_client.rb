@@ -1,3 +1,4 @@
+require "openssl"
 require_relative "constants"
 
 # HTTP client with retry logic and SSL configuration
@@ -42,25 +43,32 @@ module OmniauthOpenidFederation
     # @param timeout [Integer] Request timeout in seconds
     # @return [HTTP::Client] Configured HTTP client
     def self.build_http_client(timeout)
-      http_options_hash = build_http_options_hash || {}
+      http_options_hash = build_http_options_hash
       http_options = HTTP::Options.new(http_options_hash)
       HTTP::Client.new(http_options).timeout(timeout)
     end
 
     # Build HTTP options hash from configuration
     #
-    # @return [Hash, nil] HTTP options hash or nil
+    # @return [Hash] HTTP options hash (never nil)
     def self.build_http_options_hash
       config = Configuration.config
-
-      # If http_options is configured, use it (can be Hash or Proc)
-      if config.http_options
+      user_options = if config.http_options
         if config.http_options.is_a?(Proc)
           config.http_options.call
         else
           config.http_options
         end
       end
+
+      options = (user_options || {}).dup
+      options[:ssl] = (options[:ssl] || {}).dup
+      options[:ssl][:verify_mode] ||= ssl_verify_mode(config.verify_ssl)
+      options
+    end
+
+    def self.ssl_verify_mode(verify_ssl)
+      verify_ssl ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
     end
 
     private_class_method :build_http_options_hash

@@ -230,8 +230,9 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
       end
 
       before do
-        # Set up state in session
+        # Set up state and nonce in session
         mock_session["omniauth.state"] = "test-state-value"
+        mock_session["omniauth.nonce"] = "test-nonce"
 
         # Set up callback environment
         strategy.instance_variable_set(:@env, callback_env)
@@ -358,6 +359,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
       end
 
       before do
+        mock_session["omniauth.nonce"] = "test-nonce"
+        strategy.instance_variable_set(:@env, {"rack.session" => mock_session})
         strategy.instance_variable_set(:@access_token, access_token_double)
       end
 
