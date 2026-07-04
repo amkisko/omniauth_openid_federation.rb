@@ -32,14 +32,17 @@ class FederationCacheRefreshJob < ApplicationJob
 
     Rails.logger.info "[FederationCacheRefreshJob] Starting cache refresh..."
 
+    config = OmniauthOpenidFederation::FederationEndpoint.configuration
+
     # Clear all federation caches
     if Rails.cache.respond_to?(:delete_matched)
       Rails.cache.delete_matched("federation:*")
       Rails.logger.info "[FederationCacheRefreshJob] Cleared federation caches"
     else
       # Fallback: clear known cache keys
-      Rails.cache.delete("federation:jwks")
-      Rails.cache.delete("federation:signed_jwks")
+      issuer = config.issuer
+      Rails.cache.delete(OmniauthOpenidFederation::Cache.key_for_served_jwks(issuer))
+      Rails.cache.delete(OmniauthOpenidFederation::Cache.key_for_served_signed_jwks(issuer))
       Rails.cache.delete("federation:entity_statement")
       Rails.logger.info "[FederationCacheRefreshJob] Cleared federation caches (fallback)"
     end
@@ -47,20 +50,17 @@ class FederationCacheRefreshJob < ApplicationJob
     # Optionally: Pre-warm caches by generating data
     # This ensures data is ready immediately after cache clear
     begin
-      config = OmniauthOpenidFederation::FederationEndpoint.configuration
-      
       # Pre-warm JWKS cache
       if config.current_jwks || config.current_jwks_proc
         jwks = OmniauthOpenidFederation::FederationEndpoint.current_jwks
-        cache_key = "federation:jwks:#{Digest::SHA256.hexdigest(jwks.to_json)}"
+        cache_key = OmniauthOpenidFederation::Cache.key_for_served_jwks(config.issuer)
         Rails.cache.write(cache_key, jwks.to_json, expires_in: config.jwks_cache_ttl || 3600)
         Rails.logger.info "[FederationCacheRefreshJob] Pre-warmed JWKS cache"
       end
 
       # Pre-warm signed JWKS cache
       signed_jwks = OmniauthOpenidFederation::FederationEndpoint.generate_signed_jwks
-      cache_key = "federation:signed_jwks:#{Digest::SHA256.hexdigest(signed_jwks)}"
-      config = OmniauthOpenidFederation::FederationEndpoint.configuration
+      cache_key = OmniauthOpenidFederation::Cache.key_for_served_signed_jwks(config.issuer)
       Rails.cache.write(cache_key, signed_jwks, expires_in: config.jwks_cache_ttl || 3600)
       Rails.logger.info "[FederationCacheRefreshJob] Pre-warmed signed JWKS cache"
     rescue => e

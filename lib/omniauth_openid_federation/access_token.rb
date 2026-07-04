@@ -1,5 +1,4 @@
 require "jwt"
-require "jwe"
 require "json"
 require "uri"
 require_relative "string_helpers"
@@ -38,8 +37,7 @@ module OpenIDConnect
             # Decrypt if encrypted (ID token or userinfo encryption)
             # Use encryption key from JWKS if available, fallback to private_key
             encryption_key = extract_encryption_key_for_decryption
-            # Decrypt using JWE gem
-            plain_text = JWE.decrypt(res.body, encryption_key)
+            plain_text = OmniauthOpenidFederation::Jwe.decrypt(res.body, encryption_key)
 
             # Check if plain_text is a JWT (3 parts) or JSON payload
             # For nested JWTs: encrypted JWT contains signed JWT as plaintext
@@ -94,51 +92,50 @@ module OpenIDConnect
             header = JSON.parse(Base64.urlsafe_decode64(header_part))
             algorithm = header["alg"] || header[:alg]
 
-            if algorithm == "none" || algorithm.nil?
-              # Unsigned JWT - decode without verification
-              jwt = ::JWT.decode(signed_jwt, nil, false)
-            else
-              # Signed JWT - decode with verification
-              signed_jwks = fetch_signed_jwks(normalized_strategy_options)
-              if signed_jwks
-                # Decode using signed JWKS
-                jwt = ::JWT.decode(
-                  signed_jwt,
-                  nil,
-                  true,
-                  {algorithms: [algorithm], jwks: signed_jwks}
-                )
-              else
-                # Fallback to standard JWKS
-                # Try to resolve JWKS URI from entity statement if not in client_options
-                unless jwks_uri
-                  OmniauthOpenidFederation::Logger.debug("[AccessToken] JWKS URI not in client_options, trying to resolve from entity statement")
-                  jwks_uri = resolve_jwks_uri_from_entity_statement(normalized_strategy_options)
-                  if jwks_uri
-                    OmniauthOpenidFederation::Logger.debug("[AccessToken] Successfully resolved JWKS URI from entity statement")
-                    # Convert to URI object if it's a string
-                    jwks_uri = URI.parse(jwks_uri) if jwks_uri.is_a?(String) && !jwks_uri.is_a?(URI)
-                  end
-                end
-
-                unless jwks_uri
-                  error_msg = "JWKS URI not available. Cannot verify JWT signature. Provide jwks_uri in client_options or entity statement."
-                  OmniauthOpenidFederation::Logger.error("[AccessToken] #{error_msg}")
-                  raise OmniauthOpenidFederation::ConfigurationError, error_msg
-                end
-
-                entity_statement_keys = load_entity_statement_keys_for_jwks_validation(normalized_strategy_options)
-                jwt = OmniauthOpenidFederation::Jwks::Decode.jwt(
-                  signed_jwt,
-                  jwks_uri.to_s,
-                  entity_statement_keys: entity_statement_keys
-                )
-              end
+            if algorithm.nil? || algorithm.to_s.downcase == "none"
+              error_msg = "JWT algorithm '#{algorithm}' is not permitted for signed responses"
+              OmniauthOpenidFederation::Logger.error("[AccessToken] #{error_msg}")
+              raise OmniauthOpenidFederation::ValidationError, error_msg
             end
+
+            signed_jwks = fetch_signed_jwks(normalized_strategy_options)
+            if signed_jwks
+              jwt = ::JWT.decode(
+                signed_jwt,
+                nil,
+                true,
+                {algorithms: [algorithm], jwks: signed_jwks}
+              )
+            else
+              unless jwks_uri
+                OmniauthOpenidFederation::Logger.debug("[AccessToken] JWKS URI not in client_options, trying to resolve from entity statement")
+                jwks_uri = resolve_jwks_uri_from_entity_statement(normalized_strategy_options)
+                if jwks_uri
+                  OmniauthOpenidFederation::Logger.debug("[AccessToken] Successfully resolved JWKS URI from entity statement")
+                  jwks_uri = URI.parse(jwks_uri) if jwks_uri.is_a?(String) && !jwks_uri.is_a?(URI)
+                end
+              end
+
+              unless jwks_uri
+                error_msg = "JWKS URI not available. Cannot verify JWT signature. Provide jwks_uri in client_options or entity statement."
+                OmniauthOpenidFederation::Logger.error("[AccessToken] #{error_msg}")
+                raise OmniauthOpenidFederation::ConfigurationError, error_msg
+              end
+
+              entity_statement_keys = load_entity_statement_keys_for_jwks_validation(normalized_strategy_options)
+              jwt = OmniauthOpenidFederation::Jwks::Decode.jwt(
+                signed_jwt,
+                jwks_uri.to_s,
+                entity_statement_keys: entity_statement_keys
+              )
+            end
+          rescue OmniauthOpenidFederation::ConfigurationError, OmniauthOpenidFederation::ValidationError,
+            OmniauthOpenidFederation::SignatureError => e
+            raise e
           rescue => e
-            # If header parsing fails, try to decode as unsigned
-            OmniauthOpenidFederation::Logger.warn("[AccessToken] Failed to parse JWT header, trying unsigned decode: #{e.message}")
-            jwt = ::JWT.decode(signed_jwt, nil, false)
+            error_msg = "Failed to verify JWT response: #{e.class} - #{e.message}"
+            OmniauthOpenidFederation::Logger.error("[AccessToken] #{error_msg}")
+            raise OmniauthOpenidFederation::ValidationError, error_msg, e.backtrace
           end
 
           jwt.first.with_indifferent_access
@@ -249,7 +246,7 @@ module OpenIDConnect
           else
             OmniauthOpenidFederation::Logger.debug("[AccessToken] Entity statement file not found: #{OmniauthOpenidFederation::Utils.sanitize_path(validated_path)}")
           end
-        rescue SecurityError => e
+        rescue OmniauthOpenidFederation::SecurityError => e
           OmniauthOpenidFederation::Logger.error("[AccessToken] #{e.message}")
         end
       end
@@ -312,7 +309,7 @@ module OpenIDConnect
         signed_jwks = OmniauthOpenidFederation::Federation::SignedJWKS.fetch!(signed_jwks_uri, entity_jwks)
         OmniauthOpenidFederation::Logger.debug("[AccessToken] Successfully fetched and validated signed JWKS")
         signed_jwks
-      rescue SecurityError => e
+      rescue OmniauthOpenidFederation::SecurityError => e
         # Security errors should not be silently ignored
         OmniauthOpenidFederation::Logger.error("[AccessToken] Security error: #{e.message}")
         nil
@@ -343,7 +340,7 @@ module OpenIDConnect
           if File.exist?(validated_path)
             entity_statement_content = File.read(validated_path)
           end
-        rescue SecurityError => e
+        rescue OmniauthOpenidFederation::SecurityError => e
           OmniauthOpenidFederation::Logger.error("[AccessToken] #{e.message}")
         end
       end
@@ -447,7 +444,7 @@ module OpenIDConnect
           if File.exist?(validated_path)
             entity_statement_content = File.read(validated_path)
           end
-        rescue SecurityError => e
+        rescue OmniauthOpenidFederation::SecurityError => e
           OmniauthOpenidFederation::Logger.debug("[AccessToken] Could not load entity statement from path: #{e.message}")
         end
       end

@@ -123,27 +123,33 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
 
     context "with SSL verification" do
       it "uses SSL verification by default" do
-        stub_request(:get, uri)
-          .to_return(status: 200, body: "success")
-
         OmniauthOpenidFederation.configure do |config|
           config.verify_ssl = true
+          config.http_options = nil
         end
 
-        response = described_class.get(uri)
-        expect(response.status).to eq(200)
+        options = described_class.send(:build_http_options_hash)
+        expect(options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_PEER)
       end
 
       it "skips SSL verification when configured" do
-        stub_request(:get, uri)
-          .to_return(status: 200, body: "success")
-
         OmniauthOpenidFederation.configure do |config|
           config.verify_ssl = false
+          config.http_options = nil
         end
 
-        response = described_class.get(uri)
-        expect(response.status).to eq(200)
+        options = described_class.send(:build_http_options_hash)
+        expect(options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_NONE)
+      end
+
+      it "does not override explicit http_options ssl verify_mode" do
+        OmniauthOpenidFederation.configure do |config|
+          config.verify_ssl = true
+          config.http_options = {ssl: {verify_mode: OpenSSL::SSL::VERIFY_NONE}}
+        end
+
+        options = described_class.send(:build_http_options_hash)
+        expect(options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_NONE)
       end
     end
 

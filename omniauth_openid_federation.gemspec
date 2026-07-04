@@ -27,15 +27,15 @@ Gem::Specification.new do |spec|
   }
 
   spec.add_runtime_dependency "omniauth-oauth2", "~> 1.8"
-  spec.add_runtime_dependency "openid_connect", "~> 2.3"
-  spec.add_runtime_dependency "jwt", "~> 3.1"
-  spec.add_runtime_dependency "jwe", "~> 1.1"
-  spec.add_runtime_dependency "http", "~> 5.3"
-  spec.add_runtime_dependency "rack", ">= 2.0", "< 4"
+  spec.add_runtime_dependency "openid_connect", "~> 2.5"
+  spec.add_runtime_dependency "jwt", "~> 3.2"
+  spec.add_runtime_dependency "json-jwt", "~> 1.17"
+  spec.add_runtime_dependency "http", "~> 6.0"
+  spec.add_runtime_dependency "rack", ">= 2.2.23", "< 4"
 
   spec.add_development_dependency "rspec", "~> 3.13"
   spec.add_development_dependency "polyrun", "~> 2"
-  spec.add_development_dependency "webmock", "~> 3.26"
+  spec.add_development_dependency "webmock", "~> 3.26", ">= 3.26.2"
   spec.add_development_dependency "rake", "~> 13.3"
   spec.add_development_dependency "standard", "~> 1.52"
   spec.add_development_dependency "standard-custom", "~> 1.0"
@@ -57,4 +57,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rack-test", "~> 2.0"
   spec.add_development_dependency "tilt", "~> 2.0" # Required by Rodauth for rendering
   spec.add_development_dependency "bcrypt", "~> 3.1" # Required by Rodauth for password hashing
+  spec.add_development_dependency "bundler-audit", "~> 0.9"
 end

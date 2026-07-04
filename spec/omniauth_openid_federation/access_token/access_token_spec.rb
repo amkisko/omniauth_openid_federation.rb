@@ -4,8 +4,7 @@ RSpec.describe OpenIDConnect::AccessToken do
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
   let(:public_key) { private_key.public_key }
   let(:entity_jwk) { JWT::JWK.new(public_key) }
-  let(:client) { double("client", private_key: private_key) }
-  let(:access_token) { described_class.new(access_token: "test-token", client: client) }
+  let(:access_token) { build_token_client }
 
   let(:entity_jwks) do
     {
@@ -14,18 +13,36 @@ RSpec.describe OpenIDConnect::AccessToken do
   end
 
   let(:jwks_payload) do
-    {
-      keys: [
-        {
-          kty: "RSA",
-          kid: "provider-key-1",
-          use: "sig",
-          n: "test-n",
-          e: "AQAB"
-        }
-      ]
-    }
+    {keys: [entity_jwk.export]}
   end
+
+  def build_token_client(strategy_options = {})
+    default_client_options = {
+      identifier: "client123",
+      redirect_uri: "https://example.com/callback",
+      host: "provider.example.com",
+      jwks_uri: "/.well-known/jwks.json",
+      private_key: private_key
+    }
+    merged_client_options = default_client_options.merge(strategy_options[:client_options] || {})
+    merged_options = {
+      client_options: merged_client_options,
+      entity_statement_path: nil
+    }.merge(strategy_options)
+
+    jwks_uri_value = merged_client_options[:jwks_uri].to_s
+    jwks_uri = if jwks_uri_value.start_with?("http")
+      URI(jwks_uri_value)
+    else
+      URI("https://provider.example.com#{jwks_uri_value}")
+    end
+
+    client = double(private_key: private_key, jwks_uri: jwks_uri)
+    client.instance_variable_set(:@strategy_options, merged_options)
+    described_class.new(access_token: "test-token", client: client)
+  end
+
+  let(:access_token) { build_token_client }
 
   let(:signed_jwks_jwt) do
     header = {
@@ -53,36 +70,13 @@ RSpec.describe OpenIDConnect::AccessToken do
   end
 
   before do
-    # Stub all HTTP requests for tests that use relative paths
     stub_relative_path_endpoints(host: "provider.example.com")
-
-    # Stub Devise constant if not defined
-    stub_const("Devise", Class.new) unless defined?(Devise)
-
-    # Mock Devise.omniauth_configs
-    devise_configs = double("omniauth_configs")
-    strategy_config = double(
-      options: {
-        client_options: {
-          identifier: "client123",
-          redirect_uri: "https://example.com/callback",
-          host: "provider.example.com",
-          jwks_uri: "/.well-known/jwks.json",
-          private_key: private_key
-        },
-        entity_statement_path: nil
-      }
-    )
-    allow(devise_configs).to receive(:fetch).with(:openid_federation).and_return(strategy_config)
-    allow(devise_configs).to receive(:fetch).with(:openid_connect).and_return(strategy_config)
-    allow(::Devise).to receive(:omniauth_configs).and_return(devise_configs)
   end
 
   describe "#resource_request" do
     context "with JWT response (200 status)" do
       it "decrypts and decodes JWT using signed JWKS when entity statement is configured" do
-        # Create temporary entity statement file
-        entity_statement_path = File.join(Dir.tmpdir, "entity_statement_#{SecureRandom.hex}.jwt")
+        entity_statement_path = entity_statement_path_under_config
         entity_statement_payload = {
           iss: "https://provider.example.com",
           sub: "https://provider.example.com",
@@ -93,29 +87,11 @@ RSpec.describe OpenIDConnect::AccessToken do
             }
           }
         }
-        header = {alg: "RS256", typ: "JWT", kid: entity_jwk.export[:kid]}
-        entity_statement = JWT.encode(entity_statement_payload, private_key, "RS256", header)
+        entity_statement = encode_entity_statement(entity_statement_payload)
         File.write(entity_statement_path, entity_statement)
 
-        # Mock Devise config with entity statement path
-        devise_configs = double("omniauth_configs")
-        strategy_config = double(
-          options: {
-            client_options: {
-              identifier: "client123",
-              redirect_uri: "https://example.com/callback",
-              host: "provider.example.com",
-              jwks_uri: "/.well-known/jwks.json",
-              private_key: private_key
-            },
-            entity_statement_path: entity_statement_path
-          }
-        )
-        allow(devise_configs).to receive(:fetch).with(:openid_federation).and_return(strategy_config)
-        allow(devise_configs).to receive(:fetch).with(:openid_connect).and_return(strategy_config)
-        allow(::Devise).to receive(:omniauth_configs).and_return(devise_configs)
+        token = build_token_client(entity_statement_path: entity_statement_path)
 
-        # Mock signed JWKS fetch
         stub_request(:get, "https://provider.example.com/.well-known/signed-jwks")
           .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
 
@@ -130,43 +106,27 @@ RSpec.describe OpenIDConnect::AccessToken do
         }
         # First sign the JWT, then encrypt it
         signed_jwt = JWT.encode(id_token_payload, private_key, "RS256", {kid: entity_jwk.export[:kid]})
-        # JWE.encrypt(plaintext, key, alg, enc)
-        encrypted_token = JWE.encrypt(signed_jwt, public_key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
+        encrypted_token = OmniauthOpenidFederation::Jwe.encrypt(signed_jwt, public_key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
 
         # Mock HTTP response
         status_obj = double("status", code: 200, success?: true)
         response = double("response", status: status_obj, body: encrypted_token)
 
-        result = access_token.resource_request { response }
+        result = token.resource_request { response }
 
         aggregate_failures do
           expect(result).to be_a(Hash)
           expect(result["sub"]).to eq("user123")
         end
-      ensure
-        File.delete(entity_statement_path) if File.exist?(entity_statement_path)
       end
 
       it "falls back to standard JWKS when signed JWKS is not available" do
-        # Mock Devise config without entity statement
-        devise_configs = double("omniauth_configs")
-        strategy_config = double(
-          options: {
-            client_options: {
-              identifier: "client123",
-              redirect_uri: "https://example.com/callback",
-              host: "provider.example.com",
-              jwks_uri: "https://provider.example.com/.well-known/jwks.json",
-              private_key: private_key
-            },
-            entity_statement_path: nil
+        token = build_token_client(
+          client_options: {
+            jwks_uri: "https://provider.example.com/.well-known/jwks.json"
           }
         )
-        allow(devise_configs).to receive(:fetch).with(:openid_federation).and_return(strategy_config)
-        allow(devise_configs).to receive(:fetch).with(:openid_connect).and_return(strategy_config)
-        allow(::Devise).to receive(:omniauth_configs).and_return(devise_configs)
 
-        # Mock standard JWKS fetch
         stub_request(:get, "https://provider.example.com/.well-known/jwks.json")
           .to_return(status: 200, body: entity_jwks.to_json, headers: {"Content-Type" => "application/json"})
 
@@ -181,8 +141,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         }
         # First sign the JWT, then encrypt it
         signed_jwt = JWT.encode(id_token_payload, private_key, "RS256", {kid: entity_jwk.export[:kid]})
-        # JWE.encrypt(plaintext, key, alg, enc)
-        encrypted_token = JWE.encrypt(signed_jwt, public_key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
+        encrypted_token = OmniauthOpenidFederation::Jwe.encrypt(signed_jwt, public_key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
 
         # Mock HTTP response
         status_obj = double("status", code: 200, success?: true)
@@ -194,7 +153,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         decoded_payload = JSON.parse(Base64.urlsafe_decode64(jwt_parts[1]))
         allow(OmniauthOpenidFederation::Jwks::Decode).to receive(:jwt).and_return([decoded_payload])
 
-        result = access_token.resource_request { response }
+        result = token.resource_request { response }
 
         expect(result).to be_a(Hash)
       end
@@ -214,23 +173,7 @@ RSpec.describe OpenIDConnect::AccessToken do
       end
 
       it "handles path traversal in entity statement path" do
-        devise_configs = double("omniauth_configs")
-        strategy_config = double(
-          options: {
-            client_options: {
-              identifier: "client123",
-              redirect_uri: "https://example.com/callback",
-              host: "provider.example.com",
-              jwks_uri: "/.well-known/jwks.json",
-              private_key: private_key
-            },
-            entity_statement_path: "../../../etc/passwd"
-          }
-        )
-        allow(devise_configs).to receive(:fetch).with(:openid_federation).and_return(strategy_config)
-        allow(devise_configs).to receive(:fetch).with(:openid_connect).and_return(strategy_config)
-        allow(::Devise).to receive(:omniauth_configs).and_return(devise_configs)
-
+        token = build_token_client(entity_statement_path: "../../../etc/passwd")
         # Encrypt ID token (create JWT from payload and encrypt directly)
         # For encrypted tokens, we encrypt the signed JWT as plaintext
         id_token_payload = {
@@ -241,7 +184,7 @@ RSpec.describe OpenIDConnect::AccessToken do
           iat: Time.now.to_i
         }
         signed_jwt = JWT.encode(id_token_payload, private_key, "RS256", {kid: entity_jwk.export[:kid]})
-        encrypted_token = JWE.encrypt(signed_jwt, public_key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
+        encrypted_token = OmniauthOpenidFederation::Jwe.encrypt(signed_jwt, public_key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
 
         status_obj = double("status", code: 200, success?: true)
         response = double("response", status: status_obj, body: encrypted_token)
@@ -255,29 +198,13 @@ RSpec.describe OpenIDConnect::AccessToken do
         decoded_payload = JSON.parse(Base64.urlsafe_decode64(jwt_parts[1]))
         allow(OmniauthOpenidFederation::Jwks::Decode).to receive(:jwt).and_return([decoded_payload])
 
-        result = access_token.resource_request { response }
+        result = token.resource_request { response }
 
         expect(result).to be_a(Hash)
       end
 
       it "handles missing entity statement file" do
-        devise_configs = double("omniauth_configs")
-        strategy_config = double(
-          options: {
-            client_options: {
-              identifier: "client123",
-              redirect_uri: "https://example.com/callback",
-              host: "provider.example.com",
-              jwks_uri: "/.well-known/jwks.json",
-              private_key: private_key
-            },
-            entity_statement_path: "/nonexistent/path.jwt"
-          }
-        )
-        allow(devise_configs).to receive(:fetch).with(:openid_federation).and_return(strategy_config)
-        allow(devise_configs).to receive(:fetch).with(:openid_connect).and_return(strategy_config)
-        allow(::Devise).to receive(:omniauth_configs).and_return(devise_configs)
-
+        token = build_token_client(entity_statement_path: "/nonexistent/path.jwt")
         # Encrypt ID token (create JWT from payload and encrypt directly)
         # For encrypted tokens, we encrypt the signed JWT as plaintext
         id_token_payload = {
@@ -288,7 +215,7 @@ RSpec.describe OpenIDConnect::AccessToken do
           iat: Time.now.to_i
         }
         signed_jwt = JWT.encode(id_token_payload, private_key, "RS256", {kid: entity_jwk.export[:kid]})
-        encrypted_token = JWE.encrypt(signed_jwt, public_key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
+        encrypted_token = OmniauthOpenidFederation::Jwe.encrypt(signed_jwt, public_key, alg: "RSA-OAEP", enc: "A128CBC-HS256")
 
         status_obj = double("status", code: 200, success?: true)
         response = double("response", status: status_obj, body: encrypted_token)
@@ -301,7 +228,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         decoded_payload = JSON.parse(Base64.urlsafe_decode64(jwt_parts[1]))
         allow(OmniauthOpenidFederation::Jwks::Decode).to receive(:jwt).and_return([decoded_payload])
 
-        result = access_token.resource_request { response }
+        result = token.resource_request { response }
 
         expect(result).to be_a(Hash)
       end
@@ -347,23 +274,6 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     context "with openid_connect fallback" do
       it "falls back to openid_connect when openid_federation is not configured" do
-        devise_configs = double("omniauth_configs")
-        strategy_config = double(
-          options: {
-            client_options: {
-              identifier: "client123",
-              redirect_uri: "https://example.com/callback",
-              host: "provider.example.com",
-              jwks_uri: "/.well-known/jwks.json",
-              private_key: private_key
-            },
-            entity_statement_path: nil
-          }
-        )
-        allow(devise_configs).to receive(:fetch).with(:openid_federation).and_raise(KeyError)
-        allow(devise_configs).to receive(:fetch).with(:openid_connect).and_return(strategy_config)
-        allow(::Devise).to receive(:omniauth_configs).and_return(devise_configs)
-
         json_response = {user_id: "123"}.to_json
         status_obj = double("status", code: 200, success?: true)
         response = double("response", status: status_obj, body: json_response)
@@ -376,30 +286,17 @@ RSpec.describe OpenIDConnect::AccessToken do
 
     context "with jwks_uri as full URL" do
       it "parses full URL jwks_uri correctly" do
-        # Stub Devise constant if not defined
-        stub_const("Devise", Class.new) unless defined?(Devise)
-
-        devise_configs = double("omniauth_configs")
-        strategy_config = double(
-          options: {
-            client_options: {
-              identifier: "client123",
-              redirect_uri: "https://example.com/callback",
-              jwks_uri: "https://provider.example.com/.well-known/jwks.json",
-              private_key: private_key
-            },
-            entity_statement_path: nil
+        token = build_token_client(
+          client_options: {
+            jwks_uri: "https://provider.example.com/.well-known/jwks.json"
           }
         )
-        allow(devise_configs).to receive(:fetch).with(:openid_federation).and_return(strategy_config)
-        allow(devise_configs).to receive(:fetch).with(:openid_connect).and_return(strategy_config)
-        allow(::Devise).to receive(:omniauth_configs).and_return(devise_configs)
 
         json_response = {user_id: "123"}.to_json
         status_obj = double("status", code: 200, success?: true)
         response = double("response", status: status_obj, body: json_response)
 
-        result = access_token.resource_request { response }
+        result = token.resource_request { response }
 
         expect(result).to be_a(Hash)
       end

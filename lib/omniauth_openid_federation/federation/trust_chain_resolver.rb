@@ -1,3 +1,7 @@
+require "cgi"
+require "json"
+require "base64"
+require "jwt"
 require_relative "entity_statement"
 require_relative "entity_statement_validator"
 require_relative "../http_client"
@@ -5,7 +9,7 @@ require_relative "../logger"
 require_relative "../errors"
 require_relative "../utils"
 require_relative "../string_helpers"
-require "cgi"
+require_relative "../key_extractor"
 
 # Trust Chain Resolver for OpenID Federation 1.0
 # @see https://openid.net/specs/openid-federation-1_0.html#section-10 Section 10: Trust Chain Resolution
@@ -49,6 +53,7 @@ module OmniauthOpenidFederation
         @timeout = timeout
         @resolved_statements = []
         @visited_entities = Set.new
+        @entity_configurations = {}
       end
 
       # Resolve the trust chain
@@ -83,12 +88,13 @@ module OmniauthOpenidFederation
             end
 
             begin
+              issuer_config = fetch_entity_configuration(authority_id)
               subordinate_statement = fetch_subordinate_statement(
                 issuer: authority_id,
-                subject: current_entity_id
+                subject: current_entity_id,
+                issuer_config: issuer_config
               )
 
-              issuer_config = fetch_entity_configuration(authority_id)
               validate_entity_statement(subordinate_statement, issuer_config)
 
               @resolved_statements << subordinate_statement
@@ -143,18 +149,20 @@ module OmniauthOpenidFederation
       end
 
       def fetch_entity_configuration(entity_id)
+        return @entity_configurations[entity_id] if @entity_configurations.key?(entity_id)
+
         entity_statement_url = OmniauthOpenidFederation::Utils.build_entity_statement_url(entity_id)
         OmniauthOpenidFederation::Logger.debug("[TrustChainResolver] Fetching Entity Configuration from: #{entity_statement_url}")
 
         begin
-          EntityStatement.fetch!(entity_statement_url, timeout: @timeout)
+          config = EntityStatement.fetch!(entity_statement_url, timeout: @timeout)
+          @entity_configurations[entity_id] = config
         rescue OmniauthOpenidFederation::NetworkError => e
           raise FetchError, "Failed to fetch entity configuration from #{entity_statement_url}: #{e.message}"
         end
       end
 
-      def fetch_subordinate_statement(issuer:, subject:)
-        issuer_config = fetch_entity_configuration(issuer)
+      def fetch_subordinate_statement(issuer:, subject:, issuer_config:)
         fetch_endpoint = extract_fetch_endpoint(issuer_config)
 
         unless fetch_endpoint
@@ -198,6 +206,43 @@ module OmniauthOpenidFederation
           issuer_entity_configuration: issuer_config
         )
         validator.validate!
+        verify_entity_statement_signature!(statement, issuer_config)
+      end
+
+      def verify_entity_statement_signature!(statement, issuer_config)
+        jwt_string = statement.entity_statement
+        parts = jwt_string.split(".")
+        if parts.length != EntityStatementValidator::JWT_PARTS_COUNT
+          raise ValidationError, "Invalid JWT format: expected #{EntityStatementValidator::JWT_PARTS_COUNT} parts, got #{parts.length}"
+        end
+
+        header = JSON.parse(Base64.urlsafe_decode64(parts[0]))
+        kid = header["kid"] || header[:kid]
+
+        signing_keys = issuer_signing_keys(statement, issuer_config)
+        keys = signing_keys["keys"] || signing_keys[:keys] || []
+        signing_key_data = keys.find { |key| (key["kid"] || key[:kid]) == kid }
+
+        unless signing_key_data
+          raise ValidationError, "Signing key with kid '#{kid}' not found in issuer JWKS for signature verification"
+        end
+
+        public_key = OmniauthOpenidFederation::KeyExtractor.jwk_to_openssl_key(signing_key_data)
+        ::JWT.decode(jwt_string, public_key, true, {algorithm: "RS256"})
+      rescue ::JWT::DecodeError, ::JWT::VerificationError => e
+        error_msg = "Entity statement signature validation failed: #{e.class} - #{e.message}"
+        OmniauthOpenidFederation::Logger.error("[TrustChainResolver] #{error_msg}")
+        raise SignatureError, error_msg, e.backtrace
+      end
+
+      def issuer_signing_keys(statement, issuer_config)
+        if issuer_config.nil?
+          parsed = statement.parse
+          parsed[:jwks] || parsed["jwks"] || {}
+        else
+          issuer_parsed = issuer_config.parse
+          issuer_parsed[:jwks] || issuer_parsed["jwks"] || {}
+        end
       end
 
       def is_trust_anchor?(entity_config)

@@ -22,6 +22,7 @@ spec/omniauth_openid_federation/federation/trust_chain_resolver_spec.rb
 spec/omniauth_openid_federation/http_client_spec.rb
 spec/omniauth_openid_federation/instrumentation_spec.rb
 spec/omniauth_openid_federation/integration_spec.rb
+spec/omniauth_openid_federation/jwe_spec.rb
 spec/omniauth_openid_federation/jwks/cache_spec.rb
 spec/omniauth_openid_federation/jwks/decode_spec.rb
 spec/omniauth_openid_federation/jwks/fetch_spec.rb

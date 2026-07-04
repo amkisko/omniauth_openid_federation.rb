@@ -11,7 +11,27 @@ permissions:
   pull-requests: write
 
 jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Audit root Gemfile.lock
+        run: bundle exec bundle audit check --update
+      - name: Install appraisal gemfiles
+        run: bundle exec appraisal install
+      - name: Audit appraisal Gemfile.lock files
+        run: |
+          for lockfile in gemfiles/*.gemfile.lock; do
+            echo "==> $lockfile"
+            BUNDLE_GEMFILE="${lockfile%.lock}" bundle exec bundle audit check
+          done
+
   test:
+    needs: audit
     runs-on: ubuntu-latest
 
     strategy:

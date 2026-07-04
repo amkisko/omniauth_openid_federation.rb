@@ -275,53 +275,20 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
       end
     end
 
-    context "when handling generic errors" do
-      it "raises ValidationError when retried is true" do
-        # Test the path where retried=true and an error occurs
+    context "when handling non-JWT errors" do
+      it "does not retry or clear cache on unexpected StandardError" do
         allow(OmniauthOpenidFederation::Jwks::Fetch).to receive(:run).and_return(jwks)
         allow(JWT).to receive(:decode).and_raise(StandardError.new("Unexpected error"))
+        allow(OmniauthOpenidFederation::Cache).to receive(:delete_jwks)
 
         payload = {sub: "user123", exp: Time.now.to_i + 3600}
         encoded_jwt = JWT.encode(payload, private_key, "RS256", {kid: jwks[:keys].first[:kid]})
 
         expect {
-          described_class.jwt(encoded_jwt, jwks_uri, retried: true)
-        }.to raise_error(OmniauthOpenidFederation::ValidationError, /JWT decode failed after cache refresh/)
-      end
+          described_class.jwt(encoded_jwt, jwks_uri)
+        }.to raise_error(StandardError, "Unexpected error")
 
-      it "retries when retried is false" do
-        # Test the retry path - first call fails, second succeeds
-        # This tests the generic rescue block when retried=false (lines 103-106)
-        allow(OmniauthOpenidFederation::Jwks::Fetch).to receive(:run).and_return(jwks)
-
-        payload = {sub: "user123", exp: Time.now.to_i + 3600}
-        encoded_jwt = JWT.encode(payload, private_key, "RS256", {kid: jwks[:keys].first[:kid]})
-
-        allow(OmniauthOpenidFederation::Cache).to receive(:delete_jwks)
-
-        # Mock JWT.decode to fail first time, succeed on retry
-        decode_call_count = 0
-        original_decode = JWT.method(:decode)
-        allow(JWT).to receive(:decode) do |*args|
-          decode_call_count += 1
-          if decode_call_count == 1
-            raise StandardError.new("Temporary error")
-          else
-            # On retry, call the original decode
-            original_decode.call(*args)
-          end
-        end
-
-        # Use run method directly to test the retry logic
-        result = described_class.run(encoded_jwt, jwks_uri, retried: false) do |jwks_hash|
-          JWT.decode(encoded_jwt, nil, true, {algorithms: ["RS256"], jwks: jwks_hash})
-        end
-
-        aggregate_failures do
-          expect(result).to be_an(Array)
-          expect(OmniauthOpenidFederation::Cache).to have_received(:delete_jwks).with(jwks_uri)
-          expect(decode_call_count).to eq(2) # Should be called twice (fail + retry)
-        end
+        expect(OmniauthOpenidFederation::Cache).not_to have_received(:delete_jwks)
       end
     end
   end

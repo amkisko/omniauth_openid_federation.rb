@@ -117,6 +117,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -182,6 +183,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -213,6 +215,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         issuer: provider_issuer,
         client_options: {
@@ -251,6 +254,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -289,6 +293,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -317,6 +322,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         issuer: provider_issuer,
         client_options: {
@@ -381,6 +387,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -421,6 +428,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -516,6 +524,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -551,6 +560,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -612,6 +622,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -665,6 +676,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -725,6 +737,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -776,6 +789,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,
@@ -850,6 +864,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
           identifier: client_id,
@@ -998,6 +1013,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        send_nonce: false,
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,

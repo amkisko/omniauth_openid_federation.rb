@@ -212,6 +212,60 @@ RSpec.describe OmniauthOpenidFederation::Federation::TrustChainResolver do
           expect(chain.first).to eq(leaf_config)
         end
       end
+
+      it "rejects subordinate statement with invalid signature" do
+        leaf_config = create_entity_statement(
+          iss: leaf_entity_id,
+          sub: leaf_entity_id,
+          authority_hints: [trust_anchor_id]
+        )
+
+        ta_config = create_entity_statement(
+          iss: trust_anchor_id,
+          sub: trust_anchor_id
+        )
+
+        wrong_key = OpenSSL::PKey::RSA.new(2048)
+        forged_payload = {
+          iss: trust_anchor_id,
+          sub: leaf_entity_id,
+          iat: Time.now.to_i,
+          exp: Time.now.to_i + 3600,
+          jwks: {keys: [jwk_export]}
+        }
+        header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
+        forged_jwt = JWT.encode(forged_payload, wrong_key, "RS256", header)
+        forged_subordinate = OmniauthOpenidFederation::Federation::EntityStatement.new(forged_jwt)
+
+        allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:fetch!)
+          .with("#{leaf_entity_id}/.well-known/openid-federation", timeout: 10)
+          .and_return(leaf_config)
+
+        allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:fetch!)
+          .with("#{trust_anchor_id}/.well-known/openid-federation", timeout: 10)
+          .and_return(ta_config)
+
+        http_response = double(status: double(success?: true), body: forged_jwt)
+        allow(OmniauthOpenidFederation::HttpClient).to receive(:get)
+          .with("#{trust_anchor_id}/.well-known/openid-federation/fetch?iss=#{CGI.escape(trust_anchor_id)}&sub=#{CGI.escape(leaf_entity_id)}", timeout: 10)
+          .and_return(http_response)
+
+        allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:new)
+          .with(forged_jwt)
+          .and_return(forged_subordinate)
+
+        mock_validator_for_statement(forged_subordinate, ta_config)
+
+        resolver = described_class.new(
+          leaf_entity_id: leaf_entity_id,
+          trust_anchors: trust_anchors
+        )
+
+        expect { resolver.resolve! }.to raise_error(
+          OmniauthOpenidFederation::SignatureError,
+          /signature validation failed/
+        )
+      end
     end
 
     context "with intermediate entity" do
