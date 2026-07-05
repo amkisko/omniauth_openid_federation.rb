@@ -21,14 +21,21 @@ jobs:
           bundler-cache: true
       - name: Audit root Gemfile.lock
         run: bundle exec bundle audit check --update
-      - name: Install appraisal gemfiles
-        run: bundle exec appraisal install
-      - name: Audit appraisal Gemfile.lock files
+      - name: Install and audit appraisal gemfiles (Ruby 3.4)
         run: |
-          for lockfile in gemfiles/*.gemfile.lock; do
-            echo "==> $lockfile"
-            BUNDLE_GEMFILE="${lockfile%.lock}" bundle exec bundle audit check
+          for gemfile in gemfiles/{ruby,truffleruby,rails6,rails72,rails8}.gemfile; do
+            echo "==> $gemfile"
+            BUNDLE_GEMFILE="$gemfile" bundle install
+            BUNDLE_GEMFILE="$gemfile" bundle exec bundle audit check
           done
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: false
+      - name: Install and audit rails8_ruby4
+        run: |
+          BUNDLE_GEMFILE=gemfiles/rails8_ruby4.gemfile bundle install
+          BUNDLE_GEMFILE=gemfiles/rails8_ruby4.gemfile bundle exec bundle audit check
 
   test:
     needs: audit
@@ -98,8 +105,6 @@ jobs:
         with:
           ruby-version: "3.4"
           bundler-cache: true
-      - name: Install deps + spec paths
-        run: bundle exec appraisal install
       - name: Run parallel RSpec with Polyrun coverage
         run: |
           bundle exec polyrun build-paths -c polyrun.yml
@@ -123,7 +128,6 @@ jobs:
         with:
           ruby-version: "3.4"
           bundler-cache: true
-      - run: bundle exec appraisal install
       - uses: actions/download-artifact@v8
         with:
           name: polyrun-coverage-parallel
