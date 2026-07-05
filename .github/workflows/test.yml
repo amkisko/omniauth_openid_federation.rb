@@ -136,6 +136,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f _artifacts/coverage/merged.json
+          mkdir -p coverage
           cp _artifacts/coverage/merged.json coverage/polyrun-merged.json
           bundle exec polyrun report-coverage -i coverage/polyrun-merged.json -o coverage --basename coverage --format cobertura,json
           bundle exec polyrun report-junit -i "_artifacts/tmp/rspec-*.json" -o coverage/junit-coverage.xml
