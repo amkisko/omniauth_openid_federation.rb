@@ -14,7 +14,7 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.4"
@@ -51,7 +51,7 @@ jobs:
       BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/${{ matrix.gemfile }}.gemfile
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
@@ -69,7 +69,7 @@ jobs:
     env:
       CLEANUP_ON_EXIT: "false"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.4"
@@ -78,7 +78,7 @@ jobs:
         run: bundle exec ruby examples/integration_test_flow.rb
       - name: Upload integration logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-test-logs
           path: tmp/integration_test/
@@ -90,7 +90,7 @@ jobs:
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/rails8.gemfile
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: ruby/setup-ruby@v1
@@ -102,7 +102,7 @@ jobs:
       - name: Run parallel RSpec with Polyrun coverage
         run: |
           bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml -- bundle exec rspec --format documentation
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: polyrun-coverage-parallel
           path: |
@@ -116,13 +116,13 @@ jobs:
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/rails8.gemfile
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.4"
           bundler-cache: true
       - run: bundle exec appraisal install
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: polyrun-coverage-parallel
           path: _artifacts
@@ -133,15 +133,15 @@ jobs:
           cp _artifacts/coverage/merged.json coverage/polyrun-merged.json
           bundle exec polyrun report-coverage -i coverage/polyrun-merged.json -o coverage --basename coverage --format cobertura,json
           bundle exec polyrun report-junit -i "_artifacts/tmp/rspec-*.json" -o coverage/junit-coverage.xml
-      - uses: SonarSource/sonarqube-scan-action@v6
+      - uses: SonarSource/sonarqube-scan-action@v8
         continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         continue-on-error: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         if: ${{ !cancelled() }}
         continue-on-error: true
         with:
