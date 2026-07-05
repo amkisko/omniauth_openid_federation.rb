@@ -65,6 +65,7 @@ unless %w[1 true yes].include?(ENV["POLYRUN_COVERAGE_DISABLE"]&.downcase)
 end
 
 require "rspec"
+require "active_support"
 require "active_support/core_ext/hash/keys"
 require "active_support/core_ext/object/blank"
 require "tempfile"

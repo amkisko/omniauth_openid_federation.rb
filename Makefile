@@ -11,7 +11,7 @@ audit:
 	bundle exec bundle audit check --update
 
 test:
-	bundle exec polyrun parallel-rspec --workers 5 --merge-failures
+	bundle exec appraisal rails8 -- bundle exec polyrun parallel-rspec --workers 5 --merge-failures -c polyrun.yml
 
 integration-test:
 	bundle exec ruby examples/integration_test_flow.rb
