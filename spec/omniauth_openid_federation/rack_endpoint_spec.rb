@@ -178,6 +178,20 @@ RSpec.describe OmniauthOpenidFederation::RackEndpoint do
         end
       end
 
+      it "returns 400 when entity identifier validation raises a non-security error" do
+        allow(OmniauthOpenidFederation::Validators).to receive(:validate_entity_identifier!)
+          .and_raise(StandardError.new("validation backend unavailable"))
+
+        env = Rack::MockRequest.env_for("/openid-federation/fetch?sub=#{CGI.escape(subordinate_entity_id)}")
+        status, _headers, body = endpoint.call(env)
+
+        json_body = JSON.parse(body.first)
+        aggregate_failures do
+          expect(status).to eq(400)
+          expect(json_body["error_description"]).to include("Subject entity ID validation failed")
+        end
+      end
+
       it "returns 400 when subject equals issuer" do
         env = Rack::MockRequest.env_for("/openid-federation/fetch?sub=#{CGI.escape(issuer)}")
         status, headers, body = endpoint.call(env)
@@ -203,6 +217,33 @@ RSpec.describe OmniauthOpenidFederation::RackEndpoint do
           expect(status).to eq(404)
           expect(json_body["error"]).to eq("not_found")
           expect(json_body["error_description"]).to include("Subordinate Statement not found")
+        end
+      end
+    end
+
+    context "with live subordinate statement lookup" do
+      let(:subordinate_entity_id) { "https://subordinate.example.com" }
+
+      before do
+        OmniauthOpenidFederation::FederationEndpoint.configuration.subordinate_statements = {
+          subordinate_entity_id => {
+            metadata: {
+              openid_relying_party: {
+                redirect_uris: ["https://example.com/callback"]
+              }
+            }
+          }
+        }
+      end
+
+      it "returns subordinate statement using federation endpoint lookup" do
+        env = Rack::MockRequest.env_for("/openid-federation/fetch?sub=#{CGI.escape(subordinate_entity_id)}")
+        status, headers, body = endpoint.call(env)
+
+        aggregate_failures do
+          expect(status).to eq(200)
+          expect(headers["Content-Type"]).to eq("application/entity-statement+jwt")
+          expect(body.first.split(".").length).to eq(3)
         end
       end
     end
@@ -300,6 +341,17 @@ RSpec.describe OmniauthOpenidFederation::RackEndpoint do
 
       it "returns 503 Service Unavailable" do
         env = Rack::MockRequest.env_for("/openid-federation")
+        status, headers, body = endpoint.call(env)
+
+        aggregate_failures do
+          expect(status).to eq(503)
+          expect(headers["Content-Type"]).to eq("text/plain")
+          expect(body.first).to eq("Federation endpoint not configured")
+        end
+      end
+
+      it "returns 503 for JWKS endpoint when federation endpoint is not configured" do
+        env = Rack::MockRequest.env_for("/jwks.json")
         status, headers, body = endpoint.call(env)
 
         aggregate_failures do

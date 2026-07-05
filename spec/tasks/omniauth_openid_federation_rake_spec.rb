@@ -4,6 +4,8 @@ require "stringio"
 
 # rubocop:disable RSpec/DescribeClass
 RSpec.describe "Rake tasks", type: :rake do
+  include StrategyTestHelpers
+
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
   let(:public_key) { private_key.public_key }
   let(:provider_issuer) { "https://provider.example.com" }
@@ -53,9 +55,16 @@ RSpec.describe "Rake tasks", type: :rake do
     end
 
     it "fetches entity statement successfully" do
+      public_key = private_key.public_key
+      jwk = JWT::JWK.new(public_key)
+      jwk_export = jwk.export
+      jwk_export[:kid] = "key-1"
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
+        iat: Time.now.to_i,
+        exp: Time.now.to_i + 3600,
+        jwks: {keys: [jwk_export]},
         metadata: {
           openid_provider: {
             issuer: provider_issuer,
@@ -66,29 +75,19 @@ RSpec.describe "Rake tasks", type: :rake do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
+      jwt = JWT.encode(
+        entity_statement,
+        private_key,
+        "RS256",
+        {alg: "RS256", typ: "entity-statement+jwt", kid: "key-1"}
+      )
 
       output_file = Tempfile.new(["entity", ".jwt"]).path
 
       stub_request(:get, "#{provider_issuer}/.well-known/openid-federation")
         .to_return(status: 200, body: jwt, headers: {"Content-Type" => "application/jwt"})
 
-      # Mock TasksHelper
-      allow(OmniauthOpenidFederation::TasksHelper).to receive(:fetch_entity_statement).and_return({
-        output_path: output_file,
-        fingerprint: "test-fingerprint",
-        metadata: {
-          issuer: provider_issuer,
-          metadata: {
-            openid_provider: {
-              authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-              token_endpoint: "https://provider.example.com/oauth2/token",
-              userinfo_endpoint: "https://provider.example.com/oauth2/userinfo",
-              jwks_uri: "https://provider.example.com/.well-known/jwks.json"
-            }
-          }
-        }
-      })
+      allow(OmniauthOpenidFederation::TasksHelper).to receive(:fetch_entity_statement).and_call_original
 
       Rake::Task["openid_federation:fetch_entity_statement"].reenable
       Rake::Task["openid_federation:fetch_entity_statement"].invoke(
@@ -97,11 +96,14 @@ RSpec.describe "Rake tasks", type: :rake do
         output_file
       )
 
-      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:fetch_entity_statement).with(
-        url: "#{provider_issuer}/.well-known/openid-federation",
-        fingerprint: nil,
-        output_file: output_file
-      )
+      aggregate_failures do
+        expect(OmniauthOpenidFederation::TasksHelper).to have_received(:fetch_entity_statement).with(
+          url: "#{provider_issuer}/.well-known/openid-federation",
+          fingerprint: nil,
+          output_file: output_file
+        )
+        expect(File.read(output_file)).to eq(jwt)
+      end
     end
 
     it "handles fetch errors" do
@@ -169,20 +171,7 @@ RSpec.describe "Rake tasks", type: :rake do
       jwt = JWT.encode(entity_statement, private_key, "RS256")
       File.write(entity_statement_path, jwt)
 
-      allow(OmniauthOpenidFederation::TasksHelper).to receive(:validate_entity_statement).and_return({
-        fingerprint: "test-fingerprint",
-        metadata: {
-          issuer: provider_issuer,
-          metadata: {
-            openid_provider: {
-              authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-              token_endpoint: "https://provider.example.com/oauth2/token",
-              userinfo_endpoint: "https://provider.example.com/oauth2/userinfo",
-              jwks_uri: "https://provider.example.com/.well-known/jwks.json"
-            }
-          }
-        }
-      })
+      allow(OmniauthOpenidFederation::TasksHelper).to receive(:validate_entity_statement).and_call_original
 
       Rake::Task["openid_federation:validate_entity_statement"].reenable
       Rake::Task["openid_federation:validate_entity_statement"].invoke(entity_statement_path, nil)
@@ -231,26 +220,23 @@ RSpec.describe "Rake tasks", type: :rake do
     it "fetches JWKS successfully" do
       jwks_uri = "#{provider_issuer}/.well-known/jwks.json"
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      jwks = {keys: [jwk]}
-
       output_file = Tempfile.new(["jwks", ".json"]).path
 
       stub_request(:get, jwks_uri)
-        .to_return(status: 200, body: jwks.to_json, headers: {"Content-Type" => "application/json"})
+        .to_return(status: 200, body: {keys: [jwk]}.to_json, headers: {"Content-Type" => "application/json"})
 
-      allow(OmniauthOpenidFederation::TasksHelper).to receive(:fetch_jwks).and_return({
-        success: true,
-        jwks: jwks,
-        output_path: output_file
-      })
+      allow(OmniauthOpenidFederation::TasksHelper).to receive(:fetch_jwks).and_call_original
 
       Rake::Task["openid_federation:fetch_jwks"].reenable
       Rake::Task["openid_federation:fetch_jwks"].invoke(jwks_uri, output_file)
 
-      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:fetch_jwks).with(
-        jwks_uri: jwks_uri,
-        output_file: output_file
-      )
+      aggregate_failures do
+        expect(OmniauthOpenidFederation::TasksHelper).to have_received(:fetch_jwks).with(
+          jwks_uri: jwks_uri,
+          output_file: output_file
+        )
+        expect(JSON.parse(File.read(output_file))).to include("keys")
+      end
     end
 
     it "handles fetch errors" do
@@ -278,19 +264,18 @@ RSpec.describe "Rake tasks", type: :rake do
     it "generates keys successfully" do
       output_dir = Dir.mktmpdir
       begin
-        allow(OmniauthOpenidFederation::TasksHelper).to receive(:prepare_client_keys).and_return({
-          success: true,
-          private_key_path: File.join(output_dir, "private_key.pem"),
-          public_key_path: File.join(output_dir, "public_key.pem")
-        })
+        allow(OmniauthOpenidFederation::TasksHelper).to receive(:prepare_client_keys).and_call_original
 
         Rake::Task["openid_federation:prepare_client_keys"].reenable
         Rake::Task["openid_federation:prepare_client_keys"].invoke("single", output_dir)
 
-        expect(OmniauthOpenidFederation::TasksHelper).to have_received(:prepare_client_keys).with(
-          key_type: "single",
-          output_dir: output_dir
-        )
+        aggregate_failures do
+          expect(OmniauthOpenidFederation::TasksHelper).to have_received(:prepare_client_keys).with(
+            key_type: "single",
+            output_dir: output_dir
+          )
+          expect(File.exist?(File.join(output_dir, "client-private-key.pem"))).to be(true)
+        end
       ensure
         FileUtils.rm_rf(output_dir)
       end
@@ -314,36 +299,22 @@ RSpec.describe "Rake tasks", type: :rake do
 
   describe "openid_federation:parse_entity_statement" do
     it "parses entity statement successfully" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
-      entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        metadata: {
-          openid_provider: {
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      File.write(entity_statement_path, jwt)
+      entity_statement_path = write_provider_entity_statement_for_metadata(
+        authorization_endpoint: "https://provider.example.com/oauth2/authorize",
+        token_endpoint: "https://provider.example.com/oauth2/token"
+      )
 
-      allow(OmniauthOpenidFederation::TasksHelper).to receive(:parse_entity_statement).and_return({
-        issuer: provider_issuer,
-        metadata: {
-          openid_provider: {
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      })
+      allow(OmniauthOpenidFederation::TasksHelper).to receive(:parse_entity_statement).and_call_original
 
       Rake::Task["openid_federation:parse_entity_statement"].reenable
       Rake::Task["openid_federation:parse_entity_statement"].invoke(entity_statement_path)
 
-      expect(OmniauthOpenidFederation::TasksHelper).to have_received(:parse_entity_statement).with(
-        file_path: entity_statement_path
-      )
+      aggregate_failures do
+        expect(OmniauthOpenidFederation::TasksHelper).to have_received(:parse_entity_statement).with(
+          file_path: entity_statement_path
+        )
+        expect($stdout.string).to include(provider_issuer)
+      end
     end
 
     it "handles configuration errors" do

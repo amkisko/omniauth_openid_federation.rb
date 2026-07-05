@@ -513,5 +513,304 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       result = strategy.raw_info
       expect(result).to be_a(Hash)
     end
+
+    it "decodes ID token when entity statement JWKS uses string keys" do
+      entity_statement_path = entity_statement_path_under_config
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      entity_statement = {
+        iss: provider_issuer,
+        sub: provider_issuer,
+        jwks: {"keys" => [jwk.stringify_keys]},
+        metadata: {
+          openid_provider: {
+            authorization_endpoint: "#{provider_issuer}/oauth2/authorize",
+            token_endpoint: "#{provider_issuer}/oauth2/token"
+          }
+        }
+      }
+      jwt = encode_entity_statement(entity_statement)
+      File.write(entity_statement_path, jwt)
+
+      strategy = build_decode_strategy(nil, entity_statement_path: entity_statement_path)
+      attach_decoded_userinfo(strategy, jwk)
+
+      expect(strategy.raw_info).to be_a(Hash)
+    end
+
+    it "decodes ID token when entity statement JWKS is a top-level array" do
+      entity_statement_path = entity_statement_path_under_config
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      entity_statement = {
+        iss: provider_issuer,
+        sub: provider_issuer,
+        jwks: [jwk],
+        metadata: {
+          openid_provider: {
+            authorization_endpoint: "#{provider_issuer}/oauth2/authorize",
+            token_endpoint: "#{provider_issuer}/oauth2/token"
+          }
+        }
+      }
+      jwt = encode_entity_statement(entity_statement)
+      File.write(entity_statement_path, jwt)
+
+      strategy = build_decode_strategy(nil, entity_statement_path: entity_statement_path)
+      parsed = {
+        issuer: provider_issuer,
+        jwks: [jwk],
+        metadata: entity_statement[:metadata]
+      }
+      allow(strategy).to receive(:load_provider_entity_statement).and_return(jwt)
+      allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:new).with(jwt).and_return(
+        instance_double(OmniauthOpenidFederation::Federation::EntityStatement, parse: parsed)
+      )
+      attach_decoded_userinfo(strategy, jwk)
+
+      expect(strategy.raw_info).to be_a(Hash)
+    end
+
+    it "validates ID token using signed JWKS when kid is missing from entity statement JWKS" do
+      entity_statement_path = entity_statement_path_under_config
+      entity_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      token_key = OpenSSL::PKey::RSA.new(2048)
+      token_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(token_key.public_key)
+      entity_statement = {
+        iss: provider_issuer,
+        sub: provider_issuer,
+        jwks: {keys: [entity_jwk]},
+        metadata: {
+          openid_provider: {
+            signed_jwks_uri: "#{provider_issuer}/.well-known/signed-jwks.json",
+            authorization_endpoint: "#{provider_issuer}/oauth2/authorize",
+            token_endpoint: "#{provider_issuer}/oauth2/token"
+          }
+        }
+      }
+      jwt = encode_entity_statement(entity_statement)
+      File.write(entity_statement_path, jwt)
+
+      signed_jwks_jwt = encode_rs256({jwks: {keys: [token_jwk]}}, key: private_key)
+      stub_request(:get, "#{provider_issuer}/.well-known/signed-jwks.json")
+        .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
+
+      strategy = build_decode_strategy(nil, entity_statement_path: entity_statement_path)
+      id_token = JWT.encode(
+        {iss: provider_issuer, sub: "user-123", aud: client_id, exp: Time.now.to_i + 3600, iat: Time.now.to_i},
+        token_key,
+        "RS256",
+        {alg: "RS256", typ: "JWT", kid: token_jwk[:kid]}
+      )
+      attach_access_token(
+        strategy,
+        id_token: id_token,
+        userinfo: double(raw_attributes: {sub: "user-123"})
+      )
+
+      expect(strategy.raw_info).to be_a(Hash)
+    end
+
+    it "raises ValidationError when ID token kid is absent from available JWKS" do
+      entity_statement_path = entity_statement_path_under_config
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      entity_statement = {
+        iss: provider_issuer,
+        sub: provider_issuer,
+        jwks: {keys: [jwk]},
+        metadata: {
+          openid_provider: {
+            authorization_endpoint: "#{provider_issuer}/oauth2/authorize",
+            token_endpoint: "#{provider_issuer}/oauth2/token"
+          }
+        }
+      }
+      jwt = encode_entity_statement(entity_statement)
+      File.write(entity_statement_path, jwt)
+
+      strategy = build_decode_strategy(nil, entity_statement_path: entity_statement_path)
+      id_token = encode_id_token_for_provider_jwk(jwk, header_extras: {kid: "missing-kid"})
+      attach_access_token(strategy, id_token: id_token)
+
+      expect { strategy.raw_info }
+        .to raise_error(OmniauthOpenidFederation::ValidationError, /Key with kid/)
+    end
+
+    it "fetches JWKS from entity statement jwks_uri when client_options omit jwks_uri" do
+      jwks_uri = "#{provider_issuer}/.well-known/jwks.json"
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      entity_statement_path = entity_statement_path_under_config
+      entity_statement = {
+        iss: provider_issuer,
+        sub: provider_issuer,
+        metadata: {
+          openid_provider: {
+            issuer: provider_issuer,
+            authorization_endpoint: "#{provider_issuer}/oauth2/authorize",
+            token_endpoint: "#{provider_issuer}/oauth2/token",
+            jwks_uri: jwks_uri
+          }
+        }
+      }
+      write_entity_statement_jwt(entity_statement_path, entity_statement, encoder: :entity)
+
+      stub_request(:get, jwks_uri)
+        .to_return(status: 200, body: {keys: [jwk]}.to_json, headers: {"Content-Type" => "application/json"})
+
+      strategy = build_decode_strategy(
+        nil,
+        entity_statement_path: entity_statement_path,
+        client_options: decode_client_options(host: URI.parse(provider_issuer).host)
+      )
+      attach_decoded_userinfo(strategy, jwk)
+
+      expect(strategy.raw_info).to be_a(Hash)
+    end
+
+    it "fetches JWKS when endpoint returns a keys array" do
+      jwks_uri = "#{provider_issuer}/.well-known/jwks.json"
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+
+      allow(OmniauthOpenidFederation::Jwks::Fetch).to receive(:run).with(jwks_uri).and_return([jwk])
+
+      strategy = described_class.new(
+        nil,
+        send_nonce: false,
+        client_options: {
+          identifier: client_id,
+          redirect_uri: redirect_uri,
+          host: URI.parse(provider_issuer).host,
+          authorization_endpoint: "/oauth2/authorize",
+          token_endpoint: "/oauth2/token",
+          jwks_uri: jwks_uri,
+          private_key: private_key
+        }
+      )
+
+      attach_access_token(
+        strategy,
+        id_token: encode_id_token_for_provider_jwk(jwk),
+        userinfo: {email: "user@example.com"}
+      )
+
+      expect(strategy.raw_info).to be_a(Hash)
+    end
+  end
+
+  describe "resolve_jwks_for_validation without kid filtering" do
+    it "returns JWKS with string keys from entity statement" do
+      entity_statement_path = entity_statement_path_under_config
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      jwt = encode_entity_statement({
+        iss: provider_issuer,
+        sub: provider_issuer,
+        jwks: {"keys" => [jwk.stringify_keys]},
+        metadata: {
+          openid_provider: {
+            authorization_endpoint: "#{provider_issuer}/oauth2/authorize",
+            token_endpoint: "#{provider_issuer}/oauth2/token"
+          }
+        }
+      })
+      File.write(entity_statement_path, jwt)
+
+      strategy = build_decode_strategy(nil, entity_statement_path: entity_statement_path)
+      jwks = strategy.send(:resolve_jwks_for_validation, {})
+
+      expect(jwks).to eq({"keys" => [jwk.stringify_keys]})
+    end
+
+    it "returns JWKS when entity statement JWKS is a top-level array" do
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      jwt = "entity-statement.jwt"
+
+      strategy = build_decode_strategy(nil, entity_statement_path: entity_statement_path_under_config)
+      allow(strategy).to receive(:load_provider_entity_statement).and_return(jwt)
+      allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:new).with(jwt).and_return(
+        instance_double(
+          OmniauthOpenidFederation::Federation::EntityStatement,
+          parse: {issuer: provider_issuer, jwks: [jwk], metadata: {}}
+        )
+      )
+
+      jwks = strategy.send(:resolve_jwks_for_validation, {})
+
+      expect(jwks).to eq({"keys" => [jwk]})
+    end
+
+    it "returns JWKS when entity statement uses symbol-key hash" do
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      jwt = "entity-statement.jwt"
+
+      strategy = build_decode_strategy(nil)
+      allow(strategy).to receive(:load_provider_entity_statement).and_return(jwt)
+      allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:new).with(jwt).and_return(
+        instance_double(
+          OmniauthOpenidFederation::Federation::EntityStatement,
+          parse: {jwks: {keys: [jwk]}}
+        )
+      )
+
+      expect(strategy.send(:resolve_jwks_for_validation, {})).to eq({"keys" => [jwk]})
+    end
+
+    it "returns signed JWKS from entity statement metadata" do
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      jwt = "entity-statement.jwt"
+      entity_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+
+      strategy = build_decode_strategy(nil)
+      allow(strategy).to receive(:load_provider_entity_statement).and_return(jwt)
+      allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:new).with(jwt).and_return(
+        instance_double(OmniauthOpenidFederation::Federation::EntityStatement, parse: {issuer: provider_issuer})
+      )
+      allow(OmniauthOpenidFederation::Federation::EntityStatementHelper).to receive(:parse_for_signed_jwks_from_content)
+        .with(jwt)
+        .and_return(
+          signed_jwks_uri: "#{provider_issuer}/.well-known/signed-jwks.json",
+          entity_jwks: {keys: [entity_jwk]}
+        )
+      allow(OmniauthOpenidFederation::Federation::SignedJWKS).to receive(:fetch!)
+        .and_return({"keys" => [jwk.stringify_keys]})
+
+      jwks = strategy.send(:resolve_jwks_for_validation, {})
+
+      expect(jwks["keys"].length).to eq(1)
+    end
+
+    it "fetches JWKS from URI when entity statement has no JWKS section" do
+      jwks_uri = "#{provider_issuer}/.well-known/jwks.json"
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+
+      stub_request(:get, jwks_uri)
+        .to_return(status: 200, body: {keys: [jwk]}.to_json, headers: {"Content-Type" => "application/json"})
+
+      strategy = build_decode_strategy(
+        nil,
+        client_options: relative_path_client_options(jwks_uri: jwks_uri)
+      )
+
+      jwks = strategy.send(:resolve_jwks_for_validation, {})
+
+      expect(jwks).to be_a(Hash)
+      expect(jwks["keys"]).to be_an(Array)
+      expect(jwks["keys"].length).to eq(1)
+    end
+
+    it "returns nil when JWKS URI fetch fails" do
+      jwks_uri = "#{provider_issuer}/.well-known/jwks.json"
+
+      allow(OmniauthOpenidFederation::Jwks::Fetch).to receive(:run)
+        .with(jwks_uri)
+        .and_raise(StandardError.new("network error"))
+
+      strategy = build_decode_strategy(
+        nil,
+        entity_statement_path: nil,
+        issuer: nil,
+        client_options: relative_path_client_options(jwks_uri: jwks_uri)
+      )
+      allow(strategy).to receive(:load_provider_entity_statement).and_return(nil)
+
+      expect(strategy.send(:resolve_jwks_for_validation, {})).to be_nil
+    end
   end
 end

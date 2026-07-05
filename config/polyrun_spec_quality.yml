@@ -1,0 +1,29 @@
+# Per-example spec quality (coverage deltas, resource use). See polyrun report-spec-quality.
+track_under:
+  - lib
+  - app
+ignore_paths:
+  - /lib/omniauth_openid_federation/version.rb
+  - /lib/tasks/
+min_line_churn: 40
+min_query_count: 15
+hot_line_example_overlap: 8
+strict: false
+sample: 1.0
+ignore_examples:
+  - version_spec.rb
+  - omniauth_openid_federation_spec.rb:2
+  - /handles missing URL/
+  - /handles configuration errors/
+  - /handles validation errors/
+  - /handles unexpected errors/
+  - /handles fetch errors/
+ignore_query_patterns: []
+profile:
+  - cpu
+  - mem
+sql_counter: true
+# CI gates (POLYRUN_SPEC_QUALITY_STRICT=1 or strict: true):
+# minimum_unique_lines_per_example: 1
+# max_zero_hit_examples: 0
+# max_hot_line_overlap: 100
