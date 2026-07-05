@@ -11,3 +11,8 @@ partition:
     stages:
       - regex: federation_controller|railtie
         ignore_case: true
+
+# Opt-in via make spec-quality, POLYRUN_MERGE_SPEC_QUALITY=1, or run-shards --merge-spec-quality.
+reporting:
+  merge_spec_quality: false
+  merge_spec_quality_output: coverage/polyrun-spec-quality.json

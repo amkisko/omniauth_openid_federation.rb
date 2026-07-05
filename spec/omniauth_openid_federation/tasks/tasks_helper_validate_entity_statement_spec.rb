@@ -77,4 +77,44 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       end
     end
   end
+
+  describe ".detect_key_status" do
+    it "flags duplicate key ids as a single-key configuration" do
+      jwks = {keys: [{kid: "same", use: "sig"}, {kid: "same", use: "enc"}]}
+
+      status = described_class.detect_key_status(jwks)
+
+      expect(status[:type]).to eq(:single)
+    end
+
+    it "returns unknown when JWKS is missing" do
+      status = described_class.detect_key_status(nil)
+
+      expect(status[:type]).to eq(:unknown)
+    end
+
+    it "recognizes separate signing and encryption keys" do
+      jwks = {keys: [{kid: "sig", use: "sig"}, {kid: "enc", use: "enc"}]}
+
+      status = described_class.detect_key_status(jwks)
+
+      expect(status[:type]).to eq(:separate)
+    end
+
+    it "returns unknown for ambiguous key metadata" do
+      jwks = {keys: [{kid: "one"}, {kid: "two"}]}
+
+      status = described_class.detect_key_status(jwks)
+
+      expect(status[:type]).to eq(:unknown)
+    end
+
+    it "flags a lone key as single-key configuration" do
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(OpenSSL::PKey::RSA.new(2048).public_key, use: "sig")
+
+      status = described_class.detect_key_status(keys: [jwk])
+
+      expect(status[:type]).to eq(:single)
+    end
+  end
 end

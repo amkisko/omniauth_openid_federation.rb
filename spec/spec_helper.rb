@@ -45,16 +45,8 @@ module SpecTestLogging
 end
 
 unless %w[1 true yes].include?(ENV["POLYRUN_COVERAGE_DISABLE"]&.downcase)
-  require "polyrun"
-  root = File.expand_path("..", __dir__)
-  Polyrun::Coverage::Collector.start!(
-    root: root,
-    track_files: "{lib,app}/**/*.rb",
-    reject_patterns: [
-      "/lib/tasks/",
-      "/lib/omniauth_openid_federation/version.rb",
-      "/spec/"
-    ],
+  require "polyrun/coverage/rails"
+  Polyrun::Coverage::Rails.start!(
     formatter: Polyrun::Coverage::Formatter.multi(
       :json, :html, :cobertura, :console,
       output_dir: File.expand_path("../coverage", __dir__),
@@ -227,3 +219,4 @@ RSpec.configure do |config|
 end
 require "polyrun/rspec"
 Polyrun::RSpec.install_failure_fragments!
+Polyrun::RSpec.install_spec_quality!

@@ -11,6 +11,16 @@ bundle exec appraisal rails8 -- bundle exec polyrun parallel-rspec --workers 5 -
 
 Optional wrapper (same command): **`bin/rspec_parallel`**. See **[POLYRUN.md](../POLYRUN.md)**.
 
+### Spec quality (Polyrun)
+
+Per-example coverage deltas, line churn, and correlated outliers (slow or empty examples):
+
+```bash
+make spec-quality
+```
+
+Writes `coverage/polyrun-spec-quality.json` and prints a report. Config: `config/polyrun_spec_quality.yml`. CI runs this on the `coverage-shard` job.
+
 For **focused** or **serial** runs (single file, line, `--fail-fast`), use Appraisal + plain RSpec so the suite is not sharded:
 
 ```bash

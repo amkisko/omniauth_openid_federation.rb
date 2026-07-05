@@ -1,64 +1,15 @@
 require "spec_helper"
 
 RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
-  let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
-  let(:public_key) { private_key.public_key }
-  let(:provider_issuer) { "https://provider.example.com" }
-  let(:client_id) { "test-client-id" }
-  let(:redirect_uri) { "https://example.com/users/auth/openid_federation/callback" }
 
-  # Stub all HTTP requests for tests that use relative paths
-  before do
-    stub_relative_path_endpoints(host: URI.parse(provider_issuer).host)
-
-    # Generate a valid entity statement JWT for tests that fetch from URL
-    jwk = JWT::JWK.new(public_key)
-    jwk_export = jwk.export
-    entity_statement_payload = {
-      iss: provider_issuer,
-      sub: provider_issuer,
-      iat: Time.now.to_i,
-      exp: Time.now.to_i + 3600,
-      jwks: {
-        keys: [jwk_export]
-      },
-      metadata: {
-        openid_provider: {
-          issuer: provider_issuer,
-          authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-          token_endpoint: "https://provider.example.com/oauth2/token",
-          jwks_uri: "https://provider.example.com/.well-known/jwks.json"
-        }
-      }
-    }
-    entity_statement_header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
-    entity_statement_jwt = JWT.encode(entity_statement_payload, private_key, "RS256", entity_statement_header)
-
-    # Stub entity statement endpoint
-    WebMock.stub_request(:get, "#{provider_issuer}/.well-known/openid-federation")
-      .to_return(
-        status: 200,
-        body: entity_statement_jwt,
-        headers: {"Content-Type" => "application/jwt"}
-      )
-  end
+  include_context "strategy federation endpoint stub"
 
   describe "resolve_endpoints_from_metadata - all branches" do
     it "returns empty hash when entity_statement_path is nil" do
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
+        client_options: relative_path_client_options
       )
-
-      # Test through public API: client method uses resolve_endpoints_from_metadata
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When no entity statement, client should still work with configured endpoints
       client = strategy.client
@@ -66,33 +17,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles entity statement with issuer in metadata" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
-      entity_statement = {
+      entity_statement_path = write_simple_entity_statement_file({
         iss: provider_issuer,
         sub: provider_issuer,
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      File.write(entity_statement_path, jwt)
+        metadata: {openid_provider: provider_openid_metadata}
+      })
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
       )
-
-      # Test through public API: client method uses resolve_endpoints_from_metadata
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Client should resolve endpoints from entity statement
       client = strategy.client
@@ -100,32 +34,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles entity statement with entity_issuer fallback" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
-      entity_statement = {
+      entity_statement_path = write_simple_entity_statement_file({
         iss: provider_issuer,
         sub: provider_issuer,
-        metadata: {
-          openid_provider: {
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      File.write(entity_statement_path, jwt)
+        metadata: {openid_provider: provider_openid_metadata.except(:issuer)}
+      })
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
       )
-
-      # Test through public API: client method uses resolve_endpoints_from_metadata
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Client should resolve endpoints using entity_issuer fallback
       client = strategy.client
@@ -136,21 +54,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       File.write(entity_statement_path, "invalid")
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
+        client_options: relative_path_client_options
       )
-
-      # Test through public API: client method uses resolve_endpoints_from_metadata
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When entity statement parsing fails, should fall back to configured endpoints
       client = strategy.client
@@ -160,20 +68,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
   describe "resolve_issuer_from_metadata - all branches" do
     it "returns nil when entity_statement_path is nil" do
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
+        client_options: relative_path_client_options
       )
-
-      # Test through public API: authorize_uri uses resolve_issuer_from_metadata via resolve_audience
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When no entity statement, should use configured issuer or fail gracefully
       uri = strategy.authorize_uri
@@ -190,18 +88,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       jwt = JWT.encode(entity_statement, private_key, "RS256")
       File.write(entity_statement_path, jwt)
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
       )
-
-      # Test through public API: authorize_uri uses resolve_issuer_from_metadata via resolve_audience
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should use entity issuer (iss claim) when metadata doesn't have issuer
       uri = strategy.authorize_uri
@@ -221,21 +111,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       File.write(entity_statement_path, "invalid")
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
+        client_options: relative_path_client_options
       )
-
-      # Test through public API: authorize_uri uses resolve_issuer_from_metadata via resolve_audience
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When entity statement parsing fails, should fall back to configured issuer or fail
       # Since we have configured endpoints, it should use those
@@ -267,17 +147,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       jwt = JWT.encode(entity_statement, private_key, "RS256", header)
       File.write(entity_statement_path, jwt)
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
       )
-
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -317,31 +190,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles token endpoint from resolved endpoints" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
-      entity_statement = {
+      entity_statement_path = write_simple_entity_statement_file({
         iss: provider_issuer,
         sub: provider_issuer,
-        metadata: {
-          openid_provider: {
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      File.write(entity_statement_path, jwt)
+        metadata: {openid_provider: provider_openid_metadata.except(:issuer)}
+      })
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
       )
-
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       uri = strategy.authorize_uri
       expect(uri).to be_present
@@ -411,323 +269,266 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles no audience found scenario" do
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
       )
-
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       expect { strategy.authorize_uri }.to raise_error(OmniauthOpenidFederation::ConfigurationError)
     end
   end
 
-  describe "load_client_entity_statement - all branches" do
-    it "loads from cache when Rails.cache is available" do
-      # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
+  describe "endpoint path assembly from entity statement metadata" do
+    it "resolves relative userinfo and jwks URIs using issuer from metadata" do
+      entity_statement_path = entity_statement_path_under_config
+      entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
         metadata: {
           openid_provider: {
             issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
+            authorization_endpoint: "/oauth2/authorize",
+            token_endpoint: "/oauth2/token",
+            userinfo_endpoint: "/oauth2/userinfo",
+            jwks_uri: "/.well-known/jwks.json"
           }
         }
       }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
+      write_entity_statement_jwt(entity_statement_path, entity_statement, encoder: :entity)
 
-      entity_statement = {
-        iss: "https://client.example.com",
-        sub: "https://client.example.com",
-        jwks: {keys: []}
-      }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-
-      # Mock Rails.cache
-      rails_cache = double(fetch: jwt, read: nil, write: true)
-      stub_const("Rails", double(cache: rails_cache, root: nil))
-
-      # Configure FederationEndpoint with JWKS and metadata
-      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      OmniauthOpenidFederation::FederationEndpoint.configure do |config|
-        config.issuer = "https://client.example.com"
-        config.private_key = private_key
-        config.jwks = {keys: [jwk]}
-        config.metadata = {
-          openid_client: {
-            redirect_uris: ["https://example.com/callback"]
-          }
-        }
-      end
-
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
-        entity_statement_path: provider_entity_statement_path,
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
+        entity_statement_path: entity_statement_path,
+        client_options: decode_client_options(host: URI.parse(provider_issuer).host)
       )
 
-      # Test through public API: authorize_uri uses load_client_entity_statement for automatic registration
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
+      client = strategy.client
+      aggregate_failures do
+        expect(client.userinfo_endpoint.to_s).to eq("#{provider_issuer}/oauth2/userinfo")
+        expect(client.jwks_uri.to_s).to eq("#{provider_issuer}/.well-known/jwks.json")
+      end
+    end
 
-      # Behavior: Should load client entity statement from cache for automatic registration
+    it "uses provider issuer from metadata as audience in authorize request" do
+      entity_statement_path = write_provider_entity_statement_for_metadata
+
+      strategy = build_decode_strategy_for_authorize(entity_statement_path: entity_statement_path)
+
+      payload = authorize_request_payload(strategy.authorize_uri)
+      expect(payload["aud"]).to eq(provider_issuer)
+    end
+
+    it "resolves issuer scheme and host from metadata when client_options omit issuer" do
+      entity_statement_path = entity_statement_path_under_config
+      entity_statement = {
+        iss: provider_issuer,
+        sub: provider_issuer,
+        metadata: {
+          openid_provider: {
+            issuer: provider_issuer,
+            authorization_endpoint: "/oauth2/authorize",
+            token_endpoint: "/oauth2/token"
+          }
+        }
+      }
+      write_entity_statement_jwt(entity_statement_path, entity_statement, encoder: :entity)
+
+      strategy = build_strategy(
+        nil,
+        entity_statement_path: entity_statement_path,
+        client_options: decode_client_options(host: URI.parse(provider_issuer).host)
+      )
+
+      client = strategy.client
+      expect(client.authorization_endpoint.to_s).to eq("#{provider_issuer}/oauth2/authorize")
+    end
+
+    it "falls back to client_options when entity statement endpoint resolution fails" do
+      entity_statement_path = write_provider_entity_statement_for_metadata
+
+      allow(OmniauthOpenidFederation::EndpointResolver).to receive(:resolve)
+        .and_raise(StandardError.new("resolution failed"))
+
+      strategy = build_strategy(
+        nil,
+        entity_statement_path: entity_statement_path,
+        client_options: relative_path_client_options
+      )
+
+      expect(strategy.client).to be_a(OmniauthOpenidFederation::OidcClient)
+    end
+
+    it "skips non-URL issuer values when building endpoint URLs" do
+      entity_statement_path = entity_statement_path_under_config
+      entity_statement = {
+        iss: provider_issuer,
+        sub: provider_issuer,
+        metadata: {
+          openid_provider: {
+            issuer: "relative-issuer",
+            authorization_endpoint: "/oauth2/authorize",
+            token_endpoint: "/oauth2/token"
+          }
+        }
+      }
+      write_entity_statement_jwt(entity_statement_path, entity_statement, encoder: :entity)
+
+      strategy = build_strategy(
+        nil,
+        entity_statement_path: entity_statement_path,
+        client_options: relative_path_client_options
+      )
+
+      expect(strategy.authorize_uri).to be_present
+    end
+  end
+
+  describe "resolve_endpoints_from_trust_chain" do
+    it "resolves OpenID provider endpoints from trust chain metadata" do
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      trust_chain_leaf = {
+        metadata: {
+          openid_provider: provider_openid_metadata(
+            userinfo_endpoint: "#{provider_issuer}/oauth2/userinfo",
+            jwks_uri: "#{provider_issuer}/.well-known/jwks.json"
+          )
+        }
+      }
+      resolver = instance_double(
+        OmniauthOpenidFederation::Federation::TrustChainResolver,
+        resolve!: [trust_chain_leaf]
+      )
+      merger = instance_double(
+        OmniauthOpenidFederation::Federation::MetadataPolicyMerger,
+        merge_and_apply: trust_chain_leaf[:metadata]
+      )
+      allow(OmniauthOpenidFederation::Federation::TrustChainResolver).to receive(:new).and_return(resolver)
+      allow(OmniauthOpenidFederation::Federation::MetadataPolicyMerger).to receive(:new).and_return(merger)
+
+      strategy = build_strategy(
+        nil,
+        enable_trust_chain_resolution: true,
+        issuer: provider_issuer,
+        trust_anchors: [{entity_id: "https://ta.example.com", jwks: {keys: [jwk]}}],
+        client_options: decode_client_options
+      )
+
+      client = strategy.client
+      aggregate_failures do
+        expect(client.authorization_endpoint.to_s).to include("/oauth2/authorize")
+        expect(client.token_endpoint.to_s).to include("/oauth2/token")
+        expect(client.userinfo_endpoint.to_s).to include("/oauth2/userinfo")
+        expect(client.jwks_uri.to_s).to include("/.well-known/jwks.json")
+      end
+    end
+  end
+
+  describe "load_client_entity_statement - all branches" do
+    include_context "automatic client registration"
+
+    let(:client_entity_statement_jwt) do
+      JWT.encode(client_entity_statement_payload, private_key, "RS256")
+    end
+
+    it "loads from cache when Rails.cache is available" do
+      stub_rails_cache_double(fetch: client_entity_statement_jwt)
+
+      strategy = build_automatic_strategy
+
       uri = strategy.authorize_uri
       expect(uri).to be_present
     end
 
     it "handles cache fetch errors" do
-      # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
+      stub_rails_cache_double(fetch_raises: StandardError.new("Cache error"))
 
-      # Mock Rails.cache with error
-      rails_cache = double(read: nil, write: true)
-      allow(rails_cache).to receive(:fetch).and_raise(StandardError.new("Cache error"))
-      stub_const("Rails", double(cache: rails_cache, root: nil))
+      strategy = build_automatic_strategy
 
-      # Configure FederationEndpoint with JWKS and metadata
-      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      OmniauthOpenidFederation::FederationEndpoint.configure do |config|
-        config.issuer = "https://client.example.com"
-        config.private_key = private_key
-        config.jwks = {keys: [jwk]}
-        config.metadata = {
-          openid_client: {
-            redirect_uris: ["https://example.com/callback"]
-          }
-        }
-      end
-
-      strategy = described_class.new(
-        nil,
-        entity_statement_path: provider_entity_statement_path,
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
-      )
-
-      # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
-
-      # Behavior: Should handle cache errors and generate dynamically
       uri = strategy.authorize_uri
       expect(uri).to be_present
     end
 
     it "generates dynamically when cache is empty" do
-      # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
+      stub_rails_cache_double(fetch: nil)
 
-      # Mock Rails.cache returning nil
-      rails_cache = double(fetch: nil, read: nil, write: true)
-      stub_const("Rails", double(cache: rails_cache, root: nil))
+      strategy = build_automatic_strategy
 
-      # Configure FederationEndpoint with JWKS and metadata
-      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      OmniauthOpenidFederation::FederationEndpoint.configure do |config|
-        config.issuer = "https://client.example.com"
-        config.private_key = private_key
-        config.jwks = {keys: [jwk]}
-        config.metadata = {
-          openid_client: {
-            redirect_uris: ["https://example.com/callback"]
-          }
-        }
-      end
-
-      strategy = described_class.new(
-        nil,
-        entity_statement_path: provider_entity_statement_path,
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
-      )
-
-      # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
-
-      # Behavior: Should generate entity statement dynamically when cache is empty
       uri = strategy.authorize_uri
       expect(uri).to be_present
     end
 
-    it "handles FederationEndpoint configuration errors" do
-      # Reset configuration
-      OmniauthOpenidFederation::FederationEndpoint.instance_variable_set(:@configuration, nil)
-
-      # Mock Rails.cache returning nil
-      rails_cache = double(fetch: nil)
+    it "generates entity statement inside Rails cache fetch block" do
+      rails_cache = double(write: true)
+      allow(rails_cache).to receive(:fetch).with("federation:entity_statement", expires_in: anything).and_yield
       stub_const("Rails", double(cache: rails_cache, root: nil))
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
+        entity_statement_path: provider_entity_statement_path,
+        client_registration_type: :automatic
       )
 
-      # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
+      content = strategy.send(:load_client_entity_statement, nil, nil)
+      expect(content.split(".").length).to eq(3)
+    end
 
-      # Behavior: Should raise error when FederationEndpoint is not configured
-      expect {
-        strategy.authorize_uri
-      }.to raise_error(OmniauthOpenidFederation::ConfigurationError)
+    it "loads client entity statement from URL" do
+      client_url = "https://client.example.com/.well-known/openid-federation"
+      jwt = JWT.encode(client_entity_statement_payload, private_key, "RS256")
+      stub_request(:get, client_url).to_return(status: 200, body: jwt)
+
+      strategy = build_automatic_strategy
+      content = strategy.send(:load_client_entity_statement_from_url, client_url)
+
+      expect(content.split(".").length).to eq(3)
+    end
+
+    it "raises when client entity statement URL returns an error" do
+      client_url = "https://client.example.com/.well-known/openid-federation"
+      stub_request(:get, client_url).to_return(status: 500, body: "error")
+
+      strategy = build_automatic_strategy
+
+      expect { strategy.send(:load_client_entity_statement_from_url, client_url) }
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /Failed to fetch client entity statement/)
+    end
+
+    it "handles FederationEndpoint configuration errors" do
+      OmniauthOpenidFederation::FederationEndpoint.instance_variable_set(:@configuration, nil)
+      stub_rails_cache_double(fetch: nil)
+
+      strategy = build_strategy(nil, client_registration_type: :automatic)
+
+      expect { strategy.authorize_uri }.to raise_error(OmniauthOpenidFederation::ConfigurationError)
     end
 
     it "handles other errors in dynamic generation" do
-      # Mock Rails.cache returning nil
-      rails_cache = double(fetch: nil)
-      stub_const("Rails", double(cache: rails_cache, root: nil))
-
-      # Configure FederationEndpoint
+      stub_rails_cache_double(fetch: nil)
       OmniauthOpenidFederation::FederationEndpoint.configure do |config|
-        config.issuer = "https://client.example.com"
+        config.issuer = StrategyTestHelpers::CLIENT_ISSUER
         config.private_key = private_key
       end
+      allow(OmniauthOpenidFederation::FederationEndpoint).to receive(:generate_entity_statement)
+        .and_raise(StandardError.new("Generation error"))
 
-      # Mock generate_entity_statement to raise error
-      allow(OmniauthOpenidFederation::FederationEndpoint).to receive(:generate_entity_statement).and_raise(StandardError.new("Generation error"))
+      strategy = build_strategy(nil, client_registration_type: :automatic)
 
-      strategy = described_class.new(
-        nil,
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
-      )
-
-      # Test through public API: authorize_uri uses load_client_entity_statement
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
-
-      # Behavior: Should raise error when generation fails
-      expect {
-        strategy.authorize_uri
-      }.to raise_error(OmniauthOpenidFederation::ConfigurationError)
+      expect { strategy.authorize_uri }.to raise_error(OmniauthOpenidFederation::ConfigurationError)
     end
   end
 
   describe "load_client_entity_statement_from_file - all branches" do
+    include_context "automatic client registration"
     it "handles absolute path" do
-      # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
-
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
-      entity_statement = {
-        iss: "https://client.example.com",
-        sub: "https://client.example.com",
-        jwks: {keys: []}
-      }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      File.write(entity_statement_path, jwt)
-
-      strategy = described_class.new(
-        nil,
-        entity_statement_path: provider_entity_statement_path,
-        client_entity_statement_path: entity_statement_path,
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
+      strategy = build_automatic_strategy(
+        client_entity_statement_path: write_client_entity_statement_file
       )
 
-      # Test through public API: authorize_uri uses load_client_entity_statement_from_file
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
-
-      # Behavior: Should load client entity statement from file for automatic registration
-      uri = strategy.authorize_uri
-      expect(uri).to be_present
+      expect(strategy.authorize_uri).to be_present
     end
 
     it "handles relative path with Rails.root" do
       # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
+      provider_entity_statement_path = write_provider_entity_statement_file
 
       entity_statement_path = "tmp/test_entity.jwt"
       entity_statement = {
@@ -745,20 +546,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       FileUtils.mkdir_p(File.dirname(full_path))
       File.write(full_path, jwt)
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: provider_entity_statement_path,
         client_entity_statement_path: entity_statement_path,
         client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
       )
-
-      # Test through public API: authorize_uri uses load_client_entity_statement_from_file
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should load client entity statement from relative path
       uri = strategy.authorize_uri
@@ -771,22 +564,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       hide_const("Rails") if defined?(Rails)
 
       # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
+      provider_entity_statement_path = write_provider_entity_statement_file
 
       entity_statement_path = "tmp/test_entity.jwt"
       entity_statement = {
@@ -799,20 +577,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       FileUtils.mkdir_p(File.dirname(full_path))
       File.write(full_path, jwt)
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: provider_entity_statement_path,
         client_entity_statement_path: entity_statement_path,
         client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
       )
-
-      # Test through public API: authorize_uri uses load_client_entity_statement_from_file
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should load client entity statement from relative path using File.expand_path
       uri = strategy.authorize_uri
@@ -823,57 +593,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
   end
 
   describe "extract_entity_identifier_from_statement - all branches" do
+    include_context "automatic client registration"
+
     it "uses configured identifier when provided" do
-      # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
-
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
-      entity_statement = {
-        iss: "https://client.example.com",
-        sub: "https://client.example.com"
-      }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      File.write(entity_statement_path, jwt)
-
-      strategy = described_class.new(
-        nil,
-        entity_statement_path: provider_entity_statement_path,
-        client_entity_statement_path: entity_statement_path,
-        client_entity_identifier: "configured-id",
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
+      strategy = build_automatic_strategy(
+        client_entity_statement_path: write_client_entity_statement_file,
+        client_entity_identifier: "configured-id"
       )
 
-      # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
-
-      # Behavior: Should use configured entity identifier when provided
       uri = strategy.authorize_uri
-      # Verify the JWT payload contains configured identifier
-      uri_obj = URI.parse(uri)
-      query_params = URI.decode_www_form(uri_obj.query || "").to_h
-      request_jwt = query_params["request"]
-      parts = request_jwt.split(".")
-      payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
+      payload = authorize_request_payload(uri)
       aggregate_failures do
         expect(uri).to be_present
         expect(payload["iss"]).to eq("configured-id")
@@ -881,167 +610,39 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "extracts from sub claim" do
-      # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
-
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
-      entity_statement = {
-        iss: "https://client.example.com",
-        sub: "https://client.example.com"
-      }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      File.write(entity_statement_path, jwt)
-
-      strategy = described_class.new(
-        nil,
-        entity_statement_path: provider_entity_statement_path,
-        client_entity_statement_path: entity_statement_path,
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
+      strategy = build_automatic_strategy(
+        client_entity_statement_path: write_client_entity_statement_file
       )
 
-      # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
-
-      # Behavior: Should extract entity identifier from sub claim
       uri = strategy.authorize_uri
-      # Verify the JWT payload contains sub claim as issuer
-      uri_obj = URI.parse(uri)
-      query_params = URI.decode_www_form(uri_obj.query || "").to_h
-      request_jwt = query_params["request"]
-      parts = request_jwt.split(".")
-      payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
+      payload = authorize_request_payload(uri)
       aggregate_failures do
         expect(uri).to be_present
-        expect(payload["iss"]).to eq("https://client.example.com")
+        expect(payload["iss"]).to eq(StrategyTestHelpers::CLIENT_ISSUER)
       end
     end
 
     it "falls back to iss claim when sub is missing" do
-      # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
-
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
-      entity_statement = {
-        iss: "https://client.example.com"
-      }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      File.write(entity_statement_path, jwt)
-
-      strategy = described_class.new(
-        nil,
-        entity_statement_path: provider_entity_statement_path,
-        client_entity_statement_path: entity_statement_path,
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
+      strategy = build_automatic_strategy(
+        client_entity_statement_path: write_client_entity_statement_file({iss: StrategyTestHelpers::CLIENT_ISSUER, sub: nil, jwks: nil})
       )
 
-      # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
-
-      # Behavior: Should fall back to iss claim when sub is missing
       uri = strategy.authorize_uri
-      # Verify the JWT payload contains iss claim as issuer
-      uri_obj = URI.parse(uri)
-      query_params = URI.decode_www_form(uri_obj.query || "").to_h
-      request_jwt = query_params["request"]
-      parts = request_jwt.split(".")
-      payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
+      payload = authorize_request_payload(uri)
       aggregate_failures do
         expect(uri).to be_present
-        expect(payload["iss"]).to eq("https://client.example.com")
+        expect(payload["iss"]).to eq(StrategyTestHelpers::CLIENT_ISSUER)
       end
     end
 
     it "handles missing both sub and iss" do
-      # Provide provider entity statement for audience resolution
-      provider_tempfile = Tempfile.new(["provider_entity", ".jwt"])
-      provider_entity_statement_path = provider_tempfile.path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
-
-      entity_tempfile = Tempfile.new(["entity", ".jwt"])
-      entity_statement_path = entity_tempfile.path
-      entity_statement = {}
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      File.write(entity_statement_path, jwt)
-
-      strategy = described_class.new(
-        nil,
-        entity_statement_path: provider_entity_statement_path,
-        client_entity_statement_path: entity_statement_path,
-        client_entity_identifier: "fallback-identifier",
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
+      strategy = build_automatic_strategy(
+        client_entity_statement_path: write_simple_entity_statement_file({}),
+        client_entity_identifier: "fallback-identifier"
       )
 
-      # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
-
-      # Behavior: Should handle missing sub and iss gracefully
-      # When both are missing, it should fall back to configured identifier
       uri = strategy.authorize_uri
-      # Verify the JWT payload contains fallback identifier
-      uri_obj = URI.parse(uri)
-      query_params = URI.decode_www_form(uri_obj.query || "").to_h
-      request_jwt = query_params["request"]
-      parts = request_jwt.split(".")
-      payload = JSON.parse(Base64.urlsafe_decode64(parts[1]))
+      payload = authorize_request_payload(uri)
       aggregate_failures do
         expect(uri).to be_present
         expect(payload["iss"]).to eq("fallback-identifier")
@@ -1049,42 +650,13 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles errors in extraction" do
-      # Provide provider entity statement for audience resolution
-      provider_entity_statement_path = Tempfile.new(["provider_entity", ".jwt"]).path
-      provider_jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      provider_entity_statement = {
-        iss: provider_issuer,
-        sub: provider_issuer,
-        jwks: {keys: [provider_jwk]},
-        metadata: {
-          openid_provider: {
-            issuer: provider_issuer,
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
-        }
-      }
-      provider_jwt = JWT.encode(provider_entity_statement, private_key, "RS256")
-      File.write(provider_entity_statement_path, provider_jwt)
-
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       File.write(entity_statement_path, "invalid.jwt")
 
-      strategy = described_class.new(
-        nil,
-        entity_statement_path: provider_entity_statement_path,
+      strategy = build_automatic_strategy(
         client_entity_statement_path: entity_statement_path,
-        client_entity_identifier: "fallback-identifier",
-        client_registration_type: :automatic,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
+        client_entity_identifier: "fallback-identifier"
       )
-
-      # Test through public API: authorize_uri uses extract_entity_identifier_from_statement
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: Should raise error when client entity statement is invalid
       # Invalid JWT format is caught during loading, before extraction
@@ -1096,20 +668,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
   describe "load_provider_metadata_for_encryption" do
     it "returns nil when entity_statement_path is nil" do
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
+        client_options: relative_path_client_options
       )
-
-      # Test through public API: authorize_uri uses load_provider_metadata_for_encryption
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When no entity statement, request object should not be encrypted
       uri = strategy.authorize_uri
@@ -1125,21 +687,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "returns nil when file does not exist" do
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: "/nonexistent/path.jwt",
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
+        client_options: relative_path_client_options
       )
-
-      # Test through public API: authorize_uri uses load_provider_metadata_for_encryption
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When file doesn't exist, request object should not be encrypted
       uri = strategy.authorize_uri
@@ -1188,18 +740,10 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       WebMock.stub_request(:get, "#{provider_issuer}/.well-known/openid-federation")
         .to_return(status: 200, body: jwt, headers: {"Content-Type" => "application/jwt"})
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          private_key: private_key
-        }
       )
-
-      # Test through public API: authorize_uri uses load_provider_metadata_for_encryption
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When provider requires encryption, request object should be encrypted
       uri = strategy.authorize_uri
@@ -1218,21 +762,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       File.write(entity_statement_path, "invalid")
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
+        client_options: relative_path_client_options
       )
-
-      # Test through public API: authorize_uri uses load_provider_metadata_for_encryption
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When metadata loading fails, request object should not be encrypted
       uri = strategy.authorize_uri
@@ -1271,21 +805,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "returns nil when file does not exist" do
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: "/nonexistent/path.jwt",
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
+        client_options: relative_path_client_options
       )
-
-      # Test through public API: authorize_uri uses load_metadata_for_key_extraction
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When file doesn't exist, should work with configured private key
       uri = strategy.authorize_uri
@@ -1331,21 +855,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       File.write(entity_statement_path, "invalid")
 
-      strategy = described_class.new(
+      strategy = build_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        client_options: {
-          identifier: client_id,
-          redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
-          private_key: private_key
-        }
+        client_options: relative_path_client_options
       )
-
-      # Test through public API: authorize_uri uses load_metadata_for_key_extraction
-      allow(strategy).to receive_messages(request: double(params: {}), session: {})
 
       # Behavior: When metadata loading fails, should work with configured private key
       uri = strategy.authorize_uri

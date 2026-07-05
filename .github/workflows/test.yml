@@ -106,15 +106,19 @@ jobs:
           ruby-version: "3.4"
           bundler-cache: true
       - name: Run parallel RSpec with Polyrun coverage
+        env:
+          POLYRUN_COVERAGE: "1"
+          POLYRUN_MERGE_SPEC_QUALITY: "1"
         run: |
           bundle exec polyrun build-paths -c polyrun.yml
-          bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml -- bundle exec rspec --format documentation
+          bundle exec polyrun parallel-rspec --workers 5 --merge-spec-quality -c polyrun.yml -- bundle exec rspec --format documentation
       - uses: actions/upload-artifact@v7
         with:
           name: polyrun-coverage-parallel
           path: |
             coverage/merged.json
             coverage/polyrun-fragment-*.json
+            coverage/polyrun-spec-quality.json
             tmp/rspec-*.json
 
   coverage-merge:
