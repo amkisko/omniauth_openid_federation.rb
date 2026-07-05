@@ -127,7 +127,6 @@ module OmniAuth
         )
       end
 
-
       uid do
         raw_info["sub"] || raw_info[:sub]
       end

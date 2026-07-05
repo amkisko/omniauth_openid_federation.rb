@@ -14,7 +14,7 @@ module OmniauthOpenidFederation
     attr_accessor :private_key, :authorization_code, :jwks_uri
     attr_reader :authorization_endpoint, :token_endpoint, :userinfo_endpoint
 
-    def initialize(identifier:, secret: nil, redirect_uri:, authorization_endpoint:, token_endpoint:,
+    def initialize(identifier:, redirect_uri:, authorization_endpoint:, token_endpoint:, secret: nil,
       userinfo_endpoint: nil, jwks_uri: nil)
       token_uri = URI.parse(token_endpoint.to_s)
       site = build_site(token_uri)

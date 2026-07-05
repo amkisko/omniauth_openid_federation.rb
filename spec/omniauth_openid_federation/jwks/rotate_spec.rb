@@ -59,6 +59,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
           FileUtils.rm_rf(temp_dir) if File.directory?(temp_dir)
         end
       end
+
       it "raises ConfigurationError when entity statement file not found" do
         entity_statement_path = "/nonexistent/path.jwt"
 
@@ -66,6 +67,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
           described_class.run(jwks_uri, entity_statement_path: entity_statement_path)
         }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /Entity statement file not found/)
       end
+
       it "uses signed JWKS when entity statement has signed_jwks_uri" do
         entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
         entity_statement = {
@@ -102,6 +104,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
       ensure
         File.delete(entity_statement_path) if File.exist?(entity_statement_path)
       end
+
       it "validates absolute paths for path traversal only" do
         entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
         entity_statement = {
@@ -129,6 +132,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
       ensure
         File.delete(entity_statement_path) if File.exist?(entity_statement_path)
       end
+
       it "re-raises SecurityError when loading entity statement" do
         entity_statement_path = "../../../etc/passwd"
 

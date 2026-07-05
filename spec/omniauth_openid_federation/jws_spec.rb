@@ -444,6 +444,7 @@ RSpec.describe OmniauthOpenidFederation::Jws do
         expect(OmniauthOpenidFederation::Logger).to have_received(:error).with(/No encryption key found in provider JWKS/).at_least(:once)
       end
     end
+
     # Note: This is defensive code that's difficult to test naturally without mocking internal methods.
     # The build_jwt method always calls JWT.encode which should never return an empty string.
     # This test verifies the defensive check exists, but we cannot naturally trigger it

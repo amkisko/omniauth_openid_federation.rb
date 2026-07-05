@@ -2,13 +2,13 @@
 
 module JwtTestHelpers
   def signing_kid_for(key)
-    public_key = key.respond_to?(:private?) && key.private? ? key.public_key : key
+    public_key = (key.respond_to?(:private?) && key.private?) ? key.public_key : key
     OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)[:kid]
   end
 
   def encode_entity_statement(payload, key: private_key)
     signing_key = key
-    public_key = key.respond_to?(:private?) && key.private? ? key.public_key : key
+    public_key = (key.respond_to?(:private?) && key.private?) ? key.public_key : key
     kid = signing_kid_for(public_key)
     statement = payload.transform_keys(&:to_sym)
     statement[:iat] ||= Time.now.to_i
@@ -18,7 +18,7 @@ module JwtTestHelpers
 
   def encode_rs256(payload, key: private_key, kid: nil)
     signing_key = key
-    public_key = key.respond_to?(:private?) && key.private? ? key.public_key : key
+    public_key = (key.respond_to?(:private?) && key.private?) ? key.public_key : key
     kid ||= signing_kid_for(public_key)
     JWT.encode(payload, signing_key, "RS256", {kid: kid})
   end

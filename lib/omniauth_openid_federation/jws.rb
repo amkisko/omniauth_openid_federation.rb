@@ -55,10 +55,6 @@ module OmniauthOpenidFederation
   #   )
   #   signed_jwt = jws.sign
   class Jws
-    # Request object expiration constants
-    REQUEST_OBJECT_EXPIRATION_SECONDS = 600 # 10 minutes in seconds
-    REQUEST_OBJECT_EXPIRATION_MINUTES = 10
-
     # State generation constants
     STATE_BYTES = 16 # Number of hex bytes for state parameter
 
@@ -222,7 +218,7 @@ module OmniauthOpenidFederation
         response_type: @response_type,
         scope: @scope,
         state: state,
-        exp: (TimeHelpers.now + (defined?(ActiveSupport) ? REQUEST_OBJECT_EXPIRATION_MINUTES.minutes : REQUEST_OBJECT_EXPIRATION_SECONDS)).to_i,
+        exp: (TimeHelpers.now + TimeHelpers.request_object_expiration_offset).to_i,
         jti: SecureRandom.uuid # JWT ID to prevent replay
       }
 

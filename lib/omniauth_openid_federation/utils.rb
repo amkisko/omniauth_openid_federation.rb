@@ -7,11 +7,19 @@ module OmniauthOpenidFederation
     #
     # @param hash [Hash, Object] The hash to convert
     # @return [Hash, HashWithIndifferentAccess] Converted hash
-    def self.to_indifferent_hash(hash)
+    def self.to_indifferent_hash(value)
+      hash = if value.is_a?(Hash)
+        value
+      elsif value.respond_to?(:to_h)
+        value.to_h
+      else
+        {}
+      end
+
       if defined?(ActiveSupport::HashWithIndifferentAccess)
         ActiveSupport::HashWithIndifferentAccess.new(hash)
       else
-        hash.is_a?(Hash) ? hash : hash.to_h
+        hash
       end
     end
 

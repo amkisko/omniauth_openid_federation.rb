@@ -56,5 +56,12 @@ module OmniauthOpenidFederation
         false
       end
     end
+
+    # Seconds to add to {TimeHelpers.now} for JWT request object expiration.
+    #
+    # @return [Integer]
+    def self.request_object_expiration_offset
+      Constants::REQUEST_OBJECT_EXPIRATION_SECONDS
+    end
   end
 end

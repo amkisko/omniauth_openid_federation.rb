@@ -2,6 +2,30 @@ require "spec_helper"
 
 RSpec.describe OmniauthOpenidFederation::AccessToken do
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
+  let(:access_token) { build_token_client }
+  let(:signed_jwks_jwt) do
+    header = {
+      alg: "RS256",
+      typ: "JWT",
+      kid: entity_jwk.export[:kid]
+    }
+    JWT.encode(jwks_payload, private_key, "RS256", header)
+  end
+  let(:id_token_jwt) do
+    payload = {
+      sub: "user123",
+      iss: "https://provider.example.com",
+      aud: "client123",
+      exp: Time.now.to_i + 3600,
+      iat: Time.now.to_i
+    }
+    header = {
+      alg: "RS256",
+      typ: "JWT",
+      kid: entity_jwk.export[:kid]
+    }
+    JWT.encode(payload, private_key, "RS256", header)
+  end
   let(:public_key) { private_key.public_key }
   let(:entity_jwk) { JWT::JWK.new(public_key) }
   let(:access_token) { build_token_client }
@@ -40,33 +64,6 @@ RSpec.describe OmniauthOpenidFederation::AccessToken do
     client = double(private_key: private_key, jwks_uri: jwks_uri)
     client.instance_variable_set(:@strategy_options, merged_options)
     described_class.new(access_token: "test-token", client: client)
-  end
-
-  let(:access_token) { build_token_client }
-
-  let(:signed_jwks_jwt) do
-    header = {
-      alg: "RS256",
-      typ: "JWT",
-      kid: entity_jwk.export[:kid]
-    }
-    JWT.encode(jwks_payload, private_key, "RS256", header)
-  end
-
-  let(:id_token_jwt) do
-    payload = {
-      sub: "user123",
-      iss: "https://provider.example.com",
-      aud: "client123",
-      exp: Time.now.to_i + 3600,
-      iat: Time.now.to_i
-    }
-    header = {
-      alg: "RS256",
-      typ: "JWT",
-      kid: entity_jwk.export[:kid]
-    }
-    JWT.encode(payload, private_key, "RS256", header)
   end
 
   before do
