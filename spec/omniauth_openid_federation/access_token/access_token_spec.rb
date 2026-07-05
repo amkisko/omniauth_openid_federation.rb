@@ -1,6 +1,6 @@
 require "spec_helper"
 
-RSpec.describe OpenIDConnect::AccessToken do
+RSpec.describe OmniauthOpenidFederation::AccessToken do
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
   let(:public_key) { private_key.public_key }
   let(:entity_jwk) { JWT::JWK.new(public_key) }
@@ -240,7 +240,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         response = double("response", status: status_obj, body: "Bad Request")
 
         expect { access_token.resource_request { response } }.to raise_error(
-          OpenIDConnect::BadRequest
+          OmniauthOpenidFederation::BadRequest
         )
       end
 
@@ -249,7 +249,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         response = double("response", status: status_obj, body: "Unauthorized")
 
         expect { access_token.resource_request { response } }.to raise_error(
-          OpenIDConnect::Unauthorized
+          OmniauthOpenidFederation::Unauthorized
         )
       end
 
@@ -258,7 +258,7 @@ RSpec.describe OpenIDConnect::AccessToken do
         response = double("response", status: status_obj, body: "Forbidden")
 
         expect { access_token.resource_request { response } }.to raise_error(
-          OpenIDConnect::Forbidden
+          OmniauthOpenidFederation::Forbidden
         )
       end
 
@@ -267,13 +267,13 @@ RSpec.describe OpenIDConnect::AccessToken do
         response = double("response", status: status_obj, body: "Internal Server Error")
 
         expect { access_token.resource_request { response } }.to raise_error(
-          OpenIDConnect::HttpError
+          OmniauthOpenidFederation::HttpError
         )
       end
     end
 
-    context "with openid_connect fallback" do
-      it "falls back to openid_connect when openid_federation is not configured" do
+    context "with plain JSON response" do
+      it "parses JSON when federation JWT handling is not required" do
         json_response = {user_id: "123"}.to_json
         status_obj = double("status", code: 200, success?: true)
         response = double("response", status: status_obj, body: json_response)

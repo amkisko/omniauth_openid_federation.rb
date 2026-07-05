@@ -34,7 +34,7 @@ module OmniauthOpenidFederation
 
         if OmniauthOpenidFederation::StringHelpers.blank?(state_param) ||
             state_session.nil? ||
-            !Rack::Utils.secure_compare(state_param.to_s, state_session.to_s)
+            !OmniauthOpenidFederation::SecureCompare.secure_compare(state_param.to_s, state_session.to_s)
           # Instrument CSRF detection
           OmniauthOpenidFederation::Instrumentation.notify_csrf_detected(
             state_param: state_param ? "[PRESENT]" : "[MISSING]",

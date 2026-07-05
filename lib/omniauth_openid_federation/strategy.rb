@@ -1,9 +1,8 @@
 require "omniauth-oauth2"
-require "openid_connect"
 require "jwt"
 require "base64"
 require "securerandom"
-require "rack/utils"
+require_relative "secure_compare"
 require "tempfile"
 require "digest"
 require_relative "string_helpers"
@@ -53,7 +52,7 @@ require_relative "strategy/failure_handling"
 # - Trust marks (Section 7) - Optional feature (parsed but not validated)
 # - Federation endpoints (Section 8) - Server-side feature (Fetch Endpoint implemented separately)
 #
-# This strategy uses the openid_connect gem and extends it with federation-specific features.
+# This strategy uses OmniauthOpenidFederation::OidcClient and extends OAuth2 with federation-specific features.
 module OmniAuth
   module Strategies
     class OpenIDFederation < OmniAuth::Strategies::OAuth2
@@ -103,6 +102,10 @@ module OmniAuth
       option :enable_trust_chain_resolution, true # Enable trust chain resolution when issuer/client_id is an Entity ID
       option :request_object_params, nil # Array of parameter names to include in signed request object from request.params (allow-list)
       option :prepare_request_object_params, nil # Proc to modify params before adding to signed request object: proc { |params| modified_params }
+      option :default_request_object_claims, nil # Hash of claim defaults merged before prepare_request_object_params (request params override)
+      option :required_request_object_claims, nil # Array of claim names that must be present in the signed request object
+      option :allowed_acr_values, nil # When set, ID token acr must match one of these values
+      option :require_entity_statement_fingerprint, false # When true, remote entity statement sources require entity_statement_fingerprint
 
       # Override request_phase to use signed request objects (RFC 9101)
       def request_phase

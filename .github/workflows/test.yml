@@ -63,6 +63,27 @@ jobs:
       run: |
         bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml
 
+  integration:
+    needs: audit
+    runs-on: ubuntu-latest
+    env:
+      CLEANUP_ON_EXIT: "false"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Run mock OP/RP integration flow
+        run: bundle exec ruby examples/integration_test_flow.rb
+      - name: Upload integration logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs
+          path: tmp/integration_test/
+          if-no-files-found: ignore
+
   # One job: 5 RSpec processes on one runner + merged coverage + per-shard JSON for JUnit
   coverage-shard:
     runs-on: ubuntu-latest

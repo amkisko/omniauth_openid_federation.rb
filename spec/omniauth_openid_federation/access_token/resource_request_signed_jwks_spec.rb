@@ -1,7 +1,7 @@
 require "spec_helper"
 
 # rubocop:disable RSpec/RepeatedExample
-RSpec.describe OpenIDConnect::AccessToken, type: :access_token do
+RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
   describe "#resource_request" do
     it "handles extract_encryption_key_for_decryption error loading metadata" do
       entity_statement_path = "../../../etc/passwd"

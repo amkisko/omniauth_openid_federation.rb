@@ -462,7 +462,7 @@ module OmniauthOpenidFederation
       #     end
       #   end
       def rack_app
-        require_relative "rack_endpoint"
+        require_relative "rack"
         RackEndpoint.new
       end
 

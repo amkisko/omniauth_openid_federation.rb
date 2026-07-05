@@ -1,7 +1,7 @@
 require "spec_helper"
 
 # rubocop:disable RSpec/RepeatedExample
-RSpec.describe OpenIDConnect::AccessToken, type: :access_token do
+RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
   describe "#resource_request" do
     it "resolves JWKS URI by reading entity statement file path and extracting metadata" do
       entity_statement_path = entity_statement_path_under_config
@@ -313,7 +313,6 @@ RSpec.describe OpenIDConnect::AccessToken, type: :access_token do
 
       aggregate_failures do
         expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to fetch entity statement from URL/).at_least(:once)
-        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Entity statement not available for federation/)
         expect(result).to be_a(Hash)
       end
     end
@@ -346,7 +345,6 @@ RSpec.describe OpenIDConnect::AccessToken, type: :access_token do
 
       aggregate_failures do
         expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to fetch entity statement from issuer/).at_least(:once)
-        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Entity statement not available for federation/)
         expect(result).to be_a(Hash)
       end
     end

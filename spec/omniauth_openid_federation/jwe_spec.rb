@@ -24,6 +24,11 @@ RSpec.describe OmniauthOpenidFederation::Jwe do
       expect(described_class.decrypt(encrypted, private_key)).to eq(signed_jwt)
     end
 
+    it "round-trips nested JWT plaintext with A128GCM content encryption" do
+      encrypted = described_class.encrypt(signed_jwt, public_key, alg: "RSA-OAEP", enc: "A128GCM")
+      expect(described_class.decrypt(encrypted, private_key)).to eq(signed_jwt)
+    end
+
     it "raises DecryptionError for malformed compact tokens" do
       expect {
         described_class.decrypt("header.encrypted_key.iv.ciphertext.tag", private_key)

@@ -66,7 +66,7 @@ class MockRPServer
   end
 
   def self.load_signing_key(key_data)
-    if key_data.blank?
+    if OmniauthOpenidFederation::StringHelpers.blank?(key_data)
       OpenSSL::PKey::RSA.new(2048)
     elsif key_data.is_a?(String)
       if key_data.include?("BEGIN")
@@ -80,7 +80,7 @@ class MockRPServer
   end
 
   def self.load_encryption_key(key_data)
-    return nil if key_data.blank?
+    return nil if OmniauthOpenidFederation::StringHelpers.blank?(key_data)
     load_signing_key(key_data)
   end
 
@@ -297,7 +297,7 @@ class MockRPServer
         provider_entity_id: provider_entity_id,
         redirect_uri: redirect_uri,
         nonce: nonce,
-        created_at: Time.zone.now
+        created_at: OmniauthOpenidFederation::TimeHelpers.now
       }
 
       # Step 5: Redirect to provider

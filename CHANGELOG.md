@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-- Refactor `OmniAuth::Strategies::OpenIDFederation` into concern modules under `lib/omniauth_openid_federation/strategy/`
+- Replace `openid_connect` and `json-jwt` with `OmniauthOpenidFederation::OidcClient`, `AccessToken`, and `IdToken` built on `oauth2` and `jwt`
+- Use `jwe` gem for JWE encrypt/decrypt instead of `json-jwt`
+- Drop explicit `rack` runtime dependency; load Rack federation endpoints via `require "omniauth_openid_federation/rack"`
+- Add `OmniauthOpenidFederation::SecureCompare` for constant-time string comparison in the strategy
+- Add behavioral contract specs for token exchange, userinfo, and JWE parity with former `openid_connect` flow
 - Use `Jwe.encrypted?` for JWE detection in `AccessToken#resource_request` and `TasksHelper`
 - Deduplicate entity statement loading in `access_token.rb` via `load_entity_statement_content`
 - Fix flaky `test_local_endpoint` spec when `SSL_CERT_FILE` is set in the environment
@@ -17,6 +21,10 @@
 - Reject unknown `crit` claims in entity statement validation
 - Use issuer-scoped cache keys for federation JWKS and signed JWKS endpoints
 - Fix OAuth callback failures in `callback_phase` to return the Rack response from `fail!` instead of `nil`; avoids `Rack::ETag` `NoMethodError` and HTTP 500 on auth failure
+- Add provider-agnostic strategy options: `default_request_object_claims`, `required_request_object_claims`, `allowed_acr_values`, `require_entity_statement_fingerprint`
+- Enforce minimum RSA key size (2048 bits) in `Validators.validate_private_key!`
+- Add `JwtResponseDecoder` for encrypted/signed JWT userinfo and resource responses
+- Add Telia Tunnistus PP entity statement fixture and contract spec (A128GCM and A128CBC-HS256)
 
 ## 1.3.2 (2025-12-09)
 

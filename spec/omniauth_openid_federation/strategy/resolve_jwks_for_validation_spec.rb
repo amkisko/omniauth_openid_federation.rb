@@ -34,7 +34,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "builds client when merged options use string keys" do
@@ -64,7 +64,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "resolves all OpenID provider endpoints from entity statement metadata" do
@@ -97,7 +97,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "resolves relative endpoints using issuer from entity statement metadata" do
@@ -129,7 +129,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "builds authorize URI when audience is resolved from client host" do
@@ -288,7 +288,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(raw_info).to be_a(Hash)
     end
 
-    it "raises ConfigurationError when entity statement JWKS format is invalid" do
+    it "raises ValidationError when entity statement JWKS format is invalid" do
       entity_statement_path = entity_statement_path_under_config
       OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -307,6 +307,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        issuer: provider_issuer,
         send_nonce: false,
         entity_statement_path: entity_statement_path,
         client_options: {
@@ -316,11 +317,12 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      id_token = JWT.encode({iss: provider_issuer, sub: "user-123"}, private_key, "RS256")
+      id_token = encode_rs256({iss: provider_issuer, sub: "user-123"})
       access_token_double = double(id_token: id_token)
       strategy.instance_variable_set(:@access_token, access_token_double)
 
-      expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
+      expect { strategy.raw_info }
+        .to raise_error(OmniauthOpenidFederation::ValidationError, /Key with kid/)
     end
 
     it "raises SignatureError when ID token signature does not match JWKS key" do

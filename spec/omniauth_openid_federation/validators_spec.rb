@@ -27,6 +27,51 @@ RSpec.describe OmniauthOpenidFederation::Validators do
       expect { described_class.validate_private_key!(Object.new) }
         .to raise_error(OmniauthOpenidFederation::ConfigurationError, /Private key must be an OpenSSL::PKey::RSA/)
     end
+
+    it "raises ConfigurationError when RSA key is shorter than the minimum" do
+      short_key = OpenSSL::PKey::RSA.new(1024)
+
+      expect { described_class.validate_private_key!(short_key) }
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /must be at least 2048 bits/)
+    end
+  end
+
+  describe ".validate_required_request_object_claims!" do
+    it "passes when all required claims are present" do
+      expect {
+        described_class.validate_required_request_object_claims!(
+          {"acr_values" => "loa1", "ui_locales" => "fi"},
+          %w[acr_values ui_locales]
+        )
+      }.not_to raise_error
+    end
+
+    it "raises ConfigurationError when required claims are missing" do
+      expect {
+        described_class.validate_required_request_object_claims!(
+          {"acr_values" => "loa1"},
+          %w[acr_values ui_locales]
+        )
+      }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /Missing required request object claims: ui_locales/)
+    end
+  end
+
+  describe ".validate_allowed_acr_value!" do
+    it "passes when acr is in the allowed list" do
+      expect {
+        described_class.validate_allowed_acr_value!("loa-substantial", ["loa-substantial", "loa-high"])
+      }.not_to raise_error
+    end
+
+    it "raises ValidationError when acr is not allowed" do
+      expect {
+        described_class.validate_allowed_acr_value!("loa-low", ["loa-substantial"])
+      }.to raise_error(OmniauthOpenidFederation::ValidationError, /acr mismatch/)
+    end
+
+    it "does nothing when allowed list is empty" do
+      expect { described_class.validate_allowed_acr_value!(nil, nil) }.not_to raise_error
+    end
   end
 
   describe ".validate_uri!" do

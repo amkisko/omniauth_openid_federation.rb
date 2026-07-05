@@ -1,8 +1,8 @@
 module OmniAuth
   module Strategies
     class OpenIDFederation < OmniAuth::Strategies::OAuth2
-      def client: () -> untyped
-      def oidc_client: () -> untyped
+      def client: () -> OmniauthOpenidFederation::OidcClient
+      def oidc_client: () -> OmniauthOpenidFederation::OidcClient
       def request_phase: () -> untyped
       def callback_phase: () -> untyped
       def auth_hash: () -> OmniAuth::AuthHash
@@ -10,7 +10,7 @@ module OmniAuth
       def raw_info: () -> Hash[String, untyped]
       def client_jwk_signing_key: () -> untyped
       def options: () -> untyped
-      def exchange_authorization_code: (String authorization_code) -> untyped
+      def exchange_authorization_code: (String authorization_code) -> OmniauthOpenidFederation::AccessToken
       def new_state: () -> String
       def new_nonce: () -> String
       def resolve_endpoints_from_metadata: (Hash[Symbol, untyped] client_options_hash) -> Hash[Symbol, String?]
@@ -21,7 +21,7 @@ module OmniAuth
       def resolve_jwks_uri: (Hash[Symbol, untyped] normalized_options) -> String?
       def build_base_url: (Hash[Symbol, untyped] client_options_hash) -> String
       def build_endpoint: (String base_url, String path) -> String
-      def decode_id_token: (String id_token) -> Hash[String, untyped]
+      def decode_id_token: (String id_token) -> OmniauthOpenidFederation::IdToken
       def encrypted_token?: (String token) -> bool
       def decode_userinfo: (untyped userinfo) -> Hash[String, untyped]
       def load_provider_entity_statement: () -> Hash[Symbol, untyped]?
@@ -45,9 +45,10 @@ module OmniAuth
   end
 end
 
-module OpenIDConnect
+module OmniauthOpenidFederation
   class AccessToken
     def resource_request: () { () -> untyped } -> untyped
+    def userinfo!: () -> untyped
     def get_strategy_options: () -> Hash[Symbol, untyped]
     def extract_encryption_key_for_decryption: () -> untyped
     def fetch_signed_jwks: (Hash[Symbol, untyped] strategy_options) -> Hash[String, untyped]?
@@ -55,4 +56,3 @@ module OpenIDConnect
     def resolve_jwks_uri_from_entity_statement: (Hash[Symbol, untyped] strategy_options) -> String?
   end
 end
-

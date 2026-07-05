@@ -160,7 +160,7 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
     end
 
     it "handles missing private key on client" do
-      oidc_client = double("OpenIDConnect::Client")
+      oidc_client = double("OmniauthOpenidFederation::OidcClient")
       allow(oidc_client).to receive(:private_key).and_return(nil)
 
       strategy = double("Strategy")

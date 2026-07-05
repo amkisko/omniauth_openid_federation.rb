@@ -1,7 +1,7 @@
 # OmniAuth OpenID Federation
 #
-# Custom OmniAuth strategy for OpenID Federation providers using openid_connect gem
-# supporting signed request objects, ID token encryption, and OpenID Federation.
+# Custom OmniAuth strategy for OpenID Federation providers supporting signed request objects,
+# ID token encryption, and OpenID Federation.
 #
 # @see https://openid.net/specs/openid-federation-1_0.html
 module OmniauthOpenidFederation
@@ -41,6 +41,11 @@ require_relative "omniauth_openid_federation/cache_adapter"
 require_relative "omniauth_openid_federation/utils"
 require_relative "omniauth_openid_federation/jwe"
 require_relative "omniauth_openid_federation/jws"
+require_relative "omniauth_openid_federation/http_errors"
+require_relative "omniauth_openid_federation/id_token"
+require_relative "omniauth_openid_federation/user_info"
+require_relative "omniauth_openid_federation/secure_compare"
+require_relative "omniauth_openid_federation/oidc_client"
 require_relative "omniauth_openid_federation/jwks/normalizer"
 require_relative "omniauth_openid_federation/jwks/fetch"
 require_relative "omniauth_openid_federation/jwks/decode"
@@ -57,12 +62,12 @@ require_relative "omniauth_openid_federation/federation/trust_chain_resolver"
 require_relative "omniauth_openid_federation/federation/metadata_policy_merger"
 require_relative "omniauth_openid_federation/federation/signed_jwks"
 require_relative "omniauth_openid_federation/federation_endpoint"
-require_relative "omniauth_openid_federation/rack_endpoint"
 require_relative "omniauth_openid_federation/entity_statement_reader"
 require_relative "omniauth_openid_federation/tasks_helper"
 require_relative "omniauth_openid_federation/endpoint_resolver"
 require_relative "omniauth_openid_federation/strategy"
 require_relative "omniauth_openid_federation/access_token"
+require_relative "omniauth_openid_federation/jwt_response_decoder"
 
 module OmniauthOpenidFederation
   # Rotate JWKS cache for a provider
