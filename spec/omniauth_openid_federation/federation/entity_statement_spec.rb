@@ -180,6 +180,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
         OmniauthOpenidFederation::ValidationError
       )
     end
+
     it "fetches entity statement from issuer using fetch_from_issuer!" do
       issuer_uri = "https://provider.example.com"
       entity_statement_url = "#{issuer_uri}/.well-known/openid-federation"
@@ -193,6 +194,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
         expect(instance.entity_statement).to eq(entity_statement_content)
       end
     end
+
     it "raises ValidationError with instrumentation on validation failure" do
       # Create invalid entity statement (missing required fields)
       invalid_content = "invalid.jwt.content"
@@ -208,6 +210,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
         expect(OmniauthOpenidFederation::Instrumentation).to have_received(:notify_entity_statement_validation_failed)
       end
     end
+
     it "validates against previous statement successfully" do
       stub_request(:get, url)
         .to_return(status: 200, body: entity_statement_content)
@@ -298,6 +301,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
       result = instance.validate_against_previous(previous_payload)
       expect(result).to be false
     end
+
     it "handles JSON::ParserError in decode_payload" do
       # Create entity statement with invalid JSON in payload
       invalid_payload = Base64.urlsafe_encode64("invalid json").gsub(/=+$/, "")

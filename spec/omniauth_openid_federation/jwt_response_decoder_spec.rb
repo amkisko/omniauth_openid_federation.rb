@@ -38,8 +38,8 @@ RSpec.describe OmniauthOpenidFederation::JwtResponseDecoder do
 
     claims = described_class.new(strategy_options: strategy_options).decode(encrypted)
 
-      expect(claims["sub"]).to eq("user-123")
-      expect(claims["email"]).to eq("user@example.com")
+    expect(claims["sub"]).to eq("user-123")
+    expect(claims["email"]).to eq("user@example.com")
   end
 
   it "verifies signed JWT responses without encryption" do
@@ -47,7 +47,7 @@ RSpec.describe OmniauthOpenidFederation::JwtResponseDecoder do
 
     claims = described_class.new(strategy_options: strategy_options).decode(signed_jwt)
 
-      expect(claims["sub"]).to eq("user-456")
+    expect(claims["sub"]).to eq("user-456")
   end
 
   it "parses plain JSON responses" do
@@ -55,7 +55,7 @@ RSpec.describe OmniauthOpenidFederation::JwtResponseDecoder do
       {sub: "user-789", name: "Plain JSON"}.to_json
     )
 
-      expect(claims["sub"]).to eq("user-789")
-      expect(claims["name"]).to eq("Plain JSON")
+    expect(claims["sub"]).to eq("user-789")
+    expect(claims["name"]).to eq("Plain JSON")
   end
 end

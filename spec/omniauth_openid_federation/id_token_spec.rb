@@ -1,6 +1,8 @@
 require "spec_helper"
 
 RSpec.describe OmniauthOpenidFederation::IdToken do
+  subject(:id_token) { described_class.new(claims) }
+
   let(:claims) do
     {
       iss: "https://provider.example.com",
@@ -11,8 +13,6 @@ RSpec.describe OmniauthOpenidFederation::IdToken do
       nonce: "nonce-value"
     }
   end
-
-  subject(:id_token) { described_class.new(claims) }
 
   it "exposes raw_attributes with symbol keys" do
     expect(id_token.raw_attributes[:sub]).to eq("user-123")

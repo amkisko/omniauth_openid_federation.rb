@@ -6,6 +6,27 @@ OmniAuth.config.test_mode = true
 
 RSpec.describe OmniAuth::Strategies::OpenIDFederation do
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
+  let(:id_token_jwt) { JWT.encode(id_token_payload, private_key, "RS256", kid: "test-key-id") }
+  let(:access_token_jwt) { "mock-access-token" }
+  let(:provider_metadata) do
+    {
+      issuer: provider_issuer,
+      authorization_endpoint: "https://provider.example.com/oauth2/authorize",
+      token_endpoint: "https://provider.example.com/oauth2/token",
+      jwks_uri: "https://provider.example.com/.well-known/jwks.json",
+      userinfo_endpoint: "https://provider.example.com/oauth2/userinfo",
+      response_types_supported: ["code"],
+      subject_types_supported: ["public"],
+      id_token_signing_alg_values_supported: ["RS256"],
+      request_object_signing_alg_values_supported: ["RS256"],
+      token_endpoint_auth_methods_supported: ["private_key_jwt"],
+      token_endpoint_auth_signing_alg_values_supported: ["RS256"]
+    }
+  end
+  let(:public_key) { private_key.public_key }
+  let(:provider_issuer) { "https://provider.example.com" }
+  let(:client_id) { "test-client-id" }
+  let(:redirect_uri) { "http://localhost:3000/auth/openid_federation/callback" }
   let(:env) { Rack::MockRequest.env_for("/auth/openid_federation") }
   let(:jwks) do
     {
@@ -36,27 +57,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     session["omniauth.nonce"] = nonce if nonce
     session
   end
-  let(:id_token_jwt) { JWT.encode(id_token_payload, private_key, "RS256", kid: "test-key-id") }
-  let(:access_token_jwt) { "mock-access-token" }
-  let(:provider_metadata) do
-    {
-      issuer: provider_issuer,
-      authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-      token_endpoint: "https://provider.example.com/oauth2/token",
-      jwks_uri: "https://provider.example.com/.well-known/jwks.json",
-      userinfo_endpoint: "https://provider.example.com/oauth2/userinfo",
-      response_types_supported: ["code"],
-      subject_types_supported: ["public"],
-      id_token_signing_alg_values_supported: ["RS256"],
-      request_object_signing_alg_values_supported: ["RS256"],
-      token_endpoint_auth_methods_supported: ["private_key_jwt"],
-      token_endpoint_auth_signing_alg_values_supported: ["RS256"]
-    }
-  end
-  let(:public_key) { private_key.public_key }
-  let(:provider_issuer) { "https://provider.example.com" }
-  let(:client_id) { "test-client-id" }
-  let(:redirect_uri) { "http://localhost:3000/auth/openid_federation/callback" }
 
   def app
     strategy_class = OmniAuth::Strategies::OpenIDFederation

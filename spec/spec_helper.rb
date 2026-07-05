@@ -66,7 +66,7 @@ end
 
 require "rspec"
 require "active_support"
-require "active_support/core_ext/hash/keys"
+require "active_support/core_ext/hash/indifferent_access"
 require "active_support/core_ext/object/blank"
 require "tempfile"
 require "openssl"
@@ -86,7 +86,7 @@ Dir[File.expand_path("support/**/*.rb", __dir__)].sort.each { |f| require_relati
 # Include HTTP stubbing helpers in all specs
 RSpec.configure do |config|
   config.before(:suite) { SpecTestLogging.silence! }
-  config.before(:each) { SpecTestLogging.silence_loggers_for_example! }
+  config.before { SpecTestLogging.silence_loggers_for_example! }
 
   config.include HttpStubbing
 
@@ -227,4 +227,3 @@ RSpec.configure do |config|
 end
 require "polyrun/rspec"
 Polyrun::RSpec.install_failure_fragments!
-

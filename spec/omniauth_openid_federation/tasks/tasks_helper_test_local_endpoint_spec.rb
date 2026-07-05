@@ -308,5 +308,4 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       end
     end
   end
-
 end

@@ -361,6 +361,7 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
       expect(result).to be_nil
     end
   end
+
   # Test via public API (extract_signing_key calls normalize_private_key internally)
   it "raises ArgumentError for invalid private key type" do
     expect {

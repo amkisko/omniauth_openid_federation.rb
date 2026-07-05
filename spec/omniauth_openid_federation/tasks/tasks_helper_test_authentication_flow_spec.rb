@@ -470,5 +470,4 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       }.to raise_error(/Failed to (get authorization URL|fetch login page)/)
     end
   end
-
 end
