@@ -1,4 +1,4 @@
-.PHONY: release lint test audit integration-test
+.PHONY: release lint test audit integration-test clean
 
 release:
 	ruby usr/bin/release.rb
@@ -15,3 +15,12 @@ test:
 
 integration-test:
 	bundle exec ruby examples/integration_test_flow.rb
+
+clean:
+	rm -rf coverage
+	rm -rf tmp/cache tmp/polyrun_failures tmp/coverage_metrics tmp/integration_test
+	rm -f tmp/rspec-*.json tmp/*.log tmp/test_entity.jwt
+	rm -f spec/examples.txt
+	rm -f *.gem
+	rm -rf log/*
+	rm -rf .pray/cache
