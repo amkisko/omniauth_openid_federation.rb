@@ -14,5 +14,8 @@ module OmniauthOpenidFederation
     # Prevents DoS attacks while allowing legitimate use cases (e.g., encrypted JWT authorization codes)
     # Use Configuration.config.max_string_length for runtime configuration instead of patching this constant
     MAX_STRING_LENGTH = 8192
+
+    # Minimum RSA modulus size for OIDC signing and encryption keys (FTN and common federation profiles)
+    MIN_RSA_KEY_BITS = 2048
   end
 end

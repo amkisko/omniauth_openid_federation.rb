@@ -127,7 +127,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "raises error when authorization endpoint is missing" do
@@ -158,7 +158,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
   end
 
@@ -194,7 +194,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Access client to trigger resolve_endpoints_from_metadata
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "handles entity statement with path-based endpoints" do
@@ -226,7 +226,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "handles missing entity statement file gracefully" do
@@ -245,7 +245,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Should not raise error, should use client_options
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "handles entity statement parsing errors gracefully" do
@@ -268,7 +268,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Should not raise error, should use client_options
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
   end
 
@@ -304,7 +304,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Access client to trigger resolve_issuer_from_metadata
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "handles missing issuer in entity statement" do
@@ -335,7 +335,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
   end
 
@@ -819,7 +819,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       # Access client to trigger resolve_jwks_uri
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "resolves JWKS URI from entity statement" do
@@ -851,7 +851,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
   end
 
@@ -872,7 +872,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "handles missing host gracefully" do
@@ -888,7 +888,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
     it "builds endpoint from path" do
@@ -905,7 +905,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
 
       client = strategy.client
-      expect(client).to be_a(OpenIDConnect::Client)
+      expect(client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
   end
 

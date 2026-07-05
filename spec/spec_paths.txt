@@ -4,6 +4,7 @@ spec/omniauth_openid_federation/access_token/access_token_spec.rb
 spec/omniauth_openid_federation/access_token/resource_request_entity_statement_spec.rb
 spec/omniauth_openid_federation/access_token/resource_request_response_spec.rb
 spec/omniauth_openid_federation/access_token/resource_request_signed_jwks_spec.rb
+spec/omniauth_openid_federation/behavioral_contract_spec.rb
 spec/omniauth_openid_federation/cache_adapter_spec.rb
 spec/omniauth_openid_federation/cache_spec.rb
 spec/omniauth_openid_federation/configuration_spec.rb
@@ -22,6 +23,7 @@ spec/omniauth_openid_federation/federation/metadata_policy_merger_spec.rb
 spec/omniauth_openid_federation/federation/signed_jwks_spec.rb
 spec/omniauth_openid_federation/federation/trust_chain_resolver_spec.rb
 spec/omniauth_openid_federation/http_client_spec.rb
+spec/omniauth_openid_federation/id_token_spec.rb
 spec/omniauth_openid_federation/instrumentation_spec.rb
 spec/omniauth_openid_federation/integration_spec.rb
 spec/omniauth_openid_federation/jwe_spec.rb
@@ -32,11 +34,14 @@ spec/omniauth_openid_federation/jwks/normalizer_spec.rb
 spec/omniauth_openid_federation/jwks/rotate_spec.rb
 spec/omniauth_openid_federation/jwks/selector_spec.rb
 spec/omniauth_openid_federation/jws_spec.rb
+spec/omniauth_openid_federation/jwt_response_decoder_spec.rb
 spec/omniauth_openid_federation/key_extractor_spec.rb
 spec/omniauth_openid_federation/logger_spec.rb
+spec/omniauth_openid_federation/oidc_client_spec.rb
 spec/omniauth_openid_federation/rack_endpoint_spec.rb
 spec/omniauth_openid_federation/rate_limiter_spec.rb
 spec/omniauth_openid_federation/rodauth_integration_spec.rb
+spec/omniauth_openid_federation/secure_compare_spec.rb
 spec/omniauth_openid_federation/security_fuzzing_spec.rb
 spec/omniauth_openid_federation/strategy/authorize_uri_spec.rb
 spec/omniauth_openid_federation/strategy/callback_phase_spec.rb
@@ -58,6 +63,7 @@ spec/omniauth_openid_federation/tasks/tasks_helper_test_authentication_flow_spec
 spec/omniauth_openid_federation/tasks/tasks_helper_test_local_endpoint_error_paths_spec.rb
 spec/omniauth_openid_federation/tasks/tasks_helper_test_local_endpoint_spec.rb
 spec/omniauth_openid_federation/tasks/tasks_helper_validate_entity_statement_spec.rb
+spec/omniauth_openid_federation/telia_tunnistus_pp_contract_spec.rb
 spec/omniauth_openid_federation/utils_spec.rb
 spec/omniauth_openid_federation/validators_spec.rb
 spec/omniauth_openid_federation/version_spec.rb

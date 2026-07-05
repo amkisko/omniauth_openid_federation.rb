@@ -1,6 +1,7 @@
 require "base64"
 require "jwt"
-require "rack/utils"
+
+require_relative "../secure_compare"
 
 module OmniauthOpenidFederation
   module Strategy
@@ -142,7 +143,7 @@ module OmniauthOpenidFederation
             h[k.to_sym] = v
           end
 
-          ::OpenIDConnect::ResponseObject::IdToken.new(payload_with_symbols)
+          OmniauthOpenidFederation::IdToken.new(payload_with_symbols)
         rescue JWT::DecodeError, JWT::VerificationError => e
           error_msg = "Failed to decode or verify ID token signature: #{e.class} - #{e.message}"
           OmniauthOpenidFederation::Logger.error("[Strategy] #{error_msg}")
@@ -163,6 +164,11 @@ module OmniauthOpenidFederation
           )
 
           raise OmniauthOpenidFederation::SignatureError, error_msg, e.backtrace
+        rescue OmniauthOpenidFederation::ValidationError,
+          OmniauthOpenidFederation::SecurityError,
+          OmniauthOpenidFederation::ConfigurationError,
+          OmniauthOpenidFederation::DecryptionError => error
+          raise error
         rescue => e
           error_msg = "Failed to decode or validate ID token: #{e.class} - #{e.message}"
           OmniauthOpenidFederation::Logger.error("[Strategy] #{error_msg}")
@@ -201,30 +207,35 @@ module OmniauthOpenidFederation
             "ID token audience mismatch: expected '#{expected_client_id}' in aud, got '#{payload["aud"]}'"
         end
 
-        return unless options.send_nonce
+        if options.send_nonce
+          rack_session = omniauth_rack_session
+          unless rack_session
+            raise OmniauthOpenidFederation::ValidationError,
+              "ID token nonce validation failed: no nonce in session"
+          end
 
-        rack_session = omniauth_rack_session
-        unless rack_session
-          raise OmniauthOpenidFederation::ValidationError,
-            "ID token nonce validation failed: no nonce in session"
+          session_nonce = rack_session["omniauth.nonce"]
+          token_nonce = payload["nonce"]
+
+          if OmniauthOpenidFederation::StringHelpers.blank?(session_nonce)
+            raise OmniauthOpenidFederation::ValidationError,
+              "ID token nonce validation failed: no nonce in session"
+          end
+
+          if OmniauthOpenidFederation::StringHelpers.blank?(token_nonce) ||
+              !OmniauthOpenidFederation::SecureCompare.secure_compare(token_nonce.to_s, session_nonce.to_s)
+            OmniauthOpenidFederation::Instrumentation.notify_invalid_nonce(
+              expected_nonce: "[PRESENT]",
+              actual_nonce: token_nonce ? "[PRESENT]" : "[MISSING]"
+            )
+            raise OmniauthOpenidFederation::SecurityError, "ID token nonce mismatch"
+          end
         end
 
-        session_nonce = rack_session["omniauth.nonce"]
-        token_nonce = payload["nonce"]
-
-        if OmniauthOpenidFederation::StringHelpers.blank?(session_nonce)
-          raise OmniauthOpenidFederation::ValidationError,
-            "ID token nonce validation failed: no nonce in session"
-        end
-
-        if OmniauthOpenidFederation::StringHelpers.blank?(token_nonce) ||
-            !Rack::Utils.secure_compare(token_nonce.to_s, session_nonce.to_s)
-          OmniauthOpenidFederation::Instrumentation.notify_invalid_nonce(
-            expected_nonce: "[PRESENT]",
-            actual_nonce: token_nonce ? "[PRESENT]" : "[MISSING]"
-          )
-          raise OmniauthOpenidFederation::SecurityError, "ID token nonce mismatch"
-        end
+        OmniauthOpenidFederation::Validators.validate_allowed_acr_value!(
+          payload["acr"],
+          options.allowed_acr_values
+        )
       end
 
       def expected_id_token_issuer(normalized_options)

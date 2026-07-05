@@ -145,7 +145,7 @@ module OmniauthOpenidFederation
           entity_jwks = payload.fetch("jwks", {})
           return nil if entity_jwks.empty?
 
-          # Return JWKS as JSON string (format expected by openid_connect gem)
+          # Return JWKS as JSON string (format expected by OAuth2/OIDC clients)
           JSON.dump(entity_jwks)
         rescue => e
           OmniauthOpenidFederation::Logger.warn("[Strategy] Failed to extract client JWKS from entity statement: #{e.message}")

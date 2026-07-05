@@ -2,6 +2,8 @@ module OmniauthOpenidFederation
   module Strategy
     module AuthorizationRequest
       def authorize_uri
+        validate_provider_trust_configuration!
+
         request_params = request.params
 
         # Security: Only validate user input from HTTP requests, not config values
@@ -33,6 +35,15 @@ module OmniauthOpenidFederation
           end
         end
         request_params = sanitized_params
+
+        if options.default_request_object_claims.is_a?(Hash)
+          options.default_request_object_claims.each do |key, value|
+            key_str = key.to_s
+            next if key_str.length > 256
+            next if OmniauthOpenidFederation::StringHelpers.blank?(value)
+            request_params[key_str] ||= value
+          end
+        end
 
         # Apply custom proc to modify params before adding to signed request object
         if options.prepare_request_object_params.respond_to?(:call)
@@ -113,6 +124,16 @@ module OmniauthOpenidFederation
         validated_audience = audience_value&.to_s&.strip
         normalized_acr_values = OmniauthOpenidFederation::Validators.normalize_acr_values(request_params["acr_values"], skip_sanitization: true) || nil
 
+        request_object_claims = request_params.dup
+        request_object_claims["acr_values"] = normalized_acr_values if normalized_acr_values
+        request_object_claims["ui_locales"] = validated_ui_locales if validated_ui_locales
+        request_object_claims["claims_locales"] = validated_claims_locales if validated_claims_locales
+        request_object_claims["login_hint"] = validated_login_hint if validated_login_hint
+        OmniauthOpenidFederation::Validators.validate_required_request_object_claims!(
+          request_object_claims,
+          options.required_request_object_claims
+        )
+
         jws_builder = OmniauthOpenidFederation::Jws.new(
           client_id: validated_client_id,
           redirect_uri: validated_redirect_uri,
@@ -180,6 +201,19 @@ module OmniauthOpenidFederation
 
         uri.query = URI.encode_www_form(request: signed_request_object)
         uri.to_s
+      end
+
+      def validate_provider_trust_configuration!
+        return unless options.require_entity_statement_fingerprint
+
+        using_remote_source = OmniauthOpenidFederation::StringHelpers.present?(options.entity_statement_url) ||
+          OmniauthOpenidFederation::StringHelpers.present?(options.issuer)
+        return unless using_remote_source
+
+        if OmniauthOpenidFederation::StringHelpers.blank?(options.entity_statement_fingerprint)
+          raise OmniauthOpenidFederation::ConfigurationError,
+            "entity_statement_fingerprint is required when require_entity_statement_fingerprint is enabled"
+        end
       end
     end
   end

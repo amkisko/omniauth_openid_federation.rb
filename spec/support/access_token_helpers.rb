@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Shared helpers for OpenIDConnect::AccessToken specs
+# Shared helpers for OmniauthOpenidFederation::AccessToken specs
 module AccessTokenHelpers
   def create_client_with_strategy_options(strategy_options = {})
     default_client_options = {

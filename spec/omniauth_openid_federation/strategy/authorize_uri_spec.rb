@@ -172,8 +172,57 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       end
     end
 
-    # Note: ftn_spname was removed as it was provider-specific
-    # acr_values should be passed via request parameters instead
+    # Provider-specific parameters (for example FTN ftn_spname) use request_object_params and
+    # default_request_object_claims instead of hard-coded strategy options.
+
+    it "merges default_request_object_claims before signing" do
+      strategy = described_class.new(
+        nil,
+        default_request_object_claims: {ui_locales: "fi", service_name: "Example Shop"},
+        request_object_params: ["service_name"],
+        audience: provider_issuer,
+        client_options: {
+          identifier: client_id,
+          redirect_uri: redirect_uri,
+          host: URI.parse(provider_issuer).host,
+          authorization_endpoint: "/oauth2/authorize",
+          token_endpoint: "/oauth2/token",
+          private_key: private_key
+        }
+      )
+
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
+
+      uri = strategy.authorize_uri
+      request_jwt = URI.decode_www_form(URI.parse(uri).query).to_h["request"]
+      payload, = JWT.decode(request_jwt, private_key.public_key, true, {algorithm: "RS256"})
+
+      aggregate_failures do
+        expect(payload["ui_locales"]).to eq("fi")
+        expect(payload["service_name"]).to eq("Example Shop")
+      end
+    end
+
+    it "raises when required_request_object_claims are missing" do
+      strategy = described_class.new(
+        nil,
+        required_request_object_claims: %w[acr_values ui_locales],
+        audience: provider_issuer,
+        client_options: {
+          identifier: client_id,
+          redirect_uri: redirect_uri,
+          host: URI.parse(provider_issuer).host,
+          authorization_endpoint: "/oauth2/authorize",
+          token_endpoint: "/oauth2/token",
+          private_key: private_key
+        }
+      )
+
+      allow(strategy).to receive_messages(request: double(params: {}), session: {})
+
+      expect { strategy.authorize_uri }
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /Missing required request object claims/)
+    end
 
     it "handles request_object_params" do
       strategy = described_class.new(

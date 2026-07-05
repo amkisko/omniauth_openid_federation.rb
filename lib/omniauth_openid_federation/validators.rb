@@ -9,19 +9,54 @@ module OmniauthOpenidFederation
     #
     # @param private_key [OpenSSL::PKey::RSA, String, nil] The private key to validate
     # @raise [ConfigurationError] If private key is missing or invalid
-    def self.validate_private_key!(private_key)
+    def self.validate_private_key!(private_key, min_bits: Constants::MIN_RSA_KEY_BITS)
       if private_key.nil?
         raise ConfigurationError, "Private key is required for signed request objects"
       end
 
-      if private_key.is_a?(String)
-        begin
-          OpenSSL::PKey::RSA.new(private_key)
-        rescue => e
-          raise ConfigurationError, "Invalid private key format: #{e.message}"
+      normalized_key =
+        if private_key.is_a?(String)
+          begin
+            OpenSSL::PKey::RSA.new(private_key)
+          rescue => error
+            raise ConfigurationError, "Invalid private key format: #{error.message}"
+          end
+        elsif private_key.is_a?(OpenSSL::PKey::RSA)
+          private_key
+        else
+          raise ConfigurationError, "Private key must be an OpenSSL::PKey::RSA instance or PEM string"
         end
-      elsif !private_key.is_a?(OpenSSL::PKey::RSA)
-        raise ConfigurationError, "Private key must be an OpenSSL::PKey::RSA instance or PEM string"
+
+      if min_bits.to_i.positive? && normalized_key.n.num_bits < min_bits.to_i
+        raise ConfigurationError,
+          "RSA private key must be at least #{min_bits} bits (got #{normalized_key.n.num_bits} bits)"
+      end
+
+      true
+    end
+
+    def self.validate_required_request_object_claims!(claims, required_names)
+      required = Array(required_names).map(&:to_s).uniq
+      return true if required.empty?
+
+      normalized_claims = (claims || {}).each_with_object({}) do |(key, value), hash|
+        hash[key.to_s] = value
+      end
+
+      missing = required.reject { |name| StringHelpers.present?(normalized_claims[name]) }
+      return true if missing.empty?
+
+      raise ConfigurationError, "Missing required request object claims: #{missing.join(", ")}"
+    end
+
+    def self.validate_allowed_acr_value!(acr_value, allowed_acr_values)
+      allowed = Array(allowed_acr_values).map(&:to_s).map(&:strip).reject { |value| StringHelpers.blank?(value) }
+      return true if allowed.empty?
+
+      token_acr = acr_value.to_s.strip
+      if StringHelpers.blank?(token_acr) || !allowed.include?(token_acr)
+        raise ValidationError,
+          "ID token acr mismatch: expected one of [#{allowed.join(", ")}], got '#{acr_value}'"
       end
 
       true

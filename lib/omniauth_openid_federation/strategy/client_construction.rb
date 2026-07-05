@@ -64,7 +64,7 @@ module OmniauthOpenidFederation
             raise OmniauthOpenidFederation::ConfigurationError, error_msg
           end
 
-          oidc_client = ::OpenIDConnect::Client.new(
+          oidc_client = OmniauthOpenidFederation::OidcClient.new(
             identifier: client_identifier,
             secret: nil, # We use private_key_jwt, so no secret needed
             redirect_uri: merged_options[:redirect_uri] || merged_options["redirect_uri"],
@@ -88,7 +88,7 @@ module OmniauthOpenidFederation
           strategy_options_hash[:issuer] = options.issuer if options.issuer
           oidc_client.instance_variable_set(:@strategy_options, strategy_options_hash)
 
-          # OpenIDConnect::Client extends OAuth2::Client, so it's compatible with OmniAuth::Strategies::OAuth2
+          # OidcClient extends OAuth2::Client, so it's compatible with OmniAuth::Strategies::OAuth2
           oidc_client
         end
       end

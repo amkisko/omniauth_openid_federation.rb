@@ -1,4 +1,4 @@
-.PHONY: release lint test audit
+.PHONY: release lint test audit integration-test
 
 release:
 	ruby usr/bin/release.rb
@@ -12,3 +12,6 @@ audit:
 
 test:
 	bundle exec polyrun parallel-rspec --workers 5 --merge-failures
+
+integration-test:
+	bundle exec ruby examples/integration_test_flow.rb

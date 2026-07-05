@@ -19,8 +19,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
   describe "decode_id_token edge cases" do
     it "handles missing JWKS" do
-      WebMock.reset!
-
       strategy = build_decode_strategy(
         nil,
         issuer: nil,
@@ -29,9 +27,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,
-          host: URI.parse(provider_issuer).host,
-          authorization_endpoint: "/oauth2/authorize",
-          token_endpoint: "/oauth2/token",
           private_key: private_key
         }
       )
@@ -40,7 +35,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       access_token_double = double(id_token: id_token)
       strategy.instance_variable_set(:@access_token, access_token_double)
 
-      expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
+      expect { strategy.raw_info }
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
     end
 
     it "handles invalid JWKS format" do
@@ -73,7 +69,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       access_token_double = double(id_token: id_token)
       strategy.instance_variable_set(:@access_token, access_token_double)
 
-      expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
+      expect { strategy.raw_info }
+        .to raise_error(OmniauthOpenidFederation::ValidationError, /Key with kid/)
     end
 
     it "handles missing kid in JWT header" do
@@ -108,10 +105,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       access_token_double = double(id_token: id_token)
       strategy.instance_variable_set(:@access_token, access_token_double)
 
-      # ValidationError is wrapped in SignatureError when ID token decoding fails
-      expect {
-        strategy.raw_info
-      }.to raise_error(OmniauthOpenidFederation::SignatureError, /kid/)
+      expect { strategy.raw_info }
+        .to raise_error(OmniauthOpenidFederation::SignatureError, /kid/)
     ensure
       File.delete(entity_statement_path) if File.exist?(entity_statement_path)
     end
@@ -149,8 +144,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       access_token_double = double(id_token: id_token)
       strategy.instance_variable_set(:@access_token, access_token_double)
 
-      # ValidationError is wrapped in SignatureError when ID token decoding fails
-      expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::SignatureError, /Key with kid/)
+      expect { strategy.raw_info }
+        .to raise_error(OmniauthOpenidFederation::ValidationError, /Key with kid/)
     end
 
     it "handles missing required claims" do
@@ -187,8 +182,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       access_token_double = double(id_token: id_token)
       strategy.instance_variable_set(:@access_token, access_token_double)
 
-      # ValidationError is wrapped in SignatureError when ID token decoding fails
-      expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::SignatureError, /missing required claims/)
+      expect { strategy.raw_info }
+        .to raise_error(OmniauthOpenidFederation::ValidationError, /missing required claims/)
     ensure
       File.delete(entity_statement_path) if File.exist?(entity_statement_path)
     end
@@ -1103,6 +1098,53 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         expect(uri).to be_present
         expect(payload["acr_values"]).to eq("level1 level2")
       end
+    end
+  end
+
+  describe "allowed_acr_values validation" do
+    it "rejects ID tokens whose acr is not in the configured allow-list" do
+      entity_statement_path = entity_statement_path_under_config
+      jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+      entity_statement = {
+        iss: provider_issuer,
+        sub: provider_issuer,
+        jwks: {keys: [jwk]},
+        metadata: {
+          openid_provider: {
+            authorization_endpoint: "#{provider_issuer}/oauth2/authorize",
+            token_endpoint: "#{provider_issuer}/oauth2/token"
+          }
+        }
+      }
+      File.write(entity_statement_path, encode_entity_statement(entity_statement))
+
+      strategy = build_decode_strategy(
+        nil,
+        entity_statement_path: entity_statement_path,
+        allowed_acr_values: ["http://ftn.ficora.fi/2021/loa/substantial"],
+        fetch_userinfo: false,
+        client_options: {
+          identifier: client_id,
+          redirect_uri: redirect_uri,
+          private_key: private_key
+        }
+      )
+
+      id_token = encode_rs256(
+        {
+          iss: provider_issuer,
+          sub: "user-123",
+          aud: client_id,
+          acr: "http://ftn.ficora.fi/2021/loa/low",
+          exp: Time.now.to_i + 3600,
+          iat: Time.now.to_i
+        },
+        kid: jwk[:kid]
+      )
+      strategy.instance_variable_set(:@access_token, double(id_token: id_token))
+
+      expect { strategy.raw_info }
+        .to raise_error(OmniauthOpenidFederation::ValidationError, /acr mismatch/)
     end
   end
 

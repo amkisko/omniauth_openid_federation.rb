@@ -272,7 +272,7 @@ class IntegrationTestFlow
     script_path = File.expand_path(script, __dir__)
     project_root = File.expand_path("..", __dir__)
 
-    # Use bundle exec to ensure all dependencies (jwt, json-jwt, etc.) are available
+    # Use bundle exec to ensure all dependencies (jwt, jwe, oauth2, etc.) are available
     pid = Process.spawn(
       {
         "RUBYOPT" => "-W0", # Suppress warnings
@@ -319,7 +319,7 @@ class IntegrationTestFlow
       attempt = 0
       ready = false
       server_name = url.include?("9292") ? "OP" : "RP"
-      start_time = Time.zone.now
+      start_time = OmniauthOpenidFederation::TimeHelpers.now
 
       while attempt < max_attempts && !ready
         begin
@@ -330,7 +330,7 @@ class IntegrationTestFlow
           response = http.get(uri.path)
 
           if response.code == "200"
-            elapsed = (Time.zone.now - start_time).round(1)
+            elapsed = (OmniauthOpenidFederation::TimeHelpers.now - start_time).round(1)
             puts "  ✓ #{url} is ready (#{elapsed}s)"
             ready = true
           end
@@ -342,7 +342,7 @@ class IntegrationTestFlow
           attempt += 1
           # Show progress every 5 attempts (1 second)
           if attempt % 5 == 0
-            elapsed = (Time.zone.now - start_time).round(1)
+            elapsed = (OmniauthOpenidFederation::TimeHelpers.now - start_time).round(1)
             print "."
           end
           sleep check_interval
@@ -350,7 +350,7 @@ class IntegrationTestFlow
       end
 
       unless ready
-        elapsed = (Time.zone.now - start_time).round(1)
+        elapsed = (OmniauthOpenidFederation::TimeHelpers.now - start_time).round(1)
         puts "\n  ✗ #{server_name} server at #{url} did not become ready in time (#{elapsed}s)"
         err_log = File.join(@tmp_dir, "#{server_name.downcase}_server_error.log")
         log_file = File.join(@tmp_dir, "#{server_name.downcase}_server.log")
@@ -1261,6 +1261,8 @@ class IntegrationTestFlow
 
     puts ""
     puts (passed == @test_results.length) ? "✅ All tests passed!" : "❌ Some tests failed."
+
+    passed == @test_results.length
   end
 
   def cleanup
@@ -1330,5 +1332,5 @@ if __FILE__ == $0
   puts ""
 
   test_flow = IntegrationTestFlow.new
-  test_flow.run
+  exit(test_flow.run ? 0 : 1)
 end

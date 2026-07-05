@@ -273,7 +273,14 @@ Use `prepare_request_object_params` proc to modify parameters before they're add
 
 ```ruby
 config.omniauth :openid_federation,
-  request_object_params: [:ftn_spname], # Allow-list for custom params
+  request_object_params: [:ftn_spname], # Allow-list for provider-specific params (example: Finnish FTN)
+  default_request_object_claims: {
+    ui_locales: "fi",
+    acr_values: ENV["OPENID_ACR_VALUES"]
+  },
+  required_request_object_claims: %w[ftn_spname acr_values ui_locales],
+  allowed_acr_values: [ENV["OPENID_ACR_VALUES"]].compact,
+  require_entity_statement_fingerprint: true,
   prepare_request_object_params: proc do |params|
     # Combine config acr_values with form acr_values
     form_acr_values = params["acr_values"]&.to_s&.strip
@@ -440,6 +447,10 @@ rake openid_federation:test_authentication_flow[
 - `always_encrypt_request_object` - Force encryption of request objects (default: false)
 - `request_object_params` - Array of parameter names to include in request object (allow-list)
 - `prepare_request_object_params` - Proc to modify params before adding to signed request object: `proc { |params| modified_params }`
+- `default_request_object_claims` - Hash of default claims merged before `prepare_request_object_params` (request params override defaults)
+- `required_request_object_claims` - Array of claim names that must be present in the signed request object (raises before redirect)
+- `allowed_acr_values` - When set, ID token `acr` must match one of the configured values
+- `require_entity_statement_fingerprint` - When true, fetching provider entity statements from URL or issuer requires `entity_statement_fingerprint`
 - `discovery` - Enable automatic endpoint discovery (default: true)
 
 ## Security
@@ -500,8 +511,8 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidel
 - [omniauth](https://github.com/omniauth/omniauth) - Authentication framework
 - [devise](https://github.com/heartcombo/devise) - Rails authentication solution
 - [jwt](https://github.com/jwt/ruby-jwt) - JSON Web Token implementation
-- [json-jwt](https://github.com/nov/json-jwt) - JSON Web Encryption (via `OmniauthOpenidFederation::Jwe`)
-- [openid_connect](https://github.com/nov/openid_connect) - OpenID Connect client
+- [jwe](https://rubygems.org/gems/jwe) - JSON Web Encryption (via `OmniauthOpenidFederation::Jwe`)
+- [oauth2](https://github.com/oauth-xx/oauth2) - OAuth 2.0 client (via `OmniauthOpenidFederation::OidcClient`)
 - [http](https://github.com/httprb/http) - HTTP client
 - [anyway_config](https://github.com/palkan/anyway_config) - Configuration management
 - [action_reporter](https://github.com/basecamp/action_reporter) - Error reporting

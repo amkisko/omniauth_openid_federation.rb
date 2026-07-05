@@ -145,6 +145,9 @@ This will:
 5. Run all integration tests
 6. Clean up (kill servers, remove tmp dirs) on exit
 
+CI runs the same flow on every push to `main` (see `.github/workflows/test.yml`, job `integration`).
+Locally: `make integration-test` or `bundle exec ruby examples/integration_test_flow.rb` (exits non-zero on failure).
+
 ### Manual Start (For Debugging)
 
 If you want to start servers manually for debugging:

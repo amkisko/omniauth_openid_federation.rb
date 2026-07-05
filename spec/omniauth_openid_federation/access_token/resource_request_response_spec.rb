@@ -1,7 +1,7 @@
 require "spec_helper"
 
 # rubocop:disable RSpec/RepeatedExample
-RSpec.describe OpenIDConnect::AccessToken, type: :access_token do
+RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
   describe "#resource_request" do
     it "handles status as integer" do
       # Use a non-JWT body that won't trigger JWT parsing
@@ -79,7 +79,7 @@ RSpec.describe OpenIDConnect::AccessToken, type: :access_token do
       expect(result).to eq({"email" => "user@example.com", "name" => "Test User"})
     end
 
-    it "processes signed JWT response using openid_connect config fallback when JWKS URI is not configured" do
+    it "processes signed JWT response using client config fallback when JWKS URI is not configured" do
       payload = {iss: provider_issuer, sub: "user-123", exp: Time.now.to_i + 3600}
       signed_jwt = encode_rs256(payload)
       response = double(status: 200, body: signed_jwt)
@@ -165,7 +165,7 @@ RSpec.describe OpenIDConnect::AccessToken, type: :access_token do
 
       expect {
         token.resource_request { response }
-      }.to raise_error(OpenIDConnect::HttpError, /Unknown HttpError/)
+      }.to raise_error(OmniauthOpenidFederation::HttpError, /Unknown HttpError/)
     end
 
     it "handles JWT decode errors" do
@@ -355,7 +355,7 @@ RSpec.describe OpenIDConnect::AccessToken, type: :access_token do
 
       expect {
         token.resource_request { response }
-      }.to raise_error(OpenIDConnect::HttpError, /Unknown HttpError/)
+      }.to raise_error(OmniauthOpenidFederation::HttpError, /Unknown HttpError/)
     end
 
     it "handles encrypted response with JSON parse error" do

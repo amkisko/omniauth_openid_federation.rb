@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.email = ["contact@kiskolabs.com"]
 
   spec.summary = "OmniAuth strategy for OpenID Federation providers with signed request objects and ID token encryption."
-  spec.description = "Custom OmniAuth strategy for OpenID Federation providers using openid_connect gem, supporting signed request objects (RFC 9101), ID token encryption/decryption, client assertion (private_key_jwt), and OpenID Federation entity statements. Framework-agnostic and works with Rails, Sinatra, Rack, and other Rack-compatible frameworks."
+  spec.description = "Custom OmniAuth strategy for OpenID Federation providers supporting signed request objects (RFC 9101), ID token encryption/decryption, client assertion (private_key_jwt), and OpenID Federation entity statements. Framework-agnostic and works with Rails, Sinatra, Rack, and other Rack-compatible frameworks."
   spec.homepage = "https://github.com/amkisko/omniauth_openid_federation.rb"
   spec.license = "MIT"
 
@@ -27,11 +27,10 @@ Gem::Specification.new do |spec|
   }
 
   spec.add_runtime_dependency "omniauth-oauth2", "~> 1.8"
-  spec.add_runtime_dependency "openid_connect", "~> 2.5"
+  spec.add_runtime_dependency "oauth2", "~> 2.0"
   spec.add_runtime_dependency "jwt", "~> 3.2"
-  spec.add_runtime_dependency "json-jwt", "~> 1.17"
+  spec.add_runtime_dependency "jwe", "~> 1.1"
   spec.add_runtime_dependency "http", "~> 6.0"
-  spec.add_runtime_dependency "rack", ">= 2.2.23", "< 4"
 
   spec.add_development_dependency "rspec", "~> 3.13"
   spec.add_development_dependency "polyrun", "~> 2"

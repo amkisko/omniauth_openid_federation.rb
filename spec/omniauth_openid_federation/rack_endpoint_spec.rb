@@ -1,5 +1,5 @@
 require "spec_helper"
-require "rack"
+require "omniauth_openid_federation/rack"
 
 RSpec.describe OmniauthOpenidFederation::RackEndpoint do
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }

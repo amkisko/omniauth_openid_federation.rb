@@ -110,7 +110,7 @@ class MockOPServer
   end
 
   def self.load_signing_key(key_data)
-    if key_data.blank?
+    if OmniauthOpenidFederation::StringHelpers.blank?(key_data)
       # Generate a new key for testing
       OpenSSL::PKey::RSA.new(2048)
     elsif key_data.is_a?(String)
@@ -125,7 +125,7 @@ class MockOPServer
   end
 
   def self.load_encryption_key(key_data)
-    return nil if key_data.blank?
+    return nil if OmniauthOpenidFederation::StringHelpers.blank?(key_data)
     load_signing_key(key_data)
   end
 
@@ -477,7 +477,7 @@ class MockOPServer
         redirect_uri: redirect_uri,
         state: state,
         nonce: nonce,
-        created_at: Time.zone.now
+        created_at: OmniauthOpenidFederation::TimeHelpers.now
       }
 
       # Redirect back to RP with authorization code
