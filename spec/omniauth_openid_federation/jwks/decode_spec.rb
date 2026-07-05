@@ -307,7 +307,6 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Decode do
     end
 
     it "returns JWKS when no block is given" do
-      # Test line 44: when block_given? is false, return jwks directly
       result = described_class.run("dummy_jwt", jwks_uri)
 
       # JWKS may have string keys after JSON serialization, so compare structure

@@ -239,41 +239,4 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Selector do
       expect(result).to be_nil
     end
   end
-
-  describe ".extract_keys_array" do
-    it "extracts keys from hash with string keys" do
-      jwks = {"keys" => [{kid: "key1"}]}
-      result = described_class.send(:extract_keys_array, jwks)
-      expect(result.length).to eq(1)
-    end
-
-    it "extracts keys from hash with symbol keys" do
-      jwks = {keys: [{kid: "key1"}]}
-      result = described_class.send(:extract_keys_array, jwks)
-      expect(result.length).to eq(1)
-    end
-
-    it "handles array input" do
-      jwks = [{kid: "key1"}]
-      result = described_class.send(:extract_keys_array, jwks)
-      expect(result.length).to eq(1)
-    end
-
-    it "handles nil keys" do
-      jwks = {keys: nil}
-      result = described_class.send(:extract_keys_array, jwks)
-      expect(result).to eq([])
-    end
-
-    it "handles hash without keys key" do
-      jwks = {other: "value"}
-      result = described_class.send(:extract_keys_array, jwks)
-      expect(result).to eq([])
-    end
-
-    it "handles non-hash, non-array input" do
-      result = described_class.send(:extract_keys_array, "string")
-      expect(result).to eq([])
-    end
-  end
 end

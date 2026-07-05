@@ -185,7 +185,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
         end
       end
 
-      it "fetches directly when cache adapter is not available (line 89)" do
+      it "fetches directly when cache adapter is not available" do
         # This specifically tests the else branch at line 89
         stub_request(:get, jwks_uri)
           .to_return(status: 200, body: jwks_response.to_json, headers: {"Content-Type" => "application/json"})

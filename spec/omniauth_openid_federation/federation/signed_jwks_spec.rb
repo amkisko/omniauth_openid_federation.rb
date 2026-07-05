@@ -94,7 +94,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::SignedJWKS do
         end
       end
 
-      it "fetches directly when cache adapter is not available (line 111)" do
+      it "fetches directly when cache adapter is not available" do
         # This specifically tests the else branch at line 111
         stub_request(:get, signed_jwks_uri)
           .to_return(status: 200, body: signed_jwks_jwt, headers: {"Content-Type" => "application/jwt"})
@@ -602,7 +602,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::SignedJWKS do
       end
     end
 
-    it "handles legacy format with keys at root level (line 186)" do
+    it "handles legacy format with keys at root level" do
       # Test the legacy format where payload is the JWKS directly (keys at root)
       # This tests line 186: jwks_payload = full_payload
       Time.now.to_i

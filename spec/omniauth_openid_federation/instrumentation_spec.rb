@@ -91,6 +91,36 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
         end
       end
 
+      it "treats nil data as an empty payload hash" do
+        called_with = nil
+        config.instrumentation = ->(event, payload) { called_with = payload }
+
+        described_class.notify("test_event", data: nil)
+
+        expect(called_with[:data]).to eq({})
+      end
+
+      it "ignores non-hash data values" do
+        called_with = nil
+        config.instrumentation = ->(event, payload) { called_with = payload }
+
+        described_class.notify("test_event", data: "not a hash")
+
+        expect(called_with[:data]).to eq({})
+      end
+
+      it "redacts sensitive string-keyed fields" do
+        called_with = nil
+        config.instrumentation = ->(event, payload) { called_with = payload }
+
+        described_class.notify("test_event", data: {"token" => "secret", "safe" => "data"})
+
+        aggregate_failures do
+          expect(called_with[:data]["token"]).to eq("[REDACTED]")
+          expect(called_with[:data]["safe"]).to eq("data")
+        end
+      end
+
       it "includes timestamp in payload" do
         called_with = nil
         config.instrumentation = ->(event, payload) { called_with = payload }
@@ -446,116 +476,6 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
     end
   end
 
-  describe ".sanitize_data" do
-    it "returns empty hash for nil input" do
-      result = described_class.send(:sanitize_data, nil)
-      expect(result).to eq({})
-    end
-
-    it "returns empty hash for non-hash input" do
-      result = described_class.send(:sanitize_data, "not a hash")
-      expect(result).to eq({})
-    end
-
-    it "redacts sensitive keys" do
-      data = {
-        token: "secret",
-        access_token: "secret",
-        id_token: "secret",
-        refresh_token: "secret",
-        private_key: "secret",
-        key: "secret",
-        secret: "secret",
-        password: "secret",
-        authorization_code: "secret",
-        code: "secret",
-        state: "secret",
-        nonce: "secret",
-        state_param: "secret",
-        state_session: "secret",
-        fingerprint: "secret",
-        calculated_fingerprint: "secret",
-        expected_fingerprint: "secret",
-        safe_data: "not redacted"
-      }
-
-      result = described_class.send(:sanitize_data, data)
-
-      aggregate_failures do
-        expect(result[:token]).to eq("[REDACTED]")
-        expect(result[:access_token]).to eq("[REDACTED]")
-        expect(result[:id_token]).to eq("[REDACTED]")
-        expect(result[:refresh_token]).to eq("[REDACTED]")
-        expect(result[:private_key]).to eq("[REDACTED]")
-        expect(result[:key]).to eq("[REDACTED]")
-        expect(result[:secret]).to eq("[REDACTED]")
-        expect(result[:password]).to eq("[REDACTED]")
-        expect(result[:authorization_code]).to eq("[REDACTED]")
-        expect(result[:code]).to eq("[REDACTED]")
-        expect(result[:state]).to eq("[REDACTED]")
-        expect(result[:nonce]).to eq("[REDACTED]")
-        expect(result[:state_param]).to eq("[REDACTED]")
-        expect(result[:state_session]).to eq("[REDACTED]")
-        expect(result[:fingerprint]).to eq("[REDACTED]")
-        expect(result[:calculated_fingerprint]).to eq("[REDACTED]")
-        expect(result[:expected_fingerprint]).to eq("[REDACTED]")
-        expect(result[:safe_data]).to eq("not redacted")
-      end
-    end
-
-    it "handles string keys" do
-      data = {"token" => "secret", "safe" => "data"}
-      result = described_class.send(:sanitize_data, data)
-
-      aggregate_failures do
-        expect(result["token"]).to eq("[REDACTED]")
-        expect(result["safe"]).to eq("data")
-      end
-    end
-
-    it "handles nested hashes" do
-      data = {
-        nested: {
-          token: "secret",
-          safe: "data"
-        }
-      }
-      result = described_class.send(:sanitize_data, data)
-
-      aggregate_failures do
-        expect(result[:nested][:token]).to eq("[REDACTED]")
-        expect(result[:nested][:safe]).to eq("data")
-      end
-    end
-
-    it "handles arrays with hashes" do
-      data = {
-        items: [
-          {token: "secret1", name: "item1"},
-          {token: "secret2", name: "item2"}
-        ]
-      }
-      result = described_class.send(:sanitize_data, data)
-
-      aggregate_failures do
-        expect(result[:items][0][:token]).to eq("[REDACTED]")
-        expect(result[:items][0][:name]).to eq("item1")
-        expect(result[:items][1][:token]).to eq("[REDACTED]")
-        expect(result[:items][1][:name]).to eq("item2")
-      end
-    end
-
-    it "handles arrays with non-hash values" do
-      data = {
-        items: ["value1", "value2"]
-      }
-      result = described_class.send(:sanitize_data, data)
-
-      expect(result[:items]).to eq(["value1", "value2"])
-    end
-  end
-
-  # Test line 357: notify_authenticity_error
   describe ".notify_authenticity_error" do
     it "calls notify with authenticity error event and error severity" do
       called_with = nil

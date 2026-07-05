@@ -428,7 +428,6 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
 
     it "handles non-Hash key objects in JWKS" do
       # Create a mock object that responds to to_json but is not a Hash
-      # The normalize_keys method returns non-Hash objects as-is (line 129)
       jwk_object = double("JWKObject")
       allow(jwk_object).to receive(:to_json).and_return('{"kty":"RSA","kid":"test-kid","use":"sig"}')
 
@@ -443,7 +442,6 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementBuilder do
       )
 
       normalized = builder.instance_variable_get(:@jwks)
-      # When key is not a Hash, normalize_keys returns it as-is (line 129)
       aggregate_failures do
         expect(normalized["keys"]).to be_an(Array)
         expect(normalized["keys"].first).to eq(jwk_object)
