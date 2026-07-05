@@ -391,19 +391,23 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
     end
 
     describe "#uid" do
-      let(:id_token_jwt) do
-        header = {alg: "RS256", typ: "JWT", kid: "test-key-id"}
-        payload = id_token_payload
-        JWT.encode(payload, private_key, "RS256", header)
+      before do
+        strategy.options.send_nonce = false
+        mock_session["omniauth.nonce"] = "test-nonce"
+        strategy.instance_variable_set(:@env, {"rack.session" => mock_session})
+        strategy.instance_variable_set(:@access_token, access_token_double)
       end
 
-      before do
-        access_token_double = double(
+      let(:access_token_double) do
+        double(
           id_token: id_token_jwt,
           userinfo!: double(raw_attributes: {sub: "user-123"})
         )
-        strategy.instance_variable_set(:@access_token, access_token_double)
-        allow(strategy).to receive(:raw_info).and_return({"sub" => "user-123"})
+      end
+
+      let(:id_token_jwt) do
+        header = {alg: "RS256", typ: "JWT", kid: "test-key-id"}
+        JWT.encode(id_token_payload, private_key, "RS256", header)
       end
 
       it "extracts uid from raw_info sub claim" do
@@ -412,14 +416,15 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
     end
 
     describe "#info" do
-      let(:id_token_jwt) do
-        header = {alg: "RS256", typ: "JWT", kid: "test-key-id"}
-        payload = id_token_payload
-        JWT.encode(payload, private_key, "RS256", header)
+      before do
+        strategy.options.send_nonce = false
+        mock_session["omniauth.nonce"] = "test-nonce"
+        strategy.instance_variable_set(:@env, {"rack.session" => mock_session})
+        strategy.instance_variable_set(:@access_token, access_token_double)
       end
 
-      before do
-        access_token_double = double(
+      let(:access_token_double) do
+        double(
           id_token: id_token_jwt,
           userinfo!: double(
             raw_attributes: {
@@ -431,14 +436,11 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
             }
           )
         )
-        strategy.instance_variable_set(:@access_token, access_token_double)
-        allow(strategy).to receive(:raw_info).and_return({
-          "email" => "user@example.com",
-          "name" => "Test User",
-          "given_name" => "Test",
-          "family_name" => "User",
-          "preferred_username" => "testuser"
-        })
+      end
+
+      let(:id_token_jwt) do
+        header = {alg: "RS256", typ: "JWT", kid: "test-key-id"}
+        JWT.encode(id_token_payload, private_key, "RS256", header)
       end
 
       it "extracts user info from raw_info" do
@@ -455,22 +457,23 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
     end
 
     describe "#extra" do
-      let(:id_token_jwt) do
-        header = {alg: "RS256", typ: "JWT", kid: "test-key-id"}
-        payload = id_token_payload
-        JWT.encode(payload, private_key, "RS256", header)
+      before do
+        strategy.options.send_nonce = false
+        mock_session["omniauth.nonce"] = "test-nonce"
+        strategy.instance_variable_set(:@env, {"rack.session" => mock_session})
+        strategy.instance_variable_set(:@access_token, access_token_double)
       end
 
-      before do
-        access_token_double = double(
+      let(:access_token_double) do
+        double(
           id_token: id_token_jwt,
           userinfo!: double(raw_attributes: {sub: "user-123", email: "user@example.com"})
         )
-        strategy.instance_variable_set(:@access_token, access_token_double)
-        allow(strategy).to receive(:raw_info).and_return({
-          "sub" => "user-123",
-          "email" => "user@example.com"
-        })
+      end
+
+      let(:id_token_jwt) do
+        header = {alg: "RS256", typ: "JWT", kid: "test-key-id"}
+        JWT.encode(id_token_payload, private_key, "RS256", header)
       end
 
       it "includes raw_info in extra" do
@@ -478,35 +481,9 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
 
         aggregate_failures do
           expect(extra[:raw_info]).to be_a(Hash)
-          expect(extra[:raw_info]["sub"]).to eq("user-123")
-          expect(extra[:raw_info]["email"]).to eq("user@example.com")
+          expect(extra[:raw_info]["sub"] || extra[:raw_info][:sub]).to eq("user-123")
+          expect(extra[:raw_info]["email"] || extra[:raw_info][:email]).to eq("user@example.com")
         end
-      end
-    end
-
-    describe "encrypted ID token handling" do
-      let(:encrypted_id_token) do
-        # Create a mock encrypted token (JWE format - 5 parts)
-        # In real scenario, this would be encrypted with provider's public key
-        "header.encrypted_key.iv.ciphertext.tag"
-      end
-
-      before do
-        access_token_double = double(
-          access_token: access_token_value,
-          id_token: encrypted_id_token
-        )
-        strategy.instance_variable_set(:@access_token, access_token_double)
-      end
-
-      it "detects encrypted ID tokens" do
-        expect(strategy.send(:encrypted_token?, encrypted_id_token)).to be true
-      end
-
-      it "handles decryption of encrypted ID tokens" do
-        # This would require actual JWE decryption with provider's key
-        # For now, we just verify the detection works
-        expect(strategy.send(:encrypted_token?, encrypted_id_token)).to be true
       end
     end
 
@@ -520,19 +497,22 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
       context "when fetch_userinfo is disabled" do
         before do
           strategy.options.fetch_userinfo = false
-          access_token_double = double(
-            id_token: id_token_jwt
-          )
+          strategy.options.send_nonce = false
+          mock_session["omniauth.nonce"] = "test-nonce"
+          strategy.instance_variable_set(:@env, {"rack.session" => mock_session})
           strategy.instance_variable_set(:@access_token, access_token_double)
-          allow(strategy).to receive(:raw_info).and_return(id_token_payload.stringify_keys)
+        end
+
+        let(:access_token_double) do
+          double(id_token: id_token_jwt)
         end
 
         it "uses ID token claims only" do
           raw_info = strategy.raw_info
 
           aggregate_failures do
-            expect(raw_info["sub"]).to eq("user-123")
-            expect(raw_info["email"]).to eq("user@example.com")
+            expect(raw_info["sub"] || raw_info[:sub]).to eq("user-123")
+            expect(raw_info["email"] || raw_info[:email]).to eq("user@example.com")
           end
         end
       end
@@ -540,13 +520,14 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
       context "when fetch_userinfo is enabled (default)" do
         before do
           strategy.options.fetch_userinfo = true
-          # Mock ID token decoding to return the payload
-          id_token_object = double(
-            raw_attributes: id_token_payload.stringify_keys
-          )
-          allow(strategy).to receive(:decode_id_token).with(id_token_jwt).and_return(id_token_object)
+          strategy.options.send_nonce = false
+          mock_session["omniauth.nonce"] = "test-nonce"
+          strategy.instance_variable_set(:@env, {"rack.session" => mock_session})
+          strategy.instance_variable_set(:@access_token, access_token_double)
+        end
 
-          access_token_double = double(
+        let(:access_token_double) do
+          double(
             id_token: id_token_jwt,
             userinfo!: double(
               raw_attributes: {
@@ -555,15 +536,14 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
               }
             )
           )
-          strategy.instance_variable_set(:@access_token, access_token_double)
         end
 
         it "fetches and merges userinfo with ID token" do
           raw_info = strategy.raw_info
 
           aggregate_failures do
-            expect(raw_info["sub"]).to eq("user-123") # From ID token
-            expect(raw_info["email"]).to eq("user@example.com") # From userinfo (takes precedence)
+            expect(raw_info["sub"] || raw_info[:sub]).to eq("user-123")
+            expect(raw_info["email"] || raw_info[:email]).to eq("user@example.com")
           end
         end
       end

@@ -508,7 +508,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "handles authorization error with error_description in callback" do
-      # Test lines 286-301: error_param handling in callback_phase
       state = SecureRandom.hex(16)
       session = build_callback_session(state: state)
 
@@ -544,7 +543,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "handles authorization error without error_description in callback" do
-      # Test lines 286-301: error_param handling without error_description
       state = SecureRandom.hex(16)
       session = build_callback_session(state: state)
 

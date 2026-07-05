@@ -8,7 +8,6 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
 
   describe ".run" do
     context "with entity_statement_path" do
-      # Test line 45: Rails.root.join("config") when Rails is available
       it "uses Rails.root.join when Rails is available" do
         # Use a temporary directory to simulate config/ without polluting the project
         temp_dir = Dir.mktmpdir
@@ -60,8 +59,6 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
           FileUtils.rm_rf(temp_dir) if File.directory?(temp_dir)
         end
       end
-
-      # Test lines 60-62: Entity statement file not found
       it "raises ConfigurationError when entity statement file not found" do
         entity_statement_path = "/nonexistent/path.jwt"
 
@@ -69,8 +66,6 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
           described_class.run(jwks_uri, entity_statement_path: entity_statement_path)
         }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /Entity statement file not found/)
       end
-
-      # Test line 69: Uses signed JWKS when available
       it "uses signed JWKS when entity statement has signed_jwks_uri" do
         entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
         entity_statement = {
@@ -107,10 +102,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
       ensure
         File.delete(entity_statement_path) if File.exist?(entity_statement_path)
       end
-
-      # Test lines 50-51: Absolute path validation branch
       it "validates absolute paths for path traversal only" do
-        # Test line 50-51: when is_absolute is true, validate path traversal but allow outside allowed_dirs
         entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
         entity_statement = {
           iss: "https://provider.example.com",
@@ -128,7 +120,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
         stub_request(:get, jwks_uri)
           .to_return(status: 200, body: jwks.to_json, headers: {"Content-Type" => "application/json"})
 
-        # Absolute path should be accepted (line 50-51 branch)
+        # Absolute path should be accepted
         result = described_class.run(jwks_uri, entity_statement_path: entity_statement_path)
         aggregate_failures do
           expect(result).to be_a(Hash)
@@ -137,8 +129,6 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
       ensure
         File.delete(entity_statement_path) if File.exist?(entity_statement_path)
       end
-
-      # Test lines 76, 78: SecurityError re-raised, general error handled
       it "re-raises SecurityError when loading entity statement" do
         entity_statement_path = "../../../etc/passwd"
 

@@ -32,10 +32,26 @@ RSpec.describe OmniauthOpenidFederation::EndpointResolver do
     end
 
     it "handles entity statement path" do
-      # This would require a real entity statement file, so we just test it doesn't crash
       result = described_class.resolve(entity_statement_path: "/nonexistent/path.jwt", config: {})
 
       expect(result).to be_a(Hash)
+    end
+
+    it "returns nil endpoints when entity statement cannot be parsed" do
+      temp_file = Tempfile.new(["entity_statement", ".jwt"])
+      temp_file.write("invalid jwt")
+      temp_file.rewind
+
+      allow(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Failed to parse entity statement/)
+      result = described_class.resolve(entity_statement_path: temp_file.path, config: {})
+
+      aggregate_failures do
+        expect(result[:authorization_endpoint]).to be_nil
+        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to parse entity statement/)
+      end
+    ensure
+      temp_file.close
+      temp_file.unlink
     end
   end
 
@@ -198,92 +214,6 @@ RSpec.describe OmniauthOpenidFederation::EndpointResolver do
     it "removes trailing slash from issuer" do
       result = described_class.build_endpoint_url("https://provider.example.com/", "/oauth2/authorize")
       expect(result).to eq("https://provider.example.com/oauth2/authorize")
-    end
-  end
-
-  describe "private methods" do
-    describe ".load_entity_statement_metadata" do
-      it "returns nil when file doesn't exist" do
-        result = described_class.send(:load_entity_statement_metadata, "/nonexistent/path.jwt")
-        expect(result).to be_nil
-      end
-
-      it "returns nil when parsing fails" do
-        temp_file = Tempfile.new(["entity_statement", ".jwt"])
-        temp_file.write("invalid jwt")
-        temp_file.rewind
-
-        allow(OmniauthOpenidFederation::Logger).to receive(:warn).with(/Failed to parse entity statement/)
-        result = described_class.send(:load_entity_statement_metadata, temp_file.path)
-        aggregate_failures do
-          expect(result).to be_nil
-          expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to parse entity statement/)
-        end
-
-        temp_file.close
-        temp_file.unlink
-      end
-    end
-
-    describe ".extract_path_from_url" do
-      it "returns nil for blank URL" do
-        result = described_class.send(:extract_path_from_url, nil)
-        expect(result).to be_nil
-      end
-
-      it "returns full URL as-is when already absolute" do
-        result = described_class.send(:extract_path_from_url, "https://example.com/path")
-        expect(result).to eq("https://example.com/path")
-      end
-
-      it "returns full URL as-is when starts with http" do
-        # extract_path_from_url returns full URL as-is when it starts with http:// or https://
-        result = described_class.send(:extract_path_from_url, "https://example.com/oauth2/authorize")
-        expect(result).to eq("https://example.com/oauth2/authorize")
-      end
-
-      it "extracts path from URL with host" do
-        # When URL has a host (parsed by URI), it extracts just the path
-        # Use a proper URL format that URI.parse can handle
-        result = described_class.send(:extract_path_from_url, "//example.com/oauth2/authorize")
-        # URI.parse treats //example.com as having a host
-        expect(result).to eq("/oauth2/authorize")
-      end
-
-      it "handles URL without path when host is present" do
-        # When URL has host but no path, returns nil
-        result = described_class.send(:extract_path_from_url, "//example.com")
-        expect(result).to be_nil
-      end
-
-      it "returns path with leading slash when no host" do
-        result = described_class.send(:extract_path_from_url, "/oauth2/authorize")
-        expect(result).to eq("/oauth2/authorize")
-      end
-
-      it "adds leading slash to path without host" do
-        result = described_class.send(:extract_path_from_url, "oauth2/authorize")
-        expect(result).to eq("/oauth2/authorize")
-      end
-
-      it "handles invalid URI gracefully" do
-        result = described_class.send(:extract_path_from_url, "/valid/path")
-        expect(result).to eq("/valid/path")
-      end
-
-      it "adds leading slash to relative path when URI parse succeeds" do
-        # When URI.parse succeeds but has no host, it adds leading slash
-        result = described_class.send(:extract_path_from_url, "not-a-path")
-        expect(result).to eq("/not-a-path")
-      end
-
-      it "returns nil for invalid URI that doesn't start with slash" do
-        # Create a string that will cause URI::InvalidURIError and doesn't start with /
-        # Use a string with invalid characters that URI.parse can't handle
-        invalid_uri = "\x00invalid"
-        result = described_class.send(:extract_path_from_url, invalid_uri)
-        expect(result).to be_nil
-      end
     end
   end
 end

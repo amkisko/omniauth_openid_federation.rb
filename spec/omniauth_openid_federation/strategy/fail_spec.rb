@@ -38,7 +38,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
   end
 
   describe "fail! method error paths" do
-    # Test lines 206, 207, 210, 214, 221, 224, 234, 243, 252 in strategy.rb
     let(:strategy) do
       described_class.new(
         nil,
@@ -57,7 +56,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "instruments authenticity_error in request_phase" do
-      # Test lines 221-230: authenticity_error case
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation",
         "rack.session" => {}
@@ -65,7 +63,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       strategy.instance_variable_set(:@env, env)
       allow(strategy).to receive_messages(request: Rack::Request.new(env), session: {})
 
-      # Simulate authenticity error
       exception = OmniAuth::AuthenticityError.new("CSRF token mismatch")
       allow(OmniauthOpenidFederation::Instrumentation).to receive(:notify_authenticity_error)
 
@@ -82,7 +79,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "instruments authenticity_error in callback_phase" do
-      # Test lines 221-230: authenticity_error case in callback
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback",
         "rack.session" => {}
@@ -103,7 +99,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "instruments csrf_detected error" do
-      # Test lines 231-239: csrf_detected case
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation",
         "rack.session" => {}
@@ -123,7 +118,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "instruments missing_code error" do
-      # Test lines 240-249: missing_code case
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback",
         "rack.session" => {}
@@ -144,7 +138,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "instruments token_exchange_error" do
-      # Test lines 240-249: token_exchange_error case
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation/callback",
         "rack.session" => {}
@@ -165,7 +158,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "instruments unknown error type" do
-      # Test lines 250-259: else case (unknown error type)
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation",
         "rack.session" => {}
@@ -186,7 +178,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "handles fail! with nil exception" do
-      # Test lines 206-207: exception&.message when exception is nil
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation",
         "rack.session" => {}
@@ -206,7 +197,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "skips instrumentation when already instrumented" do
-      # Test line 202: already_instrumented check
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation",
         "rack.session" => {}
@@ -215,7 +205,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
       strategy.instance_variable_set(:@env, env)
       allow(strategy).to receive_messages(request: Rack::Request.new(env), session: {})
 
-      # Should not call instrumentation
       allow(OmniauthOpenidFederation::Instrumentation).to receive(:notify_authenticity_error)
       allow(OmniauthOpenidFederation::Instrumentation).to receive(:notify_csrf_detected)
       allow(OmniauthOpenidFederation::Instrumentation).to receive(:notify_unexpected_authentication_break)
@@ -229,7 +218,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     it "includes request_info in instrumentation" do
-      # Test lines 212-218: request_info building
       env = Rack::MockRequest.env_for(
         "/auth/openid_federation",
         "REMOTE_ADDR" => "192.168.1.1",

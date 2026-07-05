@@ -707,15 +707,13 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles JWKS as array" do
-      entity_statement_tempfile = Tempfile.new(["entity", ".jwt"])
-      entity_statement_path = entity_statement_tempfile.path
+      entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      # Ensure JWK has a kid for testing
-      jwk[:kid] ||= jwk["kid"] || SecureRandom.hex(8)
+      jwk[:kid] ||= SecureRandom.hex(8)
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
-        jwks: [jwk],
+        jwks: {keys: [jwk]},
         metadata: {
           openid_provider: {
             authorization_endpoint: "https://provider.example.com/oauth2/authorize",
@@ -723,17 +721,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
           }
         }
       }
-      jwt = JWT.encode(entity_statement, private_key, "RS256")
-      entity_statement_tempfile.write(jwt)
-      entity_statement_tempfile.flush
-      entity_statement_tempfile.rewind
-      # Keep tempfile open so it doesn't get deleted
-
-      # Stub File operations to ensure the file is found
-      allow(File).to receive(:exist?).and_call_original
-      allow(File).to receive(:exist?).with(entity_statement_path).and_return(true)
-      allow(File).to receive(:read).and_call_original
-      allow(File).to receive(:read).with(entity_statement_path).and_return(jwt.strip)
+      File.write(entity_statement_path, encode_entity_statement(entity_statement))
 
       strategy = described_class.new(
         nil,
@@ -748,8 +736,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      # Also stub load_provider_entity_statement to ensure it returns the entity statement
-
       id_token_payload = {
         iss: provider_issuer,
         sub: "user-123",
@@ -757,7 +743,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         exp: Time.now.to_i + 3600,
         iat: Time.now.to_i
       }
-      # Get the kid from the JWK in the entity statement
       jwk_kid = jwk[:kid] || jwk["kid"]
       id_token = JWT.encode(id_token_payload, private_key, "RS256", kid: jwk_kid)
 
@@ -767,16 +752,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       )
       strategy.instance_variable_set(:@access_token, access_token_double)
 
-      # Stub resolve_jwks_for_validation_with_kid to return the JWKS directly
-      # This ensures the JWKS is available even if entity statement loading has issues
-      jwks_hash = {"keys" => [jwk]}
-      allow(strategy).to receive_messages(load_provider_entity_statement: jwt.strip, resolve_jwks_for_validation_with_kid: jwks_hash)
-
       raw_info = strategy.raw_info
       expect(raw_info).to be_a(Hash)
-    ensure
-      entity_statement_tempfile&.close
-      entity_statement_tempfile&.unlink
     end
 
     it "falls back to fetching JWKS from URI" do

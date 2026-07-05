@@ -351,7 +351,6 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
   end
 
   describe ".extract_encryption_key edge cases" do
-    # Test line 121: Returns empty array when no keys available
     it "returns empty array when no keys available and no private_key" do
       result = described_class.extract_encryption_key
       expect(result).to be_nil
@@ -362,8 +361,6 @@ RSpec.describe OmniauthOpenidFederation::KeyExtractor do
       expect(result).to be_nil
     end
   end
-
-  # Test line 143: ArgumentError for invalid private key type
   # Test via public API (extract_signing_key calls normalize_private_key internally)
   it "raises ArgumentError for invalid private key type" do
     expect {

@@ -122,14 +122,27 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
     end
 
     context "with SSL verification" do
+      def capture_http_options_during_get
+        captured_hash = nil
+        original_new = HTTP::Options.method(:new)
+        allow(HTTP::Options).to receive(:new) do |options|
+          captured_hash = options if options.is_a?(Hash)
+          original_new.call(options)
+        end
+
+        stub_request(:get, uri).to_return(status: 200, body: "success")
+        described_class.get(uri)
+        captured_hash
+      end
+
       it "uses SSL verification by default" do
         OmniauthOpenidFederation.configure do |config|
           config.verify_ssl = true
           config.http_options = nil
         end
 
-        options = described_class.send(:build_http_options_hash)
-        expect(options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_PEER)
+        captured_options = capture_http_options_during_get
+        expect(captured_options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_PEER)
       end
 
       it "skips SSL verification when configured" do
@@ -138,8 +151,8 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           config.http_options = nil
         end
 
-        options = described_class.send(:build_http_options_hash)
-        expect(options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_NONE)
+        captured_options = capture_http_options_during_get
+        expect(captured_options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_NONE)
       end
 
       it "does not override explicit http_options ssl verify_mode" do
@@ -148,8 +161,8 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           config.http_options = {ssl: {verify_mode: OpenSSL::SSL::VERIFY_NONE}}
         end
 
-        options = described_class.send(:build_http_options_hash)
-        expect(options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_NONE)
+        captured_options = capture_http_options_during_get
+        expect(captured_options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_NONE)
       end
     end
 

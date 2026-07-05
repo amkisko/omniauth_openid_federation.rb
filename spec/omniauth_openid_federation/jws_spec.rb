@@ -444,8 +444,6 @@ RSpec.describe OmniauthOpenidFederation::Jws do
         expect(OmniauthOpenidFederation::Logger).to have_received(:error).with(/No encryption key found in provider JWKS/).at_least(:once)
       end
     end
-
-    # Test lines 186-188: SecurityError when signed JWT is blank
     # Note: This is defensive code that's difficult to test naturally without mocking internal methods.
     # The build_jwt method always calls JWT.encode which should never return an empty string.
     # This test verifies the defensive check exists, but we cannot naturally trigger it
@@ -470,13 +468,10 @@ RSpec.describe OmniauthOpenidFederation::Jws do
       end
     end
 
-    # Test line 271: signing_key_kid handles string key "kid"
     it "extracts kid from signing key with string key" do
-      # Test when metadata has signing key with "kid" as string key instead of symbol
-      # Use a proper JWK with valid RSA key data
       jwk = JWT::JWK.new(private_key.public_key)
       jwk_export = jwk.export
-      jwk_export["kid"] = "test-kid-string" # Use string key
+      jwk_export["kid"] = "test-kid-string"
       jwk_export["use"] = "sig"
 
       temp_file = Tempfile.new(["entity_statement", ".jwt"])
@@ -496,18 +491,16 @@ RSpec.describe OmniauthOpenidFederation::Jws do
         client_id: client_id,
         redirect_uri: redirect_uri,
         private_key: private_key,
-        entity_statement_path: temp_file.path,
-        key_source: :federation
+        entity_statement_path: temp_file.path
       )
 
-      # Test signing_key_kid method - should extract kid from string key
-      kid = jws.send(:signing_key_kid)
-      expect(kid).to eq("test-kid-string")
+      signed = jws.sign
+      jwt_header = JSON.parse(Base64.urlsafe_decode64(signed.split(".").first))
+      expect(jwt_header["kid"]).to eq("test-kid-string")
 
       temp_file.unlink
     end
 
-    # Test lines 305-306: Error handling in load_metadata_from_entity_statement
     it "handles errors when loading metadata from entity statement" do
       entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
       File.write(entity_statement_path, "invalid jwt content")
@@ -520,9 +513,9 @@ RSpec.describe OmniauthOpenidFederation::Jws do
       )
 
       allow(OmniauthOpenidFederation::Logger).to receive(:warn)
-      result = jws.send(:load_metadata_from_entity_statement)
+      signed = jws.sign
       aggregate_failures do
-        expect(result).to be_nil
+        expect(signed.split(".").length).to eq(3)
         expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to load metadata from entity statement/)
       end
     end

@@ -36,9 +36,9 @@ RSpec.describe OmniauthOpenidFederation::Federation::MetadataPolicyMerger do
   end
 
   describe "#initialize" do
-    it "initializes with trust chain" do
+    it "accepts an empty trust chain" do
       merger = described_class.new(trust_chain: [])
-      expect(merger.instance_variable_get(:@trust_chain)).to eq([])
+      expect(merger.merge_policies).to eq({})
     end
   end
 

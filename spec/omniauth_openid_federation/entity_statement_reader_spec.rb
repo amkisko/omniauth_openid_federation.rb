@@ -339,8 +339,6 @@ RSpec.describe OmniauthOpenidFederation::EntityStatementReader do
       expect(result).to be true
     end
   end
-
-  # Test lines 123-124: File access error handling (ENOENT race condition)
   describe "file access error handling" do
     it "handles ENOENT error (file deleted after File.exist? check)" do
       # Create a temp file, then delete it to simulate race condition

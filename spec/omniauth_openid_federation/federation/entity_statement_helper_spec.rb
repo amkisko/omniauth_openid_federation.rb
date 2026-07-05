@@ -68,7 +68,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatementHelper do
         end
       end
 
-      it "uses Rails.root.join when Rails is available (line 22)" do
+      it "uses Rails.root.join when Rails is available" do
         # Create file in temp Rails config directory using absolute path
         temp_config_dir = File.join(temp_rails_root, "config")
         FileUtils.mkdir_p(temp_config_dir)

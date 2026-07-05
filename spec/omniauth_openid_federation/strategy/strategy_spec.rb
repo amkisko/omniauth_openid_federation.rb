@@ -218,38 +218,61 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
     end
 
     context "when provider requires request object encryption" do
-      let(:provider_public_key) { OpenSSL::PKey::RSA.new(2048).public_key }
-      let(:provider_jwk) do
-        {
-          "kty" => "RSA",
-          "kid" => "provider-enc-key",
-          "use" => "enc",
-          "n" => Base64.urlsafe_encode64(provider_public_key.n.to_s(2)),
-          "e" => Base64.urlsafe_encode64(provider_public_key.e.to_s(2))
-        }
+      let(:provider_encryption_key) { OpenSSL::PKey::RSA.new(2048) }
+      let(:entity_statement_path) { entity_statement_path_under_config }
+      let(:encryption_strategy) do
+        described_class.new(
+          app,
+          entity_statement_path: entity_statement_path,
+          issuer: "https://provider.example.com",
+          audience: "https://provider.example.com",
+          client_options: {
+            identifier: "test-client",
+            redirect_uri: "https://example.com/callback",
+            host: "provider.example.com",
+            authorization_endpoint: "/oauth2/authorize",
+            token_endpoint: "/oauth2/token",
+            userinfo_endpoint: "/oauth2/userinfo",
+            jwks_uri: "/.well-known/jwks.json",
+            private_key: private_key
+          }
+        )
       end
 
       before do
-        # Mock provider metadata that requires encryption
-        allow(strategy).to receive(:load_provider_metadata_for_encryption).and_return({
-          "request_object_encryption_alg" => "RSA-OAEP",
-          "request_object_encryption_enc" => "A128CBC-HS256",
-          "jwks" => {
-            "keys" => [provider_jwk]
+        signing_jwk = JWT::JWK.new(public_key).export
+        signing_jwk["use"] = "sig"
+        encryption_jwk = JWT::JWK.new(provider_encryption_key.public_key).export
+        encryption_jwk["use"] = "enc"
+        encryption_jwk["kid"] = "provider-enc-key"
+
+        entity_statement = {
+          iss: "https://provider.example.com",
+          sub: "https://provider.example.com",
+          jwks: {keys: [signing_jwk, encryption_jwk]},
+          metadata: {
+            openid_provider: {
+              issuer: "https://provider.example.com",
+              authorization_endpoint: "https://provider.example.com/oauth2/authorize",
+              token_endpoint: "https://provider.example.com/oauth2/token",
+              jwks_uri: "https://provider.example.com/.well-known/jwks.json",
+              request_object_encryption_alg: "RSA-OAEP",
+              request_object_encryption_enc: "A128CBC-HS256"
+            }
           }
-        })
+        }
+        File.write(entity_statement_path, encode_entity_statement(entity_statement))
+        allow(encryption_strategy).to receive_messages(request: double(params: {}), session: {})
       end
 
       it "encrypts the signed request object when provider requires it" do
-        uri_string = strategy.authorize_uri
+        uri_string = encryption_strategy.authorize_uri
         uri = URI.parse(uri_string)
         query_params = URI.decode_www_form(uri.query || "").to_h
 
         request_param = query_params["request"]
 
-        # When encrypted, JWE has 5 parts
         parts = request_param.split(".")
-        # Verify it's encrypted (JWE header)
         header = JSON.parse(Base64.urlsafe_decode64(parts[0]))
         aggregate_failures do
           expect(parts.length).to eq(5), "Encrypted request object should have 5 parts (JWE format)"

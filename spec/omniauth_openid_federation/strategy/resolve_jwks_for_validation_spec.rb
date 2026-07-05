@@ -14,8 +14,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     stub_relative_path_endpoints(host: "example.com")
   end
 
-  describe "remaining strategy.rb coverage" do
-    it "covers client initialization with all endpoint building paths" do
+  describe "JWKS resolution and ID token validation" do
+    it "builds client endpoints from relative paths and port" do
       strategy = described_class.new(
         nil,
         send_nonce: false,
@@ -37,7 +37,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(client).to be_a(OpenIDConnect::Client)
     end
 
-    it "covers client initialization with string keys in merged_options" do
+    it "builds client when merged options use string keys" do
       entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
@@ -67,7 +67,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(client).to be_a(OpenIDConnect::Client)
     end
 
-    it "covers resolve_endpoints_from_metadata with all endpoint types" do
+    it "resolves all OpenID provider endpoints from entity statement metadata" do
       entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
@@ -100,7 +100,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(client).to be_a(OpenIDConnect::Client)
     end
 
-    it "covers resolve_endpoints_from_metadata with issuer resolution" do
+    it "resolves relative endpoints using issuer from entity statement metadata" do
       entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
@@ -132,7 +132,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(client).to be_a(OpenIDConnect::Client)
     end
 
-    it "covers resolve_audience with all fallback paths" do
+    it "builds authorize URI when audience is resolved from client host" do
       strategy = described_class.new(
         nil,
         send_nonce: false,
@@ -151,7 +151,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(uri).to be_present
     end
 
-    it "covers resolve_jwks_for_validation with signed JWKS path" do
+    it "validates ID token using signed JWKS from entity statement" do
       entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -205,7 +205,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(raw_info).to be_a(Hash)
     end
 
-    it "covers resolve_jwks_for_validation error handling" do
+    it "raises ConfigurationError when JWKS is unavailable for ID token validation" do
       entity_statement_path = entity_statement_path_under_config
       entity_statement = {
         iss: provider_issuer,
@@ -238,7 +238,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
     end
 
-    it "covers decode_id_token with symbol kid in header" do
+    it "decodes ID token when JWKS entry uses symbol keys" do
       entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -288,7 +288,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(raw_info).to be_a(Hash)
     end
 
-    it "covers decode_id_token with JWKS format validation" do
+    it "raises ConfigurationError when entity statement JWKS format is invalid" do
       entity_statement_path = entity_statement_path_under_config
       OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -323,7 +323,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
     end
 
-    it "covers decode_id_token JWT decode error handling with wrong signature" do
+    it "raises SignatureError when ID token signature does not match JWKS key" do
       entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -361,7 +361,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::SignatureError)
     end
 
-    it "covers decode_id_token error handling with available kids logging" do
+    it "raises SignatureError when ID token kid does not match available JWKS keys" do
       entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -399,7 +399,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::SignatureError)
     end
 
-    it "covers decode_id_token general error handling" do
+    it "raises SignatureError when JWT decode raises an unexpected error" do
       entity_statement_path = entity_statement_path_under_config
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
@@ -427,8 +427,6 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         }
       )
 
-      # Mock decode to raise general error
-      allow(strategy).to receive(:resolve_jwks_for_validation).and_return({keys: [jwk]})
       allow(JWT).to receive(:decode).and_raise(StandardError.new("General error"))
 
       id_token = JWT.encode({iss: provider_issuer, sub: "user-123", aud: client_id, exp: Time.now.to_i + 3600, iat: Time.now.to_i}, private_key, "RS256")
@@ -438,7 +436,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::SignatureError)
     end
 
-    it "covers fetch_jwks with array format" do
+    it "fetches JWKS in standard keys array format for ID token validation" do
       jwks_uri = "#{provider_issuer}/.well-known/jwks.json"
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       # Return in standard format {keys: [...]} for proper parsing
@@ -476,7 +474,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(result).to be_a(Hash)
     end
 
-    it "covers fetch_jwks with fallback format" do
+    it "fetches JWKS when endpoint returns a single key object" do
       jwks_uri = "#{provider_issuer}/.well-known/jwks.json"
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       # Return as single key object to test fallback format handling
