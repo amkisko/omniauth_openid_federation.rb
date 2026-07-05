@@ -39,13 +39,13 @@ jobs:
       matrix:
         include:
           - gemfile: rails6
-            ruby_version: "3.1"
+            ruby_version: "3.3"
           - gemfile: rails72
-            ruby_version: "3.2"
+            ruby_version: "3.4"
           - gemfile: rails8
             ruby_version: "3.4"
-          - gemfile: ruby
-            ruby_version: "3.4"
+          - gemfile: rails8_ruby4
+            ruby_version: "4.0"
 
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/gemfiles/${{ matrix.gemfile }}.gemfile
@@ -61,6 +61,7 @@ jobs:
 
     - name: Run tests (parallel OS processes via polyrun)
       run: |
+        bundle exec polyrun build-paths -c polyrun.yml
         bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml
 
   integration:
@@ -101,6 +102,7 @@ jobs:
         run: bundle exec appraisal install
       - name: Run parallel RSpec with Polyrun coverage
         run: |
+          bundle exec polyrun build-paths -c polyrun.yml
           bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml -- bundle exec rspec --format documentation
       - uses: actions/upload-artifact@v7
         with:

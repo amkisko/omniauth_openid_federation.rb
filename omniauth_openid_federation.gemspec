@@ -15,7 +15,7 @@ Gem::Specification.new do |spec|
     Dir["lib/**/*", "app/**/*", "config/**/*", "sig/**/*", "README.md", "LICENSE*", "CHANGELOG.md", "SECURITY.md", "examples/**/*"].select { |f| File.file?(f) }
   end
   spec.require_paths = ["lib"]
-  spec.required_ruby_version = ">= 3.0"
+  spec.required_ruby_version = ">= 3.2"
   spec.required_rubygems_version = ">= 3.3.0"
 
   spec.metadata = {
@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency "http", "~> 6.0"
 
   spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "polyrun", "~> 2"
+  spec.add_development_dependency "polyrun", ">= 2.1.2"
   spec.add_development_dependency "webmock", "~> 3.26", ">= 3.26.2"
   spec.add_development_dependency "rake", "~> 13.3"
   spec.add_development_dependency "standard", "~> 1.52"
@@ -46,6 +46,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rubocop-thread_safety", "~> 0.7"
   spec.add_development_dependency "appraisal", "~> 2.5"
   spec.add_development_dependency "memory_profiler", "~> 1.1"
+  spec.add_development_dependency "mutex_m"
   spec.add_development_dependency "rbs", "~> 3.9"
   spec.add_development_dependency "webrick", "~> 1.9"
   # Rodauth + rodauth-omniauth for integration testing with OpenID Federation strategy

@@ -116,9 +116,12 @@ module OmniauthOpenidFederation
           return config.cache_adapter
         end
 
-        # Try Rails cache
-        if defined?(Rails) && Rails.respond_to?(:cache) && Rails.cache
-          return RailsCacheAdapter.new(Rails.cache)
+        # Try Rails cache when a booted app exposes a real store
+        if defined?(Rails) && Rails.respond_to?(:cache)
+          cache = Rails.cache
+          if cache && cache.respond_to?(:read)
+            return RailsCacheAdapter.new(cache)
+          end
         end
 
         # Try ActiveSupport::Cache if available (without Rails)

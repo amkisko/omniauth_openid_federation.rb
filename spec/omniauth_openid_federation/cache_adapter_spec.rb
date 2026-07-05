@@ -276,6 +276,7 @@ RSpec.describe OmniauthOpenidFederation::CacheAdapter do
           allow(cache).to receive(:write)
           allow(cache).to receive(:delete)
           allow(cache).to receive(:clear)
+          allow(cache).to receive(:respond_to?).with(:read).and_return(true)
           allow(cache).to receive(:respond_to?).with(:cache).and_return(false)
         end
       end

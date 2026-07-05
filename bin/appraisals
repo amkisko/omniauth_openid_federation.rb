@@ -22,6 +22,8 @@ AVAILABLE_APPRAISALS = File.read(APPRAISALS_FILE, encoding: "UTF-8")
   .flatten
   .freeze
 
+SUPPORTED_RAILS_APPRAISALS = %w[rails6 rails72 rails8 rails8_ruby4].freeze
+
 # Default suite: polyrun parallel-rspec (run-shards + merge-coverage) under each appraisal gemfile.
 DEFAULT_POLYRUN_CMD = ["--", "bundle", "exec", "polyrun", "parallel-rspec", "--workers", "5", "-c", "polyrun.yml"].freeze
 
@@ -37,6 +39,7 @@ def usage
       bin/appraisals rails6 rake spec         # Run rake spec for Rails 6
 
     Available appraisals: #{AVAILABLE_APPRAISALS.join(', ')}
+    Supported Rails appraisals (default): #{SUPPORTED_RAILS_APPRAISALS.join(', ')}
   USAGE
   exit 1
 end
@@ -49,7 +52,7 @@ def parse_args
     usage
   end
 
-  return [AVAILABLE_APPRAISALS, DEFAULT_POLYRUN_CMD.dup] if args.empty?
+  return [SUPPORTED_RAILS_APPRAISALS, DEFAULT_POLYRUN_CMD.dup] if args.empty?
 
   appraisals = []
   command = []
