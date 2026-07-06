@@ -172,6 +172,31 @@ RSpec.describe OmniauthOpenidFederation::Federation::EntityStatement do
       )
     end
 
+    it "succeeds after transient HTTP 503 from provider" do
+      call_count = 0
+      stub_request(:get, url).to_return do |_request|
+        call_count += 1
+        if call_count < 2
+          {status: 503, body: "unavailable"}
+        else
+          {status: 200, body: entity_statement_content}
+        end
+      end
+
+      OmniauthOpenidFederation.configure do |config|
+        config.max_retries = 1
+        config.retry_delay = 0.1
+      end
+
+      instance = described_class.fetch!(url)
+
+      aggregate_failures do
+        expect(instance).to be_a(described_class)
+        expect(instance.entity_statement).to eq(entity_statement_content)
+        expect(call_count).to eq(2)
+      end
+    end
+
     it "raises error on fingerprint mismatch" do
       stub_request(:get, url)
         .to_return(status: 200, body: entity_statement_content)

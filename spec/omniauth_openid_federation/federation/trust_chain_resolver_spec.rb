@@ -213,6 +213,76 @@ RSpec.describe OmniauthOpenidFederation::Federation::TrustChainResolver do
         end
       end
 
+      it "resolves trust chain when subordinate fetch recovers after transient HTTP 503" do
+        leaf_config = create_entity_statement(
+          iss: leaf_entity_id,
+          sub: leaf_entity_id,
+          authority_hints: [trust_anchor_id],
+          metadata: {
+            openid_relying_party: {
+              redirect_uris: ["https://rp.example.com/callback"]
+            }
+          }
+        )
+
+        ta_config = create_entity_statement(
+          iss: trust_anchor_id,
+          sub: trust_anchor_id,
+          metadata: {
+            openid_provider: {
+              issuer: trust_anchor_id
+            }
+          }
+        )
+
+        subordinate = create_entity_statement(
+          iss: trust_anchor_id,
+          sub: leaf_entity_id
+        )
+
+        allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:fetch!)
+          .with("#{leaf_entity_id}/.well-known/openid-federation", timeout: 10)
+          .and_return(leaf_config)
+
+        allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:fetch!)
+          .with("#{trust_anchor_id}/.well-known/openid-federation", timeout: 10)
+          .and_return(ta_config)
+
+        fetch_url = "#{trust_anchor_id}/.well-known/openid-federation/fetch?iss=#{CGI.escape(trust_anchor_id)}&sub=#{CGI.escape(leaf_entity_id)}"
+        call_count = 0
+        stub_request(:get, fetch_url).to_return do |_request|
+          call_count += 1
+          if call_count < 2
+            {status: 503, body: "unavailable"}
+          else
+            {status: 200, body: subordinate.entity_statement}
+          end
+        end
+
+        OmniauthOpenidFederation.configure do |config|
+          config.max_retries = 1
+          config.retry_delay = 0.1
+        end
+
+        allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:new)
+          .with(subordinate.entity_statement)
+          .and_return(subordinate)
+
+        mock_validator_for_statement(subordinate, ta_config)
+
+        resolver = described_class.new(
+          leaf_entity_id: leaf_entity_id,
+          trust_anchors: trust_anchors
+        )
+
+        chain = resolver.resolve!
+
+        aggregate_failures do
+          expect(chain.length).to eq(2)
+          expect(call_count).to eq(2)
+        end
+      end
+
       it "rejects subordinate statement with invalid signature" do
         leaf_config = create_entity_statement(
           iss: leaf_entity_id,

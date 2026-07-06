@@ -43,51 +43,31 @@ module OmniauthOpenidFederation
         cache_ttl ||= config.cache_ttl
         rotate_on_errors = config.rotate_on_errors
 
-        # Use cache adapter if available, otherwise fetch directly
         if CacheAdapter.available?
-          if force_refresh
-            # Force refresh: clear cache and fetch fresh
-            CacheAdapter.delete(cache_key)
-          end
+          CacheAdapter.delete(cache_key) if force_refresh
 
-          if cache_ttl.nil?
-            # Manual rotation: cache forever, only rotate on errors if rotate_on_errors is enabled
-            begin
-              CacheAdapter.fetch(cache_key, expires_in: nil) do
-                fetch_jwks(jwks_uri, entity_statement_keys)
-              end
-            rescue KeyRelatedError => e
-              # Rotate on key-related errors if configured
-              if rotate_on_errors
-                OmniauthOpenidFederation::Logger.warn("[Jwks::Fetch] Key-related error detected, rotating cache: #{e.message}")
-                CacheAdapter.delete(cache_key)
-                fetch_jwks(jwks_uri, entity_statement_keys)
-              else
-                raise
-              end
-            end
-          else
-            # TTL-based cache: expires after cache_ttl seconds
-            # Rotate on errors if configured
-            begin
-              CacheAdapter.fetch(cache_key, expires_in: cache_ttl) do
-                fetch_jwks(jwks_uri, entity_statement_keys)
-              end
-            rescue KeyRelatedError => e
-              # Rotate on key-related errors if configured
-              if rotate_on_errors
-                OmniauthOpenidFederation::Logger.warn("[Jwks::Fetch] Key-related error detected, rotating cache: #{e.message}")
-                CacheAdapter.delete(cache_key)
-                fetch_jwks(jwks_uri, entity_statement_keys)
-              else
-                raise
-              end
-            end
+          fetch_from_cache(cache_key, cache_ttl: cache_ttl, rotate_on_errors: rotate_on_errors) do
+            fetch_jwks(jwks_uri, entity_statement_keys)
           end
         else
           fetch_jwks(jwks_uri, entity_statement_keys)
         end
       end
+
+      def self.fetch_from_cache(cache_key, cache_ttl:, rotate_on_errors:)
+        begin
+          CacheAdapter.fetch(cache_key, expires_in: cache_ttl) { yield }
+        rescue KeyRelatedError => error
+          if rotate_on_errors
+            OmniauthOpenidFederation::Logger.warn("[Jwks::Fetch] Key-related error detected, rotating cache: #{error.message}")
+            CacheAdapter.delete(cache_key)
+            yield
+          else
+            raise
+          end
+        end
+      end
+      private_class_method :fetch_from_cache
 
       def self.fetch_jwks(jwks_uri, entity_statement_keys)
         # Rate limiting to prevent DoS

@@ -103,6 +103,42 @@ RSpec.describe OmniauthOpenidFederation::FederationEndpoint do
         )
       }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /At least one key source/)
     end
+
+    it "requires private key for generate_entity_statement" do
+      described_class.configure do |config|
+        config.issuer = provider_issuer
+        config.private_key = nil
+        config.jwks = jwks_from_key
+        config.metadata = client_metadata
+      end
+
+      expect { described_class.generate_entity_statement }
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /Private key is required/)
+    end
+
+    it "requires JWKS for generate_entity_statement" do
+      described_class.configure do |config|
+        config.issuer = provider_issuer
+        config.private_key = private_key
+        config.jwks = nil
+        config.metadata = client_metadata
+      end
+
+      expect { described_class.generate_entity_statement }
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS is required/)
+    end
+
+    it "requires metadata for generate_entity_statement" do
+      described_class.configure do |config|
+        config.issuer = provider_issuer
+        config.private_key = private_key
+        config.jwks = jwks_from_key
+        config.metadata = nil
+      end
+
+      expect { described_class.generate_entity_statement }
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /Metadata is required/)
+    end
   end
 
   describe "auto_configure" do
@@ -231,6 +267,38 @@ RSpec.describe OmniauthOpenidFederation::FederationEndpoint do
       expect(described_class.configuration.entity_type).to eq(:openid_relying_party)
     end
 
+    it "detects openid_provider entity type from metadata" do
+      described_class.auto_configure(
+        issuer: provider_issuer,
+        private_key: private_key,
+        metadata: provider_metadata
+      )
+
+      expect(described_class.configuration.entity_type).to eq(:openid_provider)
+    end
+
+    it "preserves custom jwks_uri when ensuring provider endpoints" do
+      custom_jwks_uri = "https://keys.example.com/jwks.json"
+
+      described_class.auto_configure(
+        issuer: provider_issuer,
+        private_key: private_key,
+        metadata: {
+          openid_provider: {
+            issuer: provider_issuer,
+            jwks_uri: custom_jwks_uri
+          }
+        }
+      )
+
+      section = described_class.configuration.metadata[:openid_provider]
+      aggregate_failures do
+        expect(section[:jwks_uri]).to eq(custom_jwks_uri)
+        expect(section[:signed_jwks_uri]).to eq("#{provider_issuer}/.well-known/signed-jwks.json")
+        expect(section[:federation_fetch_endpoint]).to eq("#{provider_issuer}/.well-known/openid-federation/fetch")
+      end
+    end
+
     it "raises when auto_provision_keys cannot obtain signing material" do
       allow(described_class).to receive(:provision_jwks).and_return(nil)
 
@@ -355,6 +423,34 @@ RSpec.describe OmniauthOpenidFederation::FederationEndpoint do
       described_class.configuration.current_jwks_proc = -> { custom_jwks }
 
       expect(described_class.current_jwks).to eq(custom_jwks)
+    end
+
+    it "uses current_jwks when set directly" do
+      custom_jwks = {keys: [{kty: "RSA", kid: "live"}]}
+      described_class.configuration.current_jwks = custom_jwks
+
+      expect(described_class.current_jwks).to eq(custom_jwks)
+    end
+
+    it "uses signed_jwks_payload when configured" do
+      custom_payload = {keys: [{kty: "RSA", kid: "signed-kid", n: "abc", e: "AQAB"}]}
+      described_class.configuration.signed_jwks_payload = custom_payload
+
+      signed_jwks = described_class.generate_signed_jwks
+      payload = JSON.parse(Base64.urlsafe_decode64(signed_jwks.split(".")[1]))
+
+      expect(payload["jwks"]).to eq(custom_payload.deep_stringify_keys)
+    end
+
+    it "uses signed_jwks_payload_proc when configured" do
+      custom_payload = {keys: [{kty: "RSA", kid: "proc-kid", n: "abc", e: "AQAB"}]}
+      described_class.configuration.signed_jwks_payload = nil
+      described_class.configuration.signed_jwks_payload_proc = -> { custom_payload }
+
+      signed_jwks = described_class.generate_signed_jwks
+      payload = JSON.parse(Base64.urlsafe_decode64(signed_jwks.split(".")[1]))
+
+      expect(payload["jwks"]).to eq(custom_payload.deep_stringify_keys)
     end
   end
 
@@ -617,6 +713,32 @@ RSpec.describe OmniauthOpenidFederation::FederationEndpoint do
       described_class.configuration.subordinate_statements_proc = ->(_subject) { "header.payload.sig" }
 
       expect(described_class.get_subordinate_statement(client_issuer)).to eq("header.payload.sig")
+    end
+
+    it "returns nil when subordinate entity is not configured" do
+      expect(described_class.get_subordinate_statement("https://unknown.example.com")).to be_nil
+    end
+
+    it "includes metadata_policy and constraints in generated subordinate statement" do
+      metadata_policy = {"openid_relying_party" => {"redirect_uris" => {"subset_of" => ["https://example.com/callback"]}}}
+      constraints = {"n_max" => 2}
+
+      described_class.configuration.subordinate_statements = {
+        client_issuer => {
+          metadata: client_metadata,
+          metadata_policy: metadata_policy,
+          constraints: constraints
+        }
+      }
+
+      jwt = described_class.get_subordinate_statement(client_issuer)
+      payload = JSON.parse(Base64.urlsafe_decode64(jwt.split(".")[1]))
+
+      aggregate_failures do
+        expect(payload["metadata_policy"]).to eq(metadata_policy)
+        expect(payload["constraints"]).to eq(constraints)
+        expect(payload["sub"]).to eq(client_issuer)
+      end
     end
 
     it "rejects subordinate generation for relying party entity type" do

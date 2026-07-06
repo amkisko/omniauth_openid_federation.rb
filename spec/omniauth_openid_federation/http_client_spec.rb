@@ -54,7 +54,7 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
         end
 
         expect { described_class.get(uri) }
-          .to raise_error(OmniauthOpenidFederation::NetworkError, /Failed to GET.*after 1 retries/)
+          .to raise_error(OmniauthOpenidFederation::NetworkError, /Failed to GET.*after 2 attempts/)
       end
 
       it "handles Timeout::Error" do
@@ -119,6 +119,45 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           expect(elapsed).to be > 0.1
         end
       end
+
+      it "retries GET on transient HTTP 503" do
+        call_count = 0
+        stub_request(:get, uri).to_return do |_request|
+          call_count += 1
+          if call_count < 3
+            {status: 503, body: "unavailable"}
+          else
+            {status: 200, body: "success"}
+          end
+        end
+
+        OmniauthOpenidFederation.configure do |config|
+          config.max_retries = 2
+          config.retry_delay = 0.1
+        end
+
+        response = described_class.get(uri)
+        aggregate_failures do
+          expect(response.status).to eq(200)
+          expect(call_count).to eq(3)
+        end
+      end
+
+      it "returns the HTTP response when GET status retries are exhausted" do
+        stub_request(:get, uri)
+          .to_return(status: 503, body: "unavailable")
+
+        OmniauthOpenidFederation.configure do |config|
+          config.max_retries = 1
+          config.retry_delay = 0.1
+        end
+
+        response = described_class.get(uri)
+        aggregate_failures do
+          expect(response.status.code).to eq(503)
+          expect(response.body.to_s).to eq("unavailable")
+        end
+      end
     end
 
     context "with SSL verification" do
@@ -164,6 +203,42 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
         captured_options = capture_http_options_during_get
         expect(captured_options.dig(:ssl, :verify_mode)).to eq(OpenSSL::SSL::VERIFY_NONE)
       end
+
+      it "sets ca_file from SSL_CERT_FILE when verify_ssl is enabled" do
+        cert_file = Tempfile.new(["cert", ".pem"])
+        cert_file.write("cert content")
+        cert_file.close
+
+        original_ssl_cert_file = ENV["SSL_CERT_FILE"]
+        ENV["SSL_CERT_FILE"] = cert_file.path
+
+        OmniauthOpenidFederation.configure do |config|
+          config.verify_ssl = true
+          config.http_options = nil
+        end
+
+        captured_options = capture_http_options_during_get
+        expect(captured_options.dig(:ssl, :ca_file)).to eq(cert_file.path)
+      ensure
+        if original_ssl_cert_file
+          ENV["SSL_CERT_FILE"] = original_ssl_cert_file
+        else
+          ENV.delete("SSL_CERT_FILE")
+        end
+        cert_file.unlink
+      end
+
+      it "does not override explicit http_options ca_file" do
+        custom_ca = "/custom/ca.pem"
+
+        OmniauthOpenidFederation.configure do |config|
+          config.verify_ssl = true
+          config.http_options = {ssl: {ca_file: custom_ca}}
+        end
+
+        captured_options = capture_http_options_during_get
+        expect(captured_options.dig(:ssl, :ca_file)).to eq(custom_ca)
+      end
     end
 
     context "with custom options" do
@@ -172,7 +247,7 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           .to_raise(HTTP::Error.new("Network error"))
 
         expect { described_class.get(uri, max_retries: 1, retry_delay: 0.1) }
-          .to raise_error(OmniauthOpenidFederation::NetworkError, /after 1 retries/)
+          .to raise_error(OmniauthOpenidFederation::NetworkError, /after 2 attempts/)
       end
 
       it "uses custom timeout" do
@@ -271,6 +346,46 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
 
       described_class.post(uri, connect_timeout: 3, read_timeout: 7, max_retries: 0)
       expect(captured_timeout).to eq({connect: 3, read: 7})
+    end
+
+    it "does not retry POST on network errors by default" do
+      stub_request(:post, uri)
+        .to_raise(HTTP::Error.new("Network error"))
+
+      expect { described_class.post(uri) }
+        .to raise_error(OmniauthOpenidFederation::NetworkError, /after 1 attempts/)
+    end
+
+    it "retries POST when max_retries is set explicitly" do
+      call_count = 0
+      stub_request(:post, uri).to_return do |_request|
+        call_count += 1
+        if call_count < 2
+          raise HTTP::Error.new("Network error")
+        else
+          {status: 200, body: "ok"}
+        end
+      end
+
+      response = described_class.post(uri, max_retries: 1, retry_delay: 0.1)
+      aggregate_failures do
+        expect(response.status).to eq(200)
+        expect(call_count).to eq(2)
+      end
+    end
+
+    it "does not retry POST on HTTP 503" do
+      call_count = 0
+      stub_request(:post, uri).to_return do |_request|
+        call_count += 1
+        {status: 503, body: "unavailable"}
+      end
+
+      response = described_class.post(uri)
+      aggregate_failures do
+        expect(response.status.code).to eq(503)
+        expect(call_count).to eq(1)
+      end
     end
   end
 end

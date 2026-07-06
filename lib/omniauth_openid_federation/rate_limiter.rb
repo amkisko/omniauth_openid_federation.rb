@@ -12,6 +12,9 @@ module OmniauthOpenidFederation
 
     # Check if request should be throttled
     #
+    # Best-effort only: read-modify-write on the cache adapter is not atomic, so parallel
+    # workers can briefly exceed the limit. Treat this as a DoS soft guard, not a hard quota.
+    #
     # @param key [String] Unique identifier for the rate limit (e.g., jwks_uri)
     # @param max_requests [Integer] Maximum requests allowed in window (default: 10)
     # @param window [Integer] Time window in seconds (default: 60)
