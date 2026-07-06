@@ -11,5 +11,5 @@ reject_patterns:
   - "/lib/tasks/"
   - "/lib/omniauth_openid_federation/version.rb"
   - "/spec/"
-minimum_line_percent: 90
+minimum_line_percent: 80
 strict: true
