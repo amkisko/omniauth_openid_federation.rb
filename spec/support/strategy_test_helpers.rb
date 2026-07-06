@@ -28,7 +28,7 @@ module StrategyTestHelpers
       jwks: {keys: [jwk]},
       metadata: {openid_provider: provider_openid_metadata}
     }.merge(overrides) do |_key, left, right|
-      left.is_a?(Hash) && right.is_a?(Hash) ? left.merge(right) : right
+      (left.is_a?(Hash) && right.is_a?(Hash)) ? left.merge(right) : right
     end
   end
 
@@ -80,7 +80,7 @@ module StrategyTestHelpers
         }
       }
     }.merge(overrides) do |_key, left, right|
-      left.is_a?(Hash) && right.is_a?(Hash) ? left.merge(right) : right
+      (left.is_a?(Hash) && right.is_a?(Hash)) ? left.merge(right) : right
     end
     write_entity_statement_jwt(path, payload, encoder: :entity)
     {path: path, jwk: jwk}

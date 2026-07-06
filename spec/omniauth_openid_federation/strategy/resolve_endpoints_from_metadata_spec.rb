@@ -1,7 +1,6 @@
 require "spec_helper"
 
 RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
-
   include_context "strategy federation endpoint stub"
 
   describe "resolve_endpoints_from_metadata - all branches" do
@@ -25,7 +24,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = build_strategy(
         nil,
-        entity_statement_path: entity_statement_path,
+        entity_statement_path: entity_statement_path
       )
 
       # Behavior: Client should resolve endpoints from entity statement
@@ -42,7 +41,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = build_strategy(
         nil,
-        entity_statement_path: entity_statement_path,
+        entity_statement_path: entity_statement_path
       )
 
       # Behavior: Client should resolve endpoints using entity_issuer fallback
@@ -90,7 +89,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = build_strategy(
         nil,
-        entity_statement_path: entity_statement_path,
+        entity_statement_path: entity_statement_path
       )
 
       # Behavior: Should use entity issuer (iss claim) when metadata doesn't have issuer
@@ -149,7 +148,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = build_strategy(
         nil,
-        entity_statement_path: entity_statement_path,
+        entity_statement_path: entity_statement_path
       )
 
       uri = strategy.authorize_uri
@@ -198,7 +197,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = build_strategy(
         nil,
-        entity_statement_path: entity_statement_path,
+        entity_statement_path: entity_statement_path
       )
 
       uri = strategy.authorize_uri
@@ -270,7 +269,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
     it "handles no audience found scenario" do
       strategy = build_strategy(
-        nil,
+        nil
       )
 
       expect { strategy.authorize_uri }.to raise_error(OmniauthOpenidFederation::ConfigurationError)
@@ -550,7 +549,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         nil,
         entity_statement_path: provider_entity_statement_path,
         client_entity_statement_path: entity_statement_path,
-        client_registration_type: :automatic,
+        client_registration_type: :automatic
       )
 
       # Behavior: Should load client entity statement from relative path
@@ -581,7 +580,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         nil,
         entity_statement_path: provider_entity_statement_path,
         client_entity_statement_path: entity_statement_path,
-        client_registration_type: :automatic,
+        client_registration_type: :automatic
       )
 
       # Behavior: Should load client entity statement from relative path using File.expand_path
@@ -742,7 +741,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = build_strategy(
         nil,
-        entity_statement_path: entity_statement_path,
+        entity_statement_path: entity_statement_path
       )
 
       # Behavior: When provider requires encryption, request object should be encrypted
