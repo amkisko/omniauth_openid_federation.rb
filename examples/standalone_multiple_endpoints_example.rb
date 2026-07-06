@@ -103,7 +103,7 @@ end
 # Configure multiple OpenID Federation strategies
 use OmniAuth::Builder do
   # Strategy 1: Portal entrance point
-  provider :openid_federation_portal,
+  provider(:openid_federation_portal,
     strategy_class: OmniAuth::Strategies::OpenIDFederation,
     name: :openid_federation_portal,
     scope: [:openid, :profile, :email],
@@ -139,10 +139,10 @@ use OmniAuth::Builder do
       identifier: CLIENT_ID,
       redirect_uri: "#{REDIRECT_URI_BASE}/auth/openid_federation_portal/callback",
       private_key: load_private_key
-    }
+    })
 
   # Strategy 2: Admin entrance point
-  provider :openid_federation_admin,
+  provider(:openid_federation_admin,
     strategy_class: OmniAuth::Strategies::OpenIDFederation,
     name: :openid_federation_admin,
     scope: [:openid, :profile, :email],
@@ -171,10 +171,10 @@ use OmniAuth::Builder do
       identifier: CLIENT_ID,
       redirect_uri: "#{REDIRECT_URI_BASE}/auth/openid_federation_admin/callback",
       private_key: load_private_key
-    }
+    })
 
   # Strategy 3: Mobile app entrance point
-  provider :openid_federation_mobile,
+  provider(:openid_federation_mobile,
     strategy_class: OmniAuth::Strategies::OpenIDFederation,
     name: :openid_federation_mobile,
     scope: [:openid, :profile, :email],
@@ -200,7 +200,7 @@ use OmniAuth::Builder do
       identifier: CLIENT_ID,
       redirect_uri: "#{REDIRECT_URI_BASE}/auth/openid_federation_mobile/callback",
       private_key: load_private_key
-    }
+    })
 end
 
 # Helper to generate CSRF token

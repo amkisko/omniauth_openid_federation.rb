@@ -19,6 +19,9 @@ inherit_gem:
   standard-custom: config/base.yml
   standard-rails: config/base.yml
 
+inherit_from:
+  - .rubocop_todo.yml
+
 AllCops:
   SuggestExtensions: false
   TargetRubyVersion: 3.4
@@ -65,6 +68,13 @@ RSpec/DescribeClass:
   Exclude:
     - spec/omniauth_openid_federation/errors_spec.rb
     - spec/omniauth_openid_federation/security_fuzzing_spec.rb
+    - spec/omniauth_openid_federation/rodauth_integration_spec.rb
+    - spec/omniauth_openid_federation/telia_tunnistus_pp_contract_spec.rb
+
+RSpec/ContextWording:
+  Exclude:
+    - spec/support/**/*
+    - spec/omniauth_openid_federation/tasks/**/*
 
 RSpec/VerifiedDoubles:
   Enabled: false

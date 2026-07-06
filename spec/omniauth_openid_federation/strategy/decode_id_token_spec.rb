@@ -1,14 +1,13 @@
 require "spec_helper"
 
 RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
-
   describe "decode_id_token edge cases" do
     it "handles missing JWKS" do
       strategy = build_decode_strategy(
         nil,
         issuer: nil,
         entity_statement_path: nil,
-        entity_statement_url: nil,
+        entity_statement_url: nil
       )
 
       id_token = encode_rs256({iss: provider_issuer, sub: "user-123"})
