@@ -1,8 +1,6 @@
 # CHANGELOG
 
-## Unreleased
-
-## 2.0.0 (2026-07-05)
+## 2.0.0 (2026-07-06)
 
 - BREAKING: Replace `openid_connect` and `json-jwt` with `OmniauthOpenidFederation::OidcClient`, `AccessToken`, and `IdToken` built on `oauth2` and `jwt`
 - BREAKING: Drop explicit `rack` runtime dependency; load Rack federation endpoints via `require "omniauth_openid_federation/rack"`
@@ -28,6 +26,10 @@
 - Fix OAuth callback failures in `callback_phase` to return the Rack response from `fail!` instead of `nil`; avoids `Rack::ETag` `NoMethodError` and HTTP 500 on auth failure
 - Fix flaky `test_local_endpoint` spec when `SSL_CERT_FILE` is set in the environment
 - Replace internal `decode_id_token` stubs in strategy specs with JWKS-backed setup
+- Add `HttpClient.post` with form data, headers, and connect/read timeouts
+- Retry GET requests on HTTP 429, 502, and 503; POST requests default to no retry
+- Auto-configure SSL CA file when peer verification is enabled
+- Route rake task HTTP through `HttpClient` instead of ad hoc `Net::HTTP`
 
 ## 1.3.2 (2025-12-09)
 
