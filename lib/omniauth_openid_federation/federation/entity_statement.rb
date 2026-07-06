@@ -1,4 +1,3 @@
-require "net/http"
 require "digest"
 require "jwt"
 require "base64"
@@ -94,9 +93,6 @@ module OmniauthOpenidFederation
       # @raise [FetchError] If fetching fails
       # @raise [ValidationError] If validation fails
       def self.fetch!(url, fingerprint: nil, previous_statement: nil, timeout: 10)
-        # Use HttpClient for retry logic and configurable SSL verification
-        # Note: HttpClient uses HTTP gem, but entity statements might need Net::HTTP
-        # For now, we'll use a simple HTTP.get approach with HttpClient's retry logic
         begin
           # Convert URL to URI for HttpClient
           response = HttpClient.get(url, timeout: timeout)
