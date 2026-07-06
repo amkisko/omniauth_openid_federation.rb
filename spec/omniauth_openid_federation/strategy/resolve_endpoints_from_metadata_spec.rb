@@ -419,6 +419,76 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         expect(client.jwks_uri.to_s).to include("/.well-known/jwks.json")
       end
     end
+
+    it "resolves endpoints through TrustChainResolver HTTP fetches when issuer is an entity ID" do
+      trust_anchor_id = "https://ta.example.com"
+      leaf_entity_id = provider_issuer
+      jwk_export = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
+
+      leaf_payload = {
+        iss: leaf_entity_id,
+        sub: leaf_entity_id,
+        iat: Time.now.to_i,
+        exp: Time.now.to_i + 3600,
+        authority_hints: [trust_anchor_id],
+        jwks: {keys: [jwk_export]},
+        metadata: {openid_provider: provider_openid_metadata}
+      }
+      leaf_header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
+      leaf_jwt = JWT.encode(leaf_payload, private_key, "RS256", leaf_header)
+
+      ta_payload = {
+        iss: trust_anchor_id,
+        sub: trust_anchor_id,
+        iat: Time.now.to_i,
+        exp: Time.now.to_i + 3600,
+        jwks: {keys: [jwk_export]},
+        metadata: {openid_provider: {issuer: trust_anchor_id}}
+      }
+      ta_header = {alg: "RS256", typ: "entity-statement+jwt", kid: jwk_export[:kid]}
+      ta_jwt = JWT.encode(ta_payload, private_key, "RS256", ta_header)
+
+      subordinate_payload = {
+        iss: trust_anchor_id,
+        sub: leaf_entity_id,
+        iat: Time.now.to_i,
+        exp: Time.now.to_i + 3600,
+        jwks: {keys: [jwk_export]}
+      }
+      subordinate_jwt = JWT.encode(subordinate_payload, private_key, "RS256", ta_header)
+
+      [leaf_jwt, ta_jwt, subordinate_jwt].each do |jwt_string|
+        validator_instance = instance_double(OmniauthOpenidFederation::Federation::EntityStatementValidator)
+        allow(validator_instance).to receive(:validate!).and_return({header: ta_header, claims: {}})
+        allow(OmniauthOpenidFederation::Federation::EntityStatementValidator).to receive(:new)
+          .with(hash_including(jwt_string: jwt_string))
+          .and_return(validator_instance)
+      end
+
+      stub_request(:get, "#{leaf_entity_id}/.well-known/openid-federation")
+        .to_return(status: 200, body: leaf_jwt)
+      stub_request(:get, "#{trust_anchor_id}/.well-known/openid-federation")
+        .to_return(status: 200, body: ta_jwt)
+
+      fetch_url = "#{trust_anchor_id}/.well-known/openid-federation/fetch?iss=#{CGI.escape(trust_anchor_id)}&sub=#{CGI.escape(leaf_entity_id)}"
+      stub_request(:get, fetch_url)
+        .to_return(status: 200, body: subordinate_jwt)
+
+      strategy = build_strategy(
+        nil,
+        enable_trust_chain_resolution: true,
+        issuer: leaf_entity_id,
+        trust_anchors: [{entity_id: trust_anchor_id, jwks: {keys: [jwk_export]}}],
+        client_options: decode_client_options
+      )
+
+      client = strategy.client
+      aggregate_failures do
+        expect(client.authorization_endpoint.to_s).to include("/oauth2/authorize")
+        expect(client.token_endpoint.to_s).to include("/oauth2/token")
+        expect(client.jwks_uri.to_s).to include("/.well-known/jwks.json")
+      end
+    end
   end
 
   describe "load_client_entity_statement - all branches" do

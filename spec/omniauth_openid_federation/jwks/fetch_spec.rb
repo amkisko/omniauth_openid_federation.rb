@@ -67,6 +67,30 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
         expect { described_class.run(jwks_uri) }.to raise_error(OmniauthOpenidFederation::FetchError, /Failed to fetch JWKS/)
       end
 
+      it "succeeds after transient HTTP 503 from provider" do
+        call_count = 0
+        stub_request(:get, jwks_uri).to_return do |_request|
+          call_count += 1
+          if call_count < 2
+            {status: 503, body: "unavailable"}
+          else
+            {status: 200, body: jwks_response.to_json, headers: {"Content-Type" => "application/json"}}
+          end
+        end
+
+        OmniauthOpenidFederation.configure do |config|
+          config.max_retries = 1
+          config.retry_delay = 0.1
+        end
+
+        result = described_class.run(jwks_uri)
+
+        aggregate_failures do
+          expect(result["keys"]).to be_present
+          expect(call_count).to eq(2)
+        end
+      end
+
       it "raises KeyRelatedError on 401 status" do
         stub_request(:get, jwks_uri)
           .to_return(status: 401)
