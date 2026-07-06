@@ -2,7 +2,6 @@
 # Contains all business logic that can be tested independently
 require "json"
 require "fileutils"
-require "net/http"
 require "uri"
 require "openssl"
 require_relative "utils"
@@ -275,39 +274,19 @@ module OmniauthOpenidFederation
             results[name] = {status: :success, keys: key_count}
 
           else
-            # Test other endpoints with simple HTTP GET
-            # Note: Rake tasks are developer tools, no security validation needed
             begin
-              uri = URI.parse(url)
-            rescue URI::InvalidURIError => e
-              results[name] = {status: :error, message: "Invalid URL: #{e.message}"}
+              URI.parse(url)
+            rescue URI::InvalidURIError => error
+              results[name] = {status: :error, message: "Invalid URL: #{error.message}"}
               next
             end
-            http = Net::HTTP.new(uri.host, uri.port)
-            http.use_ssl = (uri.scheme == "https")
-            if uri.scheme == "https"
-              http.verify_mode = OpenSSL::SSL::VERIFY_PEER
 
-              # Set ca_file directly - this is the simplest and most reliable approach
-              # Try SSL_CERT_FILE first, then default cert file
-              ca_file = if ENV["SSL_CERT_FILE"] && File.file?(ENV["SSL_CERT_FILE"])
-                ENV["SSL_CERT_FILE"]
-              elsif File.exist?(OpenSSL::X509::DEFAULT_CERT_FILE)
-                OpenSSL::X509::DEFAULT_CERT_FILE
-              end
+            response = HttpClient.get(url, max_retries: 0)
 
-              http.ca_file = ca_file if ca_file
-            end
-
-            request_path = uri.path
-            request_path += "?#{uri.query}" if uri.query
-            request = Net::HTTP::Get.new(request_path)
-            response = http.request(request)
-
-            results[name] = if response.code.to_i < 400
-              {status: :success, code: response.code}
+            results[name] = if response.status.code < 400
+              {status: :success, code: response.status.code.to_s}
             else
-              {status: :warning, code: response.code, body: response.body}
+              {status: :warning, code: response.status.code.to_s, body: response.body.to_s}
             end
           end
         rescue FetchError, Federation::SignedJWKS::FetchError => e
@@ -464,8 +443,6 @@ module OmniauthOpenidFederation
       require "cgi"
       require "json"
       require "base64"
-      require "http"
-      require "openssl"
 
       results = {
         steps_completed: [],
@@ -477,12 +454,6 @@ module OmniauthOpenidFederation
         instructions: []
       }
 
-      # HTTP client helper for custom requests
-      build_http_client = lambda do |connect_timeout: 10, read_timeout: 10|
-        HTTP.timeout(connect: connect_timeout, read: read_timeout)
-      end
-
-      # Step 1: Fetch login page for CSRF token and cookies
       results[:steps_completed] << "fetch_csrf_token"
 
       html_body = nil
@@ -491,8 +462,12 @@ module OmniauthOpenidFederation
       cookies = []
 
       begin
-        http_client = build_http_client.call(connect_timeout: 10, read_timeout: 10)
-        login_response = http_client.get(login_page_url)
+        login_response = HttpClient.get(
+          login_page_url,
+          connect_timeout: 10,
+          read_timeout: 10,
+          max_retries: 0
+        )
 
         unless login_response.status.success?
           raise "Failed to fetch login page: #{login_response.status.code} #{login_response.status.reason}"
@@ -594,8 +569,12 @@ module OmniauthOpenidFederation
             common_paths.each do |path|
               test_url = URI.join(base_url, path).to_s
               begin
-                http_client = build_http_client.call(connect_timeout: 5, read_timeout: 5)
-                test_response = http_client.get(test_url)
+                test_response = HttpClient.get(
+                  test_url,
+                  connect_timeout: 5,
+                  read_timeout: 5,
+                  max_retries: 0
+                )
                 if test_response.status.code >= 300 && test_response.status.code < 400
                   auth_endpoint = test_url
                   break
@@ -630,10 +609,14 @@ module OmniauthOpenidFederation
         # Include acr_values if provided (must be configured in request_object_params to be included in JWT)
         form_data[:acr_values] = provider_acr if StringHelpers.present?(provider_acr)
 
-        http_client = build_http_client.call(connect_timeout: 10, read_timeout: 10)
-        auth_response = http_client
-          .headers(headers)
-          .post(auth_endpoint, form: form_data)
+        auth_response = HttpClient.post(
+          auth_endpoint,
+          connect_timeout: 10,
+          read_timeout: 10,
+          max_retries: 0,
+          headers: headers,
+          form: form_data
+        )
 
         authorization_url = nil
 

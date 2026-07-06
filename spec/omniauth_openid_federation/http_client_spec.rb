@@ -54,7 +54,7 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
         end
 
         expect { described_class.get(uri) }
-          .to raise_error(OmniauthOpenidFederation::NetworkError, /Failed to fetch.*after 1 retries/)
+          .to raise_error(OmniauthOpenidFederation::NetworkError, /Failed to GET.*after 1 retries/)
       end
 
       it "handles Timeout::Error" do
@@ -231,6 +231,46 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
           expect(options_proc).to have_received(:call)
         end
       end
+    end
+  end
+
+  describe ".post" do
+    it "returns HTTP response for form post" do
+      stub_request(:post, uri)
+        .with(body: {"acr_values" => "test"})
+        .to_return(status: 302, headers: {"Location" => "https://provider.example.com"})
+
+      response = described_class.post(uri, form: {acr_values: "test"}, max_retries: 0)
+      aggregate_failures do
+        expect(response.status.code).to eq(302)
+        expect(response.headers["Location"]).to eq("https://provider.example.com")
+      end
+    end
+
+    it "sends request headers" do
+      stub_request(:post, uri)
+        .with(headers: {"X-CSRF-Token" => "token"})
+        .to_return(status: 200, body: "ok")
+
+      response = described_class.post(uri, headers: {"X-CSRF-Token" => "token"}, max_retries: 0)
+      expect(response.status).to eq(200)
+    end
+
+    it "uses separate connect and read timeouts" do
+      captured_timeout = nil
+      original_new = HTTP::Options.method(:new)
+      allow(HTTP::Options).to receive(:new) do |options|
+        original_new.call(options)
+      end
+      allow_any_instance_of(HTTP::Client).to receive(:timeout) do |client, timeout_config|
+        captured_timeout = timeout_config
+        client
+      end
+
+      stub_request(:post, uri).to_return(status: 200, body: "ok")
+
+      described_class.post(uri, connect_timeout: 3, read_timeout: 7, max_retries: 0)
+      expect(captured_timeout).to eq({connect: 3, read: 7})
     end
   end
 end

@@ -96,7 +96,7 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       end
     end
 
-    it "handles HTTPS endpoints with SSL configuration" do
+    it "handles HTTPS endpoints" do
       entity_statement = double("EntityStatement")
       metadata = {
         issuer: "https://localhost:3000",
@@ -109,102 +109,12 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:fetch!).and_return(entity_statement)
       allow(entity_statement).to receive(:parse).and_return(metadata)
 
-      # Mock Net::HTTP
-      http = double("HTTP")
-      allow(Net::HTTP).to receive(:new).and_return(http)
-      allow(http).to receive(:use_ssl=)
-      allow(http).to receive(:verify_mode=)
-      allow(http).to receive(:ca_file=)
-      response = double("Response", code: "200")
-      allow(http).to receive(:request).and_return(response)
+      WebMock.stub_request(:get, "https://localhost:3000/authorize")
+        .to_return(status: 200, body: "")
 
       result = described_class.test_local_endpoint(base_url: "https://localhost:3000")
 
-      aggregate_failures do
-        expect(http).to have_received(:use_ssl=).with(true)
-        expect(http).to have_received(:verify_mode=).with(OpenSSL::SSL::VERIFY_PEER)
-      end
-    end
-
-    it "handles HTTPS with SSL_CERT_FILE environment variable" do
-      entity_statement = double("EntityStatement")
-      metadata = {
-        issuer: "https://localhost:3000",
-        metadata: {
-          openid_provider: {
-            authorization_endpoint: "https://localhost:3000/authorize"
-          }
-        }
-      }
-      allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:fetch!).and_return(entity_statement)
-      allow(entity_statement).to receive(:parse).and_return(metadata)
-
-      cert_file = Tempfile.new(["cert", ".pem"])
-      cert_file.write("cert content")
-      cert_file.close
-
-      begin
-        ENV["SSL_CERT_FILE"] = cert_file.path
-
-        http = double("HTTP")
-        allow(Net::HTTP).to receive(:new).and_return(http)
-        allow(http).to receive(:use_ssl=)
-        allow(http).to receive(:verify_mode=)
-        allow(http).to receive(:ca_file=)
-        response = double("Response", code: "200")
-        allow(http).to receive(:request).and_return(response)
-
-        result = described_class.test_local_endpoint(base_url: "https://localhost:3000")
-
-        expect(http).to have_received(:ca_file=).with(cert_file.path)
-      ensure
-        ENV.delete("SSL_CERT_FILE")
-        cert_file.unlink
-      end
-    end
-
-    it "handles HTTPS with DEFAULT_CERT_FILE (lines 295-296)" do
-      original_ssl_cert_file = ENV["SSL_CERT_FILE"]
-      ENV.delete("SSL_CERT_FILE")
-
-      entity_statement = double("EntityStatement")
-      metadata = {
-        issuer: "https://localhost:3000",
-        metadata: {
-          openid_provider: {
-            authorization_endpoint: "https://localhost:3000/authorize"
-          }
-        }
-      }
-      allow(OmniauthOpenidFederation::Federation::EntityStatement).to receive(:fetch!).and_return(entity_statement)
-      allow(entity_statement).to receive(:parse).and_return(metadata)
-
-      # Mock OpenSSL::X509::DEFAULT_CERT_FILE - use the actual constant value
-      default_cert_file = begin
-        OpenSSL::X509::DEFAULT_CERT_FILE
-      rescue
-        "/etc/ssl/certs/ca-certificates.crt"
-      end
-      allow(File).to receive(:exist?).and_call_original
-      allow(File).to receive(:exist?).with(default_cert_file).and_return(true)
-
-      http = double("HTTP")
-      allow(Net::HTTP).to receive(:new).and_return(http)
-      allow(http).to receive(:use_ssl=)
-      allow(http).to receive(:verify_mode=)
-      allow(http).to receive(:ca_file=)
-      response = double("Response", code: "200")
-      allow(http).to receive(:request).and_return(response)
-
-      result = described_class.test_local_endpoint(base_url: "https://localhost:3000")
-
-      expect(http).to have_received(:ca_file=).with(default_cert_file)
-    ensure
-      if original_ssl_cert_file
-        ENV["SSL_CERT_FILE"] = original_ssl_cert_file
-      else
-        ENV.delete("SSL_CERT_FILE")
-      end
+      expect(result[:results]["Authorization Endpoint"][:status]).to eq(:success)
     end
   end
 end

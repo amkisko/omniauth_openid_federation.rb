@@ -31,14 +31,8 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       allow(OmniauthOpenidFederation::Jwks::Fetch).to receive(:run).and_return({"keys" => [{"kid" => "key1"}]})
       allow(OmniauthOpenidFederation::Federation::SignedJWKS).to receive(:fetch!).and_return({"keys" => [{"kid" => "key2"}]})
 
-      # Mock HTTP requests for other endpoints
-      URI("http://localhost:3000/authorize")
-      http = double("HTTP")
-      response = double("Response", code: "200")
-      allow(Net::HTTP).to receive(:new).and_return(http)
-      allow(http).to receive(:use_ssl=)
-      allow(http).to receive(:verify_mode=)
-      allow(http).to receive(:request).and_return(response)
+      WebMock.stub_request(:get, "http://localhost:3000/authorize").to_return(status: 200, body: "")
+      WebMock.stub_request(:get, "http://localhost:3000/token").to_return(status: 200, body: "")
 
       result = described_class.test_local_endpoint(base_url: base_url)
 
@@ -55,12 +49,8 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
         allow(OmniauthOpenidFederation::Jwks::Fetch).to receive(:run).and_return({"keys" => []})
         allow(OmniauthOpenidFederation::Federation::SignedJWKS).to receive(:fetch!).and_return({"keys" => []})
 
-        http = double("HTTP")
-        response = double("Response", code: "200")
-        allow(Net::HTTP).to receive(:new).and_return(http)
-        allow(http).to receive(:use_ssl=)
-        allow(http).to receive(:verify_mode=)
-        allow(http).to receive(:request).and_return(response)
+        WebMock.stub_request(:get, "http://localhost:3000/authorize").to_return(status: 200, body: "")
+        WebMock.stub_request(:get, "http://localhost:3000/token").to_return(status: 200, body: "")
       end
 
       it "reports unknown when entity statement has no keys" do
@@ -291,7 +281,6 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
         WebMock.stub_request(:get, "http://localhost:3000/.well-known/signed-jwks.json")
           .to_return(status: 200, body: "", headers: {"Content-Type" => "application/jwt"})
         # Stub the authorization endpoint
-        # The code uses Net::HTTP which WebMock should intercept
         WebMock.stub_request(:get, "http://localhost:3000/authorize")
           .to_return(status: 404, body: "Not Found", headers: {"Content-Type" => "text/html"})
 

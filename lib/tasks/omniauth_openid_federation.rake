@@ -457,8 +457,7 @@ namespace :openid_federation do
       begin
         well_known_url = "#{base_url}/.well-known/openid-federation"
         puts "📥 Attempting to fetch entity statement from: #{well_known_url}"
-        require "http"
-        response = HTTP.timeout(connect: 5, read: 5).get(well_known_url)
+        response = OmniauthOpenidFederation::HttpClient.get(well_known_url, timeout: 5, max_retries: 0)
         if response.status.success?
           entity_statement_path = "/tmp/entity_statement_#{Time.now.to_i}.json"
           File.write(entity_statement_path, response.body.to_s)

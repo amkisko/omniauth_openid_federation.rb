@@ -71,7 +71,8 @@ module OmniauthOpenidFederation
   end
 
   class HttpClient
-    def self.get: (String uri, ?timeout: Integer, ?max_retries: Integer, ?retry_delay: Integer) -> untyped
+    def self.get: (String uri, ?Hash[Symbol, untyped] options) -> untyped
+    def self.post: (String uri, ?Hash[Symbol, untyped] options) -> untyped
   end
 
   class Logger
