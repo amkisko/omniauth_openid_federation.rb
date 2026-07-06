@@ -1,4 +1,3 @@
-require "http"
 require "jwt"
 require "openssl"
 require_relative "../logger"

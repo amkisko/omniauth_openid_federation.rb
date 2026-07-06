@@ -1,4 +1,3 @@
-require "http"
 require "jwt"
 require "base64"
 require "openssl"

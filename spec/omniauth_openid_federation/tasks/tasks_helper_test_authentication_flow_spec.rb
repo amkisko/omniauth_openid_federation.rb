@@ -129,33 +129,9 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       html_body = "<html><head><meta name='csrf-token' content='#{csrf_token}'></head><body><form action='/users/auth/openid_federation'></form></body></html>"
       location_header = "https://provider.example.com/authorize?request=..."
 
-      http_client = double("HttpClient")
-      login_response = double(
-        "Response",
-        status: double(success?: true),
-        headers: {},
-        body: double(to_s: html_body)
-      )
-
-      # Mock test endpoint responses
-      test_response = double("Response", status: double(code: 404))
-
-      # Mock authorization response with 3xx redirect
-      auth_response = double(
-        "Response",
-        status: double(code: 302),
-        headers: {"Location" => location_header},
-        body: double(to_s: "")
-      )
-
-      # Stub build_http_client to return a chainable mock
-      allow(described_class).to receive(:build_http_client).and_return(http_client)
-      allow(http_client).to receive(:get).and_return(login_response, test_response)
-      allow(http_client).to receive_messages(headers: http_client, post: auth_response)
-
-      # Stub WebMock to prevent real HTTP requests
       WebMock.stub_request(:get, login_page_url).to_return(status: 200, body: html_body)
-      WebMock.stub_request(:post, /.*/).to_return(status: 302, headers: {"Location" => location_header})
+      WebMock.stub_request(:post, "#{base_url}/users/auth/openid_federation")
+        .to_return(status: 302, headers: {"Location" => location_header})
 
       result = described_class.test_authentication_flow(
         login_page_url: login_page_url,
@@ -170,31 +146,9 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       html_body = "<html><head><meta name='csrf-token' content='#{csrf_token}'></head><body><form action='/users/auth/openid_federation'></form></body></html>"
       authorization_url = "https://provider.example.com/authorize?request=..."
 
-      http_client = double("HttpClient")
-      login_response = double(
-        "Response",
-        status: double(success?: true),
-        headers: {},
-        body: double(to_s: html_body)
-      )
-
-      test_response = double("Response", status: double(code: 404))
-
-      # Mock authorization response with 200 and Location header
-      auth_response = double(
-        "Response",
-        status: double(code: 200),
-        headers: {"Location" => authorization_url},
-        body: double(to_s: "")
-      )
-
-      allow(described_class).to receive(:build_http_client).and_return(http_client)
-      allow(http_client).to receive(:get).and_return(login_response, test_response)
-      allow(http_client).to receive_messages(headers: http_client, post: auth_response)
-
-      # Stub WebMock to prevent real HTTP requests
       WebMock.stub_request(:get, login_page_url).to_return(status: 200, body: html_body)
-      WebMock.stub_request(:post, /.*/).to_return(status: 200, headers: {"Location" => authorization_url})
+      WebMock.stub_request(:post, "#{base_url}/users/auth/openid_federation")
+        .to_return(status: 200, headers: {"Location" => authorization_url})
 
       result = described_class.test_authentication_flow(
         login_page_url: login_page_url,
@@ -209,31 +163,9 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       html_body = "<html><head><meta name='csrf-token' content='#{csrf_token}'></head><body><form action='/users/auth/openid_federation'></form></body></html>"
       authorization_url = "https://provider.example.com/authorize?request=..."
 
-      http_client = double("HttpClient")
-      login_response = double(
-        "Response",
-        status: double(success?: true),
-        headers: {},
-        body: double(to_s: html_body)
-      )
-
-      test_response = double("Response", status: double(code: 404))
-
-      # Mock authorization response with 200, no Location header, but URL in body
-      auth_response = double(
-        "Response",
-        status: double(code: 200),
-        headers: {},
-        body: double(to_s: authorization_url)
-      )
-
-      allow(described_class).to receive(:build_http_client).and_return(http_client)
-      allow(http_client).to receive(:get).and_return(login_response, test_response)
-      allow(http_client).to receive_messages(headers: http_client, post: auth_response)
-
-      # Stub WebMock to prevent real HTTP requests
       WebMock.stub_request(:get, login_page_url).to_return(status: 200, body: html_body)
-      WebMock.stub_request(:post, /.*/).to_return(status: 200, body: authorization_url)
+      WebMock.stub_request(:post, "#{base_url}/users/auth/openid_federation")
+        .to_return(status: 200, body: authorization_url)
 
       result = described_class.test_authentication_flow(
         login_page_url: login_page_url,
@@ -248,30 +180,9 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       html_body = "<html><head><meta name='csrf-token' content='#{csrf_token}'></head><body><form action='/users/auth/openid_federation'></form></body></html>"
       long_location = "https://provider.example.com/authorize?request=#{"x" * 3000}" # Exceeds 2048
 
-      http_client = double("HttpClient")
-      login_response = double(
-        "Response",
-        status: double(success?: true),
-        headers: {},
-        body: double(to_s: html_body)
-      )
-
-      test_response = double("Response", status: double(code: 404))
-
-      auth_response = double(
-        "Response",
-        status: double(code: 302),
-        headers: {"Location" => long_location},
-        body: double(to_s: "")
-      )
-
-      allow(described_class).to receive(:build_http_client).and_return(http_client)
-      allow(http_client).to receive(:get).and_return(login_response, test_response)
-      allow(http_client).to receive_messages(headers: http_client, post: auth_response)
-
-      # Stub WebMock to prevent real HTTP requests
       WebMock.stub_request(:get, login_page_url).to_return(status: 200, body: html_body)
-      WebMock.stub_request(:post, /.*/).to_return(status: 302, headers: {"Location" => long_location})
+      WebMock.stub_request(:post, "#{base_url}/users/auth/openid_federation")
+        .to_return(status: 302, headers: {"Location" => long_location})
 
       expect {
         described_class.test_authentication_flow(
@@ -286,30 +197,9 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       html_body = "<html><head><meta name='csrf-token' content='#{csrf_token}'></head><body><form action='/users/auth/openid_federation'></form></body></html>"
       relative_location = "/authorize?request=..."
 
-      http_client = double("HttpClient")
-      login_response = double(
-        "Response",
-        status: double(success?: true),
-        headers: {},
-        body: double(to_s: html_body)
-      )
-
-      test_response = double("Response", status: double(code: 404))
-
-      auth_response = double(
-        "Response",
-        status: double(code: 302),
-        headers: {"Location" => relative_location},
-        body: double(to_s: "")
-      )
-
-      allow(described_class).to receive(:build_http_client).and_return(http_client)
-      allow(http_client).to receive(:get).and_return(login_response, test_response)
-      allow(http_client).to receive_messages(headers: http_client, post: auth_response)
-
-      # Stub WebMock to prevent real HTTP requests
       WebMock.stub_request(:get, login_page_url).to_return(status: 200, body: html_body)
-      WebMock.stub_request(:post, /.*/).to_return(status: 302, headers: {"Location" => relative_location})
+      WebMock.stub_request(:post, "#{base_url}/users/auth/openid_federation")
+        .to_return(status: 302, headers: {"Location" => relative_location})
 
       result = described_class.test_authentication_flow(
         login_page_url: login_page_url,
@@ -323,29 +213,9 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       csrf_token = SecureRandom.hex(16)
       html_body = "<html><head><meta name='csrf-token' content='#{csrf_token}'></head><body><form action='/users/auth/openid_federation'></form></body></html>"
 
-      http_client = double("HttpClient")
-      login_response = double(
-        "Response",
-        status: double(success?: true),
-        headers: {},
-        body: double(to_s: html_body)
-      )
-
-      test_response = double("Response", status: double(code: 404))
-      auth_response = double(
-        "Response",
-        status: double(code: 500, reason: "Error"),
-        headers: {},
-        body: double(to_s: "")
-      )
-
-      allow(described_class).to receive(:build_http_client).and_return(http_client)
-      allow(http_client).to receive(:get).and_return(login_response, test_response)
-      allow(http_client).to receive_messages(headers: http_client, post: auth_response)
-
-      # Stub WebMock to prevent real HTTP requests
       WebMock.stub_request(:get, login_page_url).to_return(status: 200, body: html_body)
-      WebMock.stub_request(:post, /.*/).to_return(status: 500, body: "Error")
+      WebMock.stub_request(:post, "#{base_url}/users/auth/openid_federation")
+        .to_return(status: 500, body: "Error")
 
       expect {
         described_class.test_authentication_flow(
@@ -359,29 +229,9 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       csrf_token = SecureRandom.hex(16)
       html_body = "<html><head><meta name='csrf-token' content='#{csrf_token}'></head><body><a href='/users/auth/openid_federation'>Login</a></body></html>"
 
-      http_client = double("HttpClient")
-      login_response = double(
-        "Response",
-        status: double(success?: true),
-        headers: {},
-        body: double(to_s: html_body)
-      )
-
-      test_response = double("Response", status: double(code: 404))
-      auth_response = double(
-        "Response",
-        status: double(code: 500, reason: "Error"),
-        headers: {},
-        body: double(to_s: "")
-      )
-
-      allow(described_class).to receive(:build_http_client).and_return(http_client)
-      allow(http_client).to receive(:get).and_return(login_response, test_response)
-      allow(http_client).to receive_messages(headers: http_client, post: auth_response)
-
-      # Stub WebMock to prevent real HTTP requests
       WebMock.stub_request(:get, login_page_url).to_return(status: 200, body: html_body)
-      WebMock.stub_request(:post, /.*/).to_return(status: 500, body: "Error")
+      WebMock.stub_request(:post, "#{base_url}/users/auth/openid_federation")
+        .to_return(status: 500, body: "Error")
 
       expect {
         described_class.test_authentication_flow(
@@ -395,34 +245,11 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       csrf_token = SecureRandom.hex(16)
       html_body = "<html><head><meta name='csrf-token' content='#{csrf_token}'></head><body>No form found</body></html>"
 
-      http_client = double("HttpClient")
-      login_response = double(
-        "Response",
-        status: double(success?: true),
-        headers: {},
-        body: double(to_s: html_body)
-      )
-
-      # Mock test responses for common paths
-      test_response_404 = double("Response", status: double(code: 404))
-      test_response_302 = double("Response", status: double(code: 302))
-
-      auth_response = double(
-        "Response",
-        status: double(code: 500, reason: "Error"),
-        headers: {},
-        body: double(to_s: "")
-      )
-
-      allow(described_class).to receive(:build_http_client).and_return(http_client)
-      allow(http_client).to receive(:get).and_return(login_response, test_response_404, test_response_404, test_response_302)
-      allow(http_client).to receive_messages(headers: http_client, post: auth_response)
-
-      # Stub WebMock to prevent real HTTP requests
       WebMock.stub_request(:get, login_page_url).to_return(status: 200, body: html_body)
-      WebMock.stub_request(:get, /http:\/\/localhost:3000\//).to_return(status: 404, body: "Not Found")
-      WebMock.stub_request(:get, /http:\/\/localhost:3000\/login/).to_return(status: 200, body: html_body)
-      WebMock.stub_request(:post, /.*/).to_return(status: 500, body: "Error")
+      WebMock.stub_request(:get, "#{base_url}/users/auth/openid_federation").to_return(status: 404, body: "Not Found")
+      WebMock.stub_request(:get, "#{base_url}/auth/openid_federation").to_return(status: 404, body: "Not Found")
+      WebMock.stub_request(:get, "#{base_url}/openid_federation").to_return(status: 302, body: "")
+      WebMock.stub_request(:post, "#{base_url}/openid_federation").to_return(status: 500, body: "Error")
 
       expect {
         described_class.test_authentication_flow(
@@ -437,37 +264,19 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
       html_body = "<html><head><meta name='csrf-token' content='#{csrf_token}'></head><body><form action='/users/auth/openid_federation'></form></body></html>"
       cookie_value = "session_id=abc123; path=/"
 
-      http_client = double("HttpClient")
-      login_response = double(
-        "Response",
-        status: double(success?: true),
-        headers: {"Set-Cookie" => cookie_value},
-        body: double(to_s: html_body)
-      )
-
-      test_response = double("Response", status: double(code: 404))
-      auth_response = double(
-        "Response",
-        status: double(code: 500, reason: "Error"),
-        headers: {},
-        body: double(to_s: "")
-      )
-
-      allow(described_class).to receive(:build_http_client).and_return(http_client)
-      allow(http_client).to receive(:get).and_return(login_response, test_response)
-      allow(http_client).to receive_messages(headers: http_client, post: auth_response)
-
-      # Stub WebMock to prevent real HTTP requests
-      WebMock.stub_request(:get, login_page_url).to_return(status: 404, body: "Not Found")
-      WebMock.stub_request(:get, /http:\/\/localhost:3000\//).to_return(status: 404, body: "Not Found")
-      WebMock.stub_request(:post, /.*/).to_return(status: 500, body: "Error")
+      WebMock.stub_request(:get, login_page_url)
+        .to_return(status: 200, body: html_body, headers: {"Set-Cookie" => cookie_value})
+      WebMock.stub_request(:get, "#{base_url}/users/auth/openid_federation").to_return(status: 404, body: "")
+      WebMock.stub_request(:get, "#{base_url}/auth/openid_federation").to_return(status: 404, body: "")
+      WebMock.stub_request(:get, "#{base_url}/openid_federation").to_return(status: 404, body: "")
+      WebMock.stub_request(:post, "#{base_url}/users/auth/openid_federation").to_return(status: 500, body: "Error")
 
       expect {
         described_class.test_authentication_flow(
           login_page_url: login_page_url,
           base_url: base_url
         )
-      }.to raise_error(/Failed to (get authorization URL|fetch login page)/)
+      }.to raise_error(/Failed to get authorization URL/)
     end
   end
 end
