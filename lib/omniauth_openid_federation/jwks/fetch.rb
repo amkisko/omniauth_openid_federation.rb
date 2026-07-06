@@ -55,16 +55,14 @@ module OmniauthOpenidFederation
       end
 
       def self.fetch_from_cache(cache_key, cache_ttl:, rotate_on_errors:)
-        begin
-          CacheAdapter.fetch(cache_key, expires_in: cache_ttl) { yield }
-        rescue KeyRelatedError => error
-          if rotate_on_errors
-            OmniauthOpenidFederation::Logger.warn("[Jwks::Fetch] Key-related error detected, rotating cache: #{error.message}")
-            CacheAdapter.delete(cache_key)
-            yield
-          else
-            raise
-          end
+        CacheAdapter.fetch(cache_key, expires_in: cache_ttl) { yield }
+      rescue KeyRelatedError => error
+        if rotate_on_errors
+          OmniauthOpenidFederation::Logger.warn("[Jwks::Fetch] Key-related error detected, rotating cache: #{error.message}")
+          CacheAdapter.delete(cache_key)
+          yield
+        else
+          raise
         end
       end
       private_class_method :fetch_from_cache
