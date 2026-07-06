@@ -333,13 +333,9 @@ RSpec.describe OmniauthOpenidFederation::HttpClient do
 
     it "uses separate connect and read timeouts" do
       captured_timeout = nil
-      original_new = HTTP::Options.method(:new)
-      allow(HTTP::Options).to receive(:new) do |options|
-        original_new.call(options)
-      end
-      allow_any_instance_of(HTTP::Client).to receive(:timeout) do |client, timeout_config|
+      allow(described_class).to receive(:build_http_client).and_wrap_original do |original_method, timeout_config|
         captured_timeout = timeout_config
-        client
+        original_method.call(timeout_config)
       end
 
       stub_request(:post, uri).to_return(status: 200, body: "ok")

@@ -55,45 +55,61 @@ module OmniauthOpenidFederation
       retries = 0
 
       loop do
-        begin
-          client = http_client
-          client = client.headers(headers) unless headers.empty?
+        response = perform_request(http_client, headers, method, uri, form)
 
-          response = case method
-          when :get
-            client.get(uri)
-          when :post
-            client.post(uri, form: form || {})
-          else
-            raise ArgumentError, "Unsupported HTTP method: #{method}"
-          end
-
-          if method == :get && retryable_http_status?(response.status.code) && retries < max_retries
-            retries += 1
-            delay = retry_delay_for(retries, retry_delay)
-            OmniauthOpenidFederation::Logger.warn(
-              "[HttpClient] HTTP #{response.status.code} on attempt #{retries}/#{max_attempts}, retrying in #{delay}s"
-            )
-            sleep(delay)
-            next
-          end
-
-          return response
-        rescue *RETRYABLE_ERRORS => error
-          retries += 1
-          if retries > max_retries
-            error_message = "Failed to #{method.to_s.upcase} #{uri} after #{max_attempts} attempts: #{error.class} - #{error.message}"
-            OmniauthOpenidFederation::Logger.error("[HttpClient] #{error_message}")
-            raise OmniauthOpenidFederation::NetworkError, error_message, error.backtrace
-          end
-
-          delay = retry_delay_for(retries, retry_delay)
-          OmniauthOpenidFederation::Logger.warn(
-            "[HttpClient] Request failed on attempt #{retries}/#{max_attempts}, retrying in #{delay}s: #{error.message}"
-          )
-          sleep(delay)
+        if should_retry_for_status?(method, response, retries, max_retries)
+          retries = retry_after_status(response, retries, max_attempts, retry_delay)
+          next
         end
+
+        return response
+      rescue *RETRYABLE_ERRORS => error
+        retries = handle_network_error(method, uri, error, retries, max_retries, max_attempts, retry_delay)
       end
+    end
+
+    def self.perform_request(http_client, headers, method, uri, form)
+      client = http_client
+      client = client.headers(headers) unless headers.empty?
+
+      case method
+      when :get
+        client.get(uri)
+      when :post
+        client.post(uri, form: form || {})
+      else
+        raise ArgumentError, "Unsupported HTTP method: #{method}"
+      end
+    end
+
+    def self.should_retry_for_status?(method, response, retries, max_retries)
+      method == :get && retryable_http_status?(response.status.code) && retries < max_retries
+    end
+
+    def self.retry_after_status(response, retries, max_attempts, retry_delay)
+      retries += 1
+      delay = retry_delay_for(retries, retry_delay)
+      OmniauthOpenidFederation::Logger.warn(
+        "[HttpClient] HTTP #{response.status.code} on attempt #{retries}/#{max_attempts}, retrying in #{delay}s"
+      )
+      sleep(delay)
+      retries
+    end
+
+    def self.handle_network_error(method, uri, error, retries, max_retries, max_attempts, retry_delay)
+      retries += 1
+      if retries > max_retries
+        error_message = "Failed to #{method.to_s.upcase} #{uri} after #{max_attempts} attempts: #{error.class} - #{error.message}"
+        OmniauthOpenidFederation::Logger.error("[HttpClient] #{error_message}")
+        raise OmniauthOpenidFederation::NetworkError, error_message, error.backtrace
+      end
+
+      delay = retry_delay_for(retries, retry_delay)
+      OmniauthOpenidFederation::Logger.warn(
+        "[HttpClient] Request failed on attempt #{retries}/#{max_attempts}, retrying in #{delay}s: #{error.message}"
+      )
+      sleep(delay)
+      retries
     end
 
     def self.build_http_client(timeout_config)
@@ -136,7 +152,7 @@ module OmniauthOpenidFederation
     def self.max_retries_for(options, method)
       return options[:max_retries] if options.key?(:max_retries)
 
-      method == :post ? 0 : Configuration.config.max_retries
+      (method == :post) ? 0 : Configuration.config.max_retries
     end
 
     def self.resolve_timeout(options)
@@ -160,7 +176,8 @@ module OmniauthOpenidFederation
       [base_delay * retry_count, Constants::MAX_RETRY_DELAY_SECONDS].min
     end
 
-    private_class_method :request, :build_http_client, :build_http_options_hash, :ssl_verify_mode, :ssl_ca_file,
+    private_class_method :request, :perform_request, :should_retry_for_status?, :retry_after_status,
+      :handle_network_error, :build_http_client, :build_http_options_hash, :ssl_verify_mode, :ssl_ca_file,
       :max_retries_for, :resolve_timeout, :retryable_http_status?, :retry_delay_for
   end
 end
