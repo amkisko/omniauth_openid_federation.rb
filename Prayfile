@@ -4,7 +4,7 @@ source "amkisko", git: "https://github.com/amkisko/prayers", distribution: "pray
 
 target :agents do
   output "AGENTS.md"
-  skills ".agents/skills"
+  folder ".agents/skills"
 end
 
 agent "amkisko/working-rules", "~> 1.0", source: "amkisko", exports: ["working-rules"]
