@@ -9,7 +9,7 @@ bundle exec appraisal install   # once / after Appraisals change
 bundle exec appraisal rails8 -- bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml
 ```
 
-Optional wrapper (same command): **`bin/rspec_parallel`**. See **[POLYRUN.md](../POLYRUN.md)**.
+Optional wrapper (same command): **`bin/rspec_parallel`**. See **`polyrun.yml`** and this file.
 
 ### Spec quality (Polyrun)
 
