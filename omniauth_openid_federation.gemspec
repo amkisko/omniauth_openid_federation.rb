@@ -48,7 +48,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "appraisal", "~> 2.5"
   spec.add_development_dependency "memory_profiler", "~> 1.1"
   spec.add_development_dependency "mutex_m"
-  spec.add_development_dependency "rbs", "~> 3.9"
+  spec.add_development_dependency "rbs", "~> 4.0"
   spec.add_development_dependency "webrick", "~> 1.9"
   # Rodauth + rodauth-omniauth for integration testing with OpenID Federation strategy
   spec.add_development_dependency "rodauth", "~> 2.0"
