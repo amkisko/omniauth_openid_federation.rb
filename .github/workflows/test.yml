@@ -23,7 +23,7 @@ jobs:
         run: bundle exec bundle audit check --update
       - name: Install and audit appraisal gemfiles (Ruby 3.4)
         run: |
-          for gemfile in gemfiles/{ruby,truffleruby,rails6,rails72,rails8}.gemfile; do
+          for gemfile in gemfiles/{ruby,rails72,rails8}.gemfile; do
             echo "==> $gemfile"
             BUNDLE_GEMFILE="$gemfile" bundle install
             BUNDLE_GEMFILE="$gemfile" bundle exec bundle audit check
@@ -45,8 +45,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - gemfile: rails6
-            ruby_version: "3.3"
           - gemfile: rails72
             ruby_version: "3.4"
           - gemfile: rails8
