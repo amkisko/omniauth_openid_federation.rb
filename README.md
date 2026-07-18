@@ -1,6 +1,6 @@
 # omniauth_openid_federation
 
-[![Gem Version](https://badge.fury.io/rb/omniauth_openid_federation.svg?v=1.1.0)](https://badge.fury.io/rb/omniauth_openid_federation) [![Test Status](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/omniauth_openid_federation.rb/graph/badge.svg?token=CX3O9M1GIT)](https://codecov.io/gh/amkisko/omniauth_openid_federation.rb) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=amkisko_omniauth_openid_federation.rb&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=amkisko_omniauth_openid_federation.rb)
+[![Gem Version](https://badge.fury.io/rb/omniauth_openid_federation.svg?v=1.1.0)](https://badge.fury.io/rb/omniauth_openid_federation) [![Test Status](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/omniauth_openid_federation.rb/graph/badge.svg?token=CX3O9M1GIT)](https://app.codecov.io/github/amkisko/omniauth_openid_federation.rb) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=amkisko_omniauth_openid_federation.rb&metric=alert_status)](https://sonarcloud.io/project/overview?id=amkisko_omniauth_openid_federation.rb)
 
 OmniAuth strategy for OpenID Federation providers with comprehensive security features, supporting signed request objects, ID token encryption, and full OpenID Federation 1.0 compliance.
 
@@ -516,6 +516,19 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidel
 - [http](https://github.com/httprb/http) - HTTP client
 - [anyway_config](https://github.com/palkan/anyway_config) - Configuration management
 - [action_reporter](https://github.com/basecamp/action_reporter) - Error reporting
+
+## Links
+
+- [GitHub](https://github.com/amkisko/omniauth_openid_federation.rb)
+- [GitLab](https://gitlab.com/amkisko/omniauth_openid_federation.rb)
+- [RubyGems](https://rubygems.org/gems/omniauth_openid_federation)
+- [Versions Atom](https://rubygems.org/gems/omniauth_openid_federation/versions.atom) (feed id `10007301350098`)
+- [libraries.io](https://libraries.io/rubygems/omniauth_openid_federation)
+- [Deps.dev](https://deps.dev/rubygems/omniauth_openid_federation)
+- [SonarCloud](https://sonarcloud.io/project/overview?id=amkisko_omniauth_openid_federation.rb)
+- [Snyk](https://snyk.io/test/github/amkisko/omniauth_openid_federation.rb)
+- [Codecov](https://app.codecov.io/github/amkisko/omniauth_openid_federation.rb)
+- [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/amkisko/omniauth_openid_federation.rb)
 
 ## License
 

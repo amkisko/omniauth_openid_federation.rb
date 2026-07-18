@@ -15,7 +15,7 @@ Gem::Specification.new do |spec|
     Dir["lib/**/*", "app/**/*", "config/**/*", "sig/**/*", "README.md", "LICENSE*", "CHANGELOG.md", "SECURITY.md", "examples/**/*"].select { |f| File.file?(f) }
   end
   spec.require_paths = ["lib"]
-  spec.required_ruby_version = ">= 3.2"
+  spec.required_ruby_version = ">= 3.4"
   spec.required_rubygems_version = ">= 3.3.0"
 
   spec.metadata = {
