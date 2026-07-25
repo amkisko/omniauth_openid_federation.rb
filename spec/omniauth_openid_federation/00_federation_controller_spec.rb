@@ -74,12 +74,7 @@ RSpec.describe OmniauthOpenidFederation::FederationController do
     # Reset configuration after each test to prevent state leakage
     OmniauthOpenidFederation::FederationEndpoint.instance_variable_set(:@configuration, nil)
     if example.exception && response && response.body
-      puts "\n=== Response Debug Info (Test: #{example.full_description}) ==="
-      puts "Status: #{response.status}"
-      puts "Headers: #{response.headers.inspect}"
-      puts "Body: #{response.body.inspect}"
-      puts "Body (first 500 chars): #{response.body[0..500]}"
-      puts "=== End Response Debug Info ===\n"
+
     end
   end
 

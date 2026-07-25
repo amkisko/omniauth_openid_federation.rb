@@ -175,7 +175,7 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
         described_class.notify("test_event", severity: :error)
 
-        expect(logger).to have_received(:error).with(match(/OpenID Federation Security/))
+        expect(logger).to have_received(:error).with(include("OpenID Federation Security"))
       end
 
       it "calls warn for :warning severity" do
@@ -185,7 +185,7 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
         described_class.notify("test_event", severity: :warning)
 
-        expect(logger).to have_received(:warn).with(match(/OpenID Federation Security/))
+        expect(logger).to have_received(:warn).with(include("OpenID Federation Security"))
       end
 
       it "calls info for :info severity" do
@@ -195,7 +195,7 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
         described_class.notify("test_event", severity: :info)
 
-        expect(logger).to have_received(:info).with(match(/OpenID Federation Security/))
+        expect(logger).to have_received(:info).with(include("OpenID Federation Security"))
       end
     end
 
@@ -206,7 +206,7 @@ RSpec.describe OmniauthOpenidFederation::Instrumentation do
 
         aggregate_failures do
           expect { described_class.notify("test_event") }.not_to raise_error
-          expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(match(/Failed to notify/))
+          expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(include("Failed to notify"))
         end
       end
     end

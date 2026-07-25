@@ -79,6 +79,42 @@ RSpec/ContextWording:
 RSpec/VerifiedDoubles:
   Enabled: false
 
+RSpec/DescribedClass:
+  Enabled: false
+
+RSpec/AnyInstance:
+  Enabled: false
+
+RSpec/NamedSubject:
+  Enabled: false
+
+RSpec/NoExpectationExample:
+  Enabled: false
+
+RSpec/MessageSpies:
+  Enabled: false
+
+RSpec/MultipleDescribes:
+  Enabled: false
+
+RSpec/RepeatedExampleGroupDescription:
+  Enabled: false
+
+RSpec/RepeatedDescription:
+  Enabled: false
+
+RSpec/StubbedMock:
+  Enabled: false
+
+RSpec/ExpectActual:
+  Enabled: false
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/ReceiveMessages:
+  Enabled: false
+
 # Custom cop overrides
 Style/AccessModifierDeclarations:
   EnforcedStyle: inline

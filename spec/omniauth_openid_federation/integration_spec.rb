@@ -613,7 +613,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         if result_or_error.is_a?(Array)
           expect(result_or_error).to be_a(Array)
         else
-          expect(error_message).to match(/Audience is required/)
+          expect(error_message).to include("Audience is required")
         end
       end
     end
