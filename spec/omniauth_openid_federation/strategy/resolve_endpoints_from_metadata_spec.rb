@@ -648,6 +648,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = build_strategy(
         nil,
+        audience: provider_issuer,
         entity_statement_path: provider_entity_statement_path,
         client_entity_statement_path: entity_statement_path,
         client_registration_type: :automatic
