@@ -17,11 +17,11 @@ RSpec.configure do |config|
     end
 
     if ENV["DEBUG"] || ENV["SHOW_SPEC_INFO"]
-      puts "Running #{@spec_file_path}:#{@spec_line_number}"
+      warn "Running #{@spec_file_path}:#{@spec_line_number}"
     end
   end
 end
 
 def print_current_spec
-  puts ">>> #{@spec_file_path}:#{@spec_line_number}"
+  warn ">>> #{@spec_file_path}:#{@spec_line_number}"
 end
