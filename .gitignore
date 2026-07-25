@@ -24,8 +24,6 @@
 *.local
 *.gem
 
-/gemfiles/*.lock
-
 # FederationEndpoint auto-provisioned keys, JWKS, and entity statements (local dev / test side effects).
 config/.federation-*
 

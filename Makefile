@@ -22,7 +22,7 @@ audit:
 		echo "==> skipping gemfiles/rails8_ruby4.gemfile (Ruby 4.0+ required)"; \
 	fi
 
-test:
+test: lint
 	bundle exec appraisal rails8 -- bundle exec polyrun parallel-rspec --workers 5 --merge-failures -c polyrun.yml
 
 spec-quality:
