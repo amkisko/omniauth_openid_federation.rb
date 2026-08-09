@@ -11,7 +11,7 @@ RSpec.configure do |config|
       File.basename(@spec_file_path)
     end
 
-    if ENV["DEBUG"]
+    if ENV["DEBUG"] && defined?(Rails)
       Rails.logger.level = 0
       ActiveRecord::Base.logger = Logger.new($stdout) if defined?(ActiveRecord::Base)
     end
