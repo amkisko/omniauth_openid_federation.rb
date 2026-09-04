@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Unreleased
+
+- Add `rfcs/` starter pack: process (RFC 0001), positioning (RFC 0002), and Standards Track design RFCs 0003–0006 for strategy, trust chain, token verification, and federation endpoint.
+
 ## 2.0.0 (2026-07-06)
 
 - BREAKING: Replace `openid_connect` and `json-jwt` with `OmniauthOpenidFederation::OidcClient`, `AccessToken`, and `IdToken` built on `oauth2` and `jwt`
