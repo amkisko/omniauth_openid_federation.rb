@@ -4,6 +4,8 @@
 
 OmniAuth strategy for OpenID Federation providers with comprehensive security features, supporting signed request objects, ID token encryption, and full OpenID Federation 1.0 compliance.
 
+Design changes go through `rfcs/` (RFC 0001).
+
 ## Installation
 
 ```ruby
