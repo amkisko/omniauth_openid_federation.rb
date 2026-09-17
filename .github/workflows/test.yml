@@ -81,7 +81,7 @@ jobs:
     - name: Run tests (parallel OS processes via polyrun)
       run: |
         bundle exec polyrun build-paths -c polyrun.yml
-        bundle exec polyrun parallel-rspec --workers 5 -c polyrun.yml
+        bundle exec polyrun parallel-rspec --workers 5 --merge-failures -c polyrun.yml
 
   integration:
     needs: audit
@@ -123,7 +123,7 @@ jobs:
           POLYRUN_MERGE_SPEC_QUALITY: "1"
         run: |
           bundle exec polyrun build-paths -c polyrun.yml
-          bundle exec polyrun parallel-rspec --workers 5 --merge-spec-quality -c polyrun.yml -- bundle exec rspec --format documentation
+          bundle exec polyrun parallel-rspec --workers 5 --merge-failures --merge-spec-quality -c polyrun.yml -- bundle exec rspec --format documentation
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: polyrun-coverage-parallel
