@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "securerandom"
+require "tmpdir"
+
 module StrategyTestHelpers
   CLIENT_ISSUER = "https://client.example.com"
 
@@ -52,8 +55,13 @@ module StrategyTestHelpers
     path
   end
 
+  # Tempfile unlinks on GC; CI can collect the object before the strategy reads the path.
+  def durable_entity_statement_path(prefix)
+    File.join(Dir.tmpdir, "#{prefix}-#{Process.pid}-#{SecureRandom.hex(8)}.jwt")
+  end
+
   def entity_statement_tempfile(payload, encoder: :simple, prefix: "entity")
-    path = Tempfile.new([prefix, ".jwt"]).path
+    path = durable_entity_statement_path(prefix)
     write_entity_statement_jwt(path, payload, encoder: encoder)
     path
   end
@@ -213,7 +221,7 @@ module StrategyTestHelpers
   end
 
   def write_invalid_client_entity_statement_file(content = "dummy.jwt")
-    path = Tempfile.new(["entity", ".jwt"]).path
+    path = durable_entity_statement_path("entity")
     File.write(path, content)
     path
   end

@@ -32,6 +32,21 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(client).to be_present
     end
 
+    it "keeps the written entity statement after garbage collection" do
+      entity_statement_path = write_simple_entity_statement_file({
+        iss: provider_issuer,
+        sub: provider_issuer,
+        metadata: {openid_provider: provider_openid_metadata}
+      })
+
+      GC.start
+
+      aggregate_failures do
+        expect(File.exist?(entity_statement_path)).to be true
+        expect(build_strategy(nil, entity_statement_path: entity_statement_path).client).to be_present
+      end
+    end
+
     it "handles entity statement with entity_issuer fallback" do
       entity_statement_path = write_simple_entity_statement_file({
         iss: provider_issuer,
