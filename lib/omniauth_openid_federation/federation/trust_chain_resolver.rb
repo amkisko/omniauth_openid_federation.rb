@@ -1,3 +1,5 @@
+require_relative "trust_chain_signature"
+
 require "cgi"
 require "json"
 require "base64"
@@ -37,6 +39,8 @@ module OmniauthOpenidFederation
     #
     # Resolves and validates trust chains from a Leaf Entity to a Trust Anchor.
     class TrustChainResolver
+      include TrustChainSignature
+
       # Initialize resolver
       #
       # @param leaf_entity_id [String] Entity Identifier of the Leaf Entity
@@ -72,7 +76,7 @@ module OmniauthOpenidFederation
         current_entity_id = @leaf_entity_id
         current_config = leaf_config
 
-        while current_config && !is_trust_anchor?(current_config)
+        while current_config && !trust_anchor_for(current_entity_id)
           authority_hints = extract_authority_hints(current_config)
 
           if StringHelpers.blank?(authority_hints)
@@ -89,13 +93,21 @@ module OmniauthOpenidFederation
 
             begin
               issuer_config = fetch_entity_configuration(authority_id)
+              validate_entity_statement(issuer_config, nil)
+
               subordinate_statement = fetch_subordinate_statement(
                 issuer: authority_id,
                 subject: current_entity_id,
                 issuer_config: issuer_config
               )
 
-              validate_entity_statement(subordinate_statement, issuer_config)
+              validate_entity_statement(
+                subordinate_statement,
+                issuer_config,
+                subject_config: current_config,
+                expected_issuer: authority_id,
+                expected_subject: current_entity_id
+              )
 
               @resolved_statements << subordinate_statement
               @visited_entities.add(authority_id)
@@ -104,7 +116,8 @@ module OmniauthOpenidFederation
               current_config = issuer_config
               found_next = true
               break
-            rescue ValidationError, FetchError => e
+            rescue ValidationError, FetchError, SignatureError => e
+              @visited_entities.add(authority_id)
               OmniauthOpenidFederation::Logger.warn("[TrustChainResolver] Failed to resolve via #{authority_id}: #{e.message}")
               OmniauthOpenidFederation::Instrumentation.notify_trust_chain_validation_failed(
                 entity_id: current_entity_id,
@@ -122,7 +135,7 @@ module OmniauthOpenidFederation
           end
         end
 
-        unless is_trust_anchor?(current_config)
+        unless trust_anchor_for(current_entity_id)
           error_msg = "Trust chain did not terminate at a configured Trust Anchor"
           OmniauthOpenidFederation::Instrumentation.notify_trust_chain_validation_failed(
             entity_id: @leaf_entity_id,
@@ -156,9 +169,21 @@ module OmniauthOpenidFederation
 
         begin
           config = EntityStatement.fetch!(entity_statement_url, timeout: @timeout)
+          assert_entity_configuration_ids!(config, entity_id)
           @entity_configurations[entity_id] = config
         rescue OmniauthOpenidFederation::NetworkError => e
           raise FetchError, "Failed to fetch entity configuration from #{entity_statement_url}: #{e.message}"
+        end
+      end
+
+      def assert_entity_configuration_ids!(config, expected_entity_id)
+        parsed = config.parse
+        iss = entity_issuer(parsed)
+        sub = field(parsed, :sub)
+
+        unless iss == expected_entity_id && sub == expected_entity_id
+          raise ValidationError,
+            "Entity configuration iss/sub must equal requested entity id '#{expected_entity_id}' (iss=#{iss}, sub=#{sub})"
         end
       end
 
@@ -186,10 +211,17 @@ module OmniauthOpenidFederation
       end
 
       def extract_fetch_endpoint(entity_config)
-        # Fetch endpoint is typically at /.well-known/openid-federation/fetch
-        # or can be specified in metadata
         parsed = entity_config.parse
-        issuer = parsed[:issuer] || parsed[:iss] || parsed["issuer"] || parsed["iss"]
+        payload = entity_config.decode_payload
+        metadata = field(payload, :metadata) || {}
+        federation_entity = field(metadata, :federation_entity) || {}
+        openid_provider = field(metadata, :openid_provider) || {}
+
+        endpoint = field(federation_entity, :federation_fetch_endpoint) || field(openid_provider, :federation_fetch_endpoint)
+
+        return endpoint if StringHelpers.present?(endpoint)
+
+        issuer = entity_issuer(parsed)
         return nil unless issuer
 
         "#{issuer}/.well-known/openid-federation/fetch"
@@ -200,58 +232,46 @@ module OmniauthOpenidFederation
         parsed[:authority_hints] || parsed["authority_hints"]
       end
 
-      def validate_entity_statement(statement, issuer_config)
+      def validate_entity_statement(statement, issuer_config, subject_config: nil, expected_issuer: nil, expected_subject: nil)
         validator = EntityStatementValidator.new(
           jwt_string: statement.entity_statement,
-          issuer_entity_configuration: issuer_config
+          issuer_entity_configuration: issuer_config,
+          subject_entity_configuration: subject_config
         )
         validator.validate!
+
+        if expected_issuer || expected_subject
+          parsed = statement.parse
+          iss = entity_issuer(parsed)
+          sub = parsed[:sub] || parsed["sub"]
+
+          if expected_issuer && iss != expected_issuer
+            raise ValidationError, "Subordinate statement iss '#{iss}' does not match expected issuer '#{expected_issuer}'"
+          end
+          if expected_subject && sub != expected_subject
+            raise ValidationError, "Subordinate statement sub '#{sub}' does not match expected subject '#{expected_subject}'"
+          end
+        end
+
         verify_entity_statement_signature!(statement, issuer_config)
       end
 
-      def verify_entity_statement_signature!(statement, issuer_config)
-        jwt_string = statement.entity_statement
-        parts = jwt_string.split(".")
-        if parts.length != EntityStatementValidator::JWT_PARTS_COUNT
-          raise ValidationError, "Invalid JWT format: expected #{EntityStatementValidator::JWT_PARTS_COUNT} parts, got #{parts.length}"
-        end
+      def normalize_jwks(jwks)
+        return {} if jwks.nil?
+        return jwks if jwks.is_a?(Hash)
+        return {"keys" => jwks} if jwks.is_a?(Array)
 
-        header = JSON.parse(Base64.urlsafe_decode64(parts[0]))
-        kid = header["kid"] || header[:kid]
-
-        signing_keys = issuer_signing_keys(statement, issuer_config)
-        keys = signing_keys["keys"] || signing_keys[:keys] || []
-        signing_key_data = keys.find { |key| (key["kid"] || key[:kid]) == kid }
-
-        unless signing_key_data
-          raise ValidationError, "Signing key with kid '#{kid}' not found in issuer JWKS for signature verification"
-        end
-
-        public_key = OmniauthOpenidFederation::KeyExtractor.jwk_to_openssl_key(signing_key_data)
-        ::JWT.decode(jwt_string, public_key, true, {algorithm: "RS256"})
-      rescue ::JWT::DecodeError, ::JWT::VerificationError => e
-        error_msg = "Entity statement signature validation failed: #{e.class} - #{e.message}"
-        OmniauthOpenidFederation::Logger.error("[TrustChainResolver] #{error_msg}")
-        raise SignatureError, error_msg, e.backtrace
+        {}
       end
 
-      def issuer_signing_keys(statement, issuer_config)
-        if issuer_config.nil?
-          parsed = statement.parse
-          parsed[:jwks] || parsed["jwks"] || {}
-        else
-          issuer_parsed = issuer_config.parse
-          issuer_parsed[:jwks] || issuer_parsed["jwks"] || {}
-        end
+      def trust_anchor_for(entity_id)
+        @trust_anchors.find { |ta| ta[:entity_id] == entity_id }
       end
 
       def is_trust_anchor?(entity_config)
         parsed = entity_config.parse
-        entity_id = parsed[:issuer] || parsed[:iss] || parsed["issuer"] || parsed["iss"]
-
-        @trust_anchors.any? do |ta|
-          ta[:entity_id] == entity_id
-        end
+        entity_id = entity_issuer(parsed)
+        !trust_anchor_for(entity_id).nil?
       end
     end
   end

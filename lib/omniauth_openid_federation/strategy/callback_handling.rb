@@ -12,6 +12,28 @@ module OmniauthOpenidFederation
         code_param = code_param_raw ? OmniauthOpenidFederation::Validators.sanitize_request_param(code_param_raw) : nil
         error_param = error_param_raw ? OmniauthOpenidFederation::Validators.sanitize_request_param(error_param_raw) : nil
         error_description_param = error_description_raw ? OmniauthOpenidFederation::Validators.sanitize_request_param(error_description_raw) : nil
+
+        # CSRF protection: constant-time state comparison before any OAuth outcome
+        state_session = session["omniauth.state"]
+
+        if OmniauthOpenidFederation::StringHelpers.blank?(state_param) ||
+            state_session.nil? ||
+            !OmniauthOpenidFederation::SecureCompare.secure_compare(state_param.to_s, state_session.to_s)
+          OmniauthOpenidFederation::Instrumentation.notify_csrf_detected(
+            state_param: state_param ? "[PRESENT]" : "[MISSING]",
+            state_session: state_session ? "[PRESENT]" : "[MISSING]",
+            request_info: {
+              remote_ip: request.env["REMOTE_ADDR"],
+              user_agent: request.env["HTTP_USER_AGENT"],
+              path: request.path
+            }
+          )
+          env["omniauth_openid_federation.instrumented"] = true
+          return fail!(:csrf_detected, OmniauthOpenidFederation::SecurityError.new("CSRF detected"))
+        end
+
+        session.delete("omniauth.state")
+
         if error_param
           error_msg = "Authorization error: #{error_param}"
           error_msg += " - #{error_description_param}" if error_description_param
@@ -28,30 +50,6 @@ module OmniauthOpenidFederation
           env["omniauth_openid_federation.instrumented"] = true
           return fail!(:authorization_error, OmniauthOpenidFederation::ValidationError.new(error_msg))
         end
-
-        # CSRF protection: constant-time state comparison
-        state_session = session["omniauth.state"]
-
-        if OmniauthOpenidFederation::StringHelpers.blank?(state_param) ||
-            state_session.nil? ||
-            !OmniauthOpenidFederation::SecureCompare.secure_compare(state_param.to_s, state_session.to_s)
-          # Instrument CSRF detection
-          OmniauthOpenidFederation::Instrumentation.notify_csrf_detected(
-            state_param: state_param ? "[PRESENT]" : "[MISSING]",
-            state_session: state_session ? "[PRESENT]" : "[MISSING]",
-            request_info: {
-              remote_ip: request.env["REMOTE_ADDR"],
-              user_agent: request.env["HTTP_USER_AGENT"],
-              path: request.path
-            }
-          )
-          # Mark as instrumented to prevent double instrumentation in fail!
-          env["omniauth_openid_federation.instrumented"] = true
-          return fail!(:csrf_detected, OmniauthOpenidFederation::SecurityError.new("CSRF detected"))
-        end
-
-        # Clear state from session
-        session.delete("omniauth.state")
 
         if OmniauthOpenidFederation::StringHelpers.blank?(code_param)
           # Instrument unexpected authentication break

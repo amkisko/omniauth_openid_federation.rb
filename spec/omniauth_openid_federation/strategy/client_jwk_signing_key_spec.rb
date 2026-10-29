@@ -1,6 +1,6 @@
 require "spec_helper"
 
-RSpec.describe OmniAuth::Strategies::OpenIDFederation, "#client_jwk_signing_key" do
+RSpec.describe OmniAuth::Strategies::OpenIDFederation, "#client_jwk_signing_key", type: :strategy do
   let(:private_key) { OpenSSL::PKey::RSA.new(2048) }
   let(:public_key) { private_key.public_key }
   let(:client_id) { "test-client-id" }
@@ -22,7 +22,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, "#client_jwk_signing_key"
   end
 
   it "extracts JWKS from client entity statement file when configured value is nil" do
-    entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+    entity_statement_path = durable_entity_statement_path("entity")
     jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
     entity_statement = {
       iss: "https://client.example.com",
@@ -81,7 +81,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, "#client_jwk_signing_key"
   end
 
   it "does not auto-extract JWKS when configured value is empty string" do
-    entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+    entity_statement_path = durable_entity_statement_path("entity")
     jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
     entity_statement = {
       iss: "https://client.example.com",
@@ -106,7 +106,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, "#client_jwk_signing_key"
   end
 
   it "returns nil when entity statement has no JWKS" do
-    entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+    entity_statement_path = durable_entity_statement_path("entity")
     entity_statement = {
       iss: "https://client.example.com",
       sub: "https://client.example.com"
@@ -128,7 +128,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, "#client_jwk_signing_key"
   end
 
   it "dynamically sets client_jwk_signing_key from entity statement via options accessor" do
-    entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+    entity_statement_path = durable_entity_statement_path("entity")
     jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
     entity_statement = {
       iss: "https://client.example.com",

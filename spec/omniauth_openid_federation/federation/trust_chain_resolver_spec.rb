@@ -332,8 +332,8 @@ RSpec.describe OmniauthOpenidFederation::Federation::TrustChainResolver do
         )
 
         expect { resolver.resolve! }.to raise_error(
-          OmniauthOpenidFederation::SignatureError,
-          /signature validation failed/
+          OmniauthOpenidFederation::ValidationError,
+          /no valid authority found/
         )
       end
     end

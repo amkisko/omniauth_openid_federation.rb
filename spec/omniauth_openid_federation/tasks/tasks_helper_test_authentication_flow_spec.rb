@@ -94,7 +94,7 @@ RSpec.describe OmniauthOpenidFederation::TasksHelper do
           login_page_url: login_page_url,
           base_url: base_url
         )
-      }.to raise_error(/HTML response too large/)
+      }.to raise_error(OmniauthOpenidFederation::NetworkError, /HTTP response body exceeds limit/)
     end
 
     it "handles cookie extraction with size limits" do

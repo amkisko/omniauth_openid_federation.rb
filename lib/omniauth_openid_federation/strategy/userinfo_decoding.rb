@@ -1,7 +1,39 @@
+require_relative "../secure_compare"
+require_relative "../string_helpers"
+
 module OmniauthOpenidFederation
   module Strategy
     module UserinfoDecoding
+      IDENTITY_CLAIM_KEYS = %w[iss sub aud exp iat].freeze
+
       private
+
+      def merge_userinfo_with_id_token_claims(id_token_claims, userinfo_hash)
+        normalized_id = stringify_claim_keys(id_token_claims)
+        normalized_userinfo = stringify_claim_keys(userinfo_hash)
+
+        id_sub = normalized_id["sub"]
+        userinfo_sub = normalized_userinfo["sub"]
+
+        if OmniauthOpenidFederation::StringHelpers.blank?(userinfo_sub) ||
+            OmniauthOpenidFederation::StringHelpers.blank?(id_sub) ||
+            !OmniauthOpenidFederation::SecureCompare.secure_compare(userinfo_sub.to_s, id_sub.to_s)
+          raise OmniauthOpenidFederation::ValidationError,
+            "UserInfo sub must match ID token sub"
+        end
+
+        merged = normalized_id.merge(normalized_userinfo)
+        IDENTITY_CLAIM_KEYS.each do |claim|
+          merged[claim] = normalized_id[claim] if normalized_id.key?(claim)
+        end
+        merged
+      end
+
+      def stringify_claim_keys(claims)
+        (claims || {}).each_with_object({}) do |(key, value), hash|
+          hash[key.to_s] = value
+        end
+      end
 
       def decode_userinfo(userinfo)
         if userinfo.is_a?(String)

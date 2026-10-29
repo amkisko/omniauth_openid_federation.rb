@@ -116,49 +116,43 @@ module OmniauthOpenidFederation
           end
         end
 
-        # 2. Try signed JWKS (if entity statement has signed_jwks_uri)
-        # This is more likely to have the latest keys during key rotation
+        # 2. Try signed JWKS (if entity statement has signed_jwks_uri).
+        # When signed_jwks_uri is advertised, signature/validation failures fail closed
+        # instead of falling back to an unsigned jwks_uri.
         if entity_statement_content
-          begin
-            parsed = OmniauthOpenidFederation::Federation::EntityStatementHelper.parse_for_signed_jwks_from_content(
-              entity_statement_content
+          parsed = OmniauthOpenidFederation::Federation::EntityStatementHelper.parse_for_signed_jwks_from_content(
+            entity_statement_content
+          )
+          if parsed && parsed[:signed_jwks_uri] && parsed[:entity_jwks]
+            OmniauthOpenidFederation::Logger.debug("[Strategy] Fetching signed JWKS for ID token validation (kid: #{kid})")
+            signed_jwks = OmniauthOpenidFederation::Federation::SignedJWKS.fetch!(
+              parsed[:signed_jwks_uri],
+              parsed[:entity_jwks]
             )
-            if parsed && parsed[:signed_jwks_uri] && parsed[:entity_jwks]
-              OmniauthOpenidFederation::Logger.debug("[Strategy] Fetching signed JWKS for ID token validation (kid: #{kid})")
-              signed_jwks = OmniauthOpenidFederation::Federation::SignedJWKS.fetch!(
-                parsed[:signed_jwks_uri],
-                parsed[:entity_jwks]
-              )
-              # Ensure it's in the format expected by JWT.decode
-              jwks_hash = if signed_jwks.is_a?(Hash) && signed_jwks.key?("keys")
-                signed_jwks
-              elsif signed_jwks.is_a?(Hash) && signed_jwks.key?(:keys)
-                {"keys" => signed_jwks[:keys]}
-              elsif signed_jwks.is_a?(Array)
-                {"keys" => signed_jwks}
-              end
 
-              keys = jwks_hash&.dig("keys")
-              if keys&.is_a?(Array) && !keys.empty?
-                # Track first valid JWKS
-                first_valid_jwks ||= jwks_hash
-                # If kid is nil, return JWKS anyway (let JWT decoding fail with proper error)
-                if kid.nil?
-                  OmniauthOpenidFederation::Logger.debug("[Strategy] Kid is nil, returning signed JWKS for validation attempt")
-                  return jwks_hash
-                end
-                # Check if kid is in this JWKS
-                key_data = keys.find { |key| (key["kid"] || key[:kid]) == kid }
-                if key_data
-                  OmniauthOpenidFederation::Logger.debug("[Strategy] Found kid '#{kid}' in signed JWKS")
-                  return jwks_hash
-                else
-                  OmniauthOpenidFederation::Logger.debug("[Strategy] Kid '#{kid}' not found in signed JWKS, trying standard JWKS URI")
-                end
+            jwks_hash = if signed_jwks.is_a?(Hash) && signed_jwks.key?("keys")
+              signed_jwks
+            elsif signed_jwks.is_a?(Hash) && signed_jwks.key?(:keys)
+              {"keys" => signed_jwks[:keys]}
+            elsif signed_jwks.is_a?(Array)
+              {"keys" => signed_jwks}
+            end
+
+            keys = jwks_hash&.dig("keys")
+            if keys&.is_a?(Array) && !keys.empty?
+              first_valid_jwks ||= jwks_hash
+              if kid.nil?
+                OmniauthOpenidFederation::Logger.debug("[Strategy] Kid is nil, returning signed JWKS for validation attempt")
+                return jwks_hash
+              end
+              key_data = keys.find { |key| (key["kid"] || key[:kid]) == kid }
+              if key_data
+                OmniauthOpenidFederation::Logger.debug("[Strategy] Found kid '#{kid}' in signed JWKS")
+                return jwks_hash
+              else
+                OmniauthOpenidFederation::Logger.debug("[Strategy] Kid '#{kid}' not found in signed JWKS, trying standard JWKS URI")
               end
             end
-          rescue => e
-            OmniauthOpenidFederation::Logger.debug("[Strategy] Could not fetch signed JWKS: #{e.message}")
           end
         end
 

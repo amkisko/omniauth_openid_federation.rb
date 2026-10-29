@@ -9,7 +9,12 @@ module OmniauthOpenidFederation
           return load_client_entity_statement_from_file(entity_statement_path)
         end
 
-        # Priority 2: Check cache (if Rails.cache is available)
+        # Priority 2: Fetch from configured URL
+        if OmniauthOpenidFederation::StringHelpers.present?(entity_statement_url)
+          return load_client_entity_statement_from_url(entity_statement_url)
+        end
+
+        # Priority 3: Check cache (if Rails.cache is available)
         # This respects background job cache refresh and key rotation
         if defined?(Rails) && Rails.cache
           cache_key = "federation:entity_statement"

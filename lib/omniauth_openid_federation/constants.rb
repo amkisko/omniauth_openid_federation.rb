@@ -17,5 +17,8 @@ module OmniauthOpenidFederation
 
     # Minimum RSA modulus size for OIDC signing and encryption keys (FTN and common federation profiles)
     MIN_RSA_KEY_BITS = 2048
+
+    # Maximum HTTP response body size for federation/JWKS fetches (1 MiB)
+    MAX_HTTP_RESPONSE_BODY_BYTES = 1_048_576
   end
 end

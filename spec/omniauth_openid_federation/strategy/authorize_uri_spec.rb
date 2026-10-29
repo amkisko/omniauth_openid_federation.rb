@@ -15,7 +15,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
   describe "#authorize_uri - all branches" do
     it "handles automatic client registration" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       entity_statement = {
         iss: "https://client.example.com",
         sub: "https://client.example.com",
@@ -51,7 +51,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles automatic registration with client_entity_identifier" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       entity_statement = {
         iss: "https://client.example.com",
         sub: "https://client.example.com",
@@ -88,7 +88,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles automatic registration with client.identifier=" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       entity_statement = {
         iss: "https://client.example.com",
         sub: "https://client.example.com",
@@ -126,7 +126,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles automatic registration with client.client_id=" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       entity_statement = {
         iss: "https://client.example.com",
         sub: "https://client.example.com",
@@ -293,7 +293,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles provider metadata for encryption" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -377,7 +377,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles issuer resolution from entity statement" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,

@@ -39,9 +39,13 @@ module OmniauthOpenidFederation
       # @param issuer_entity_configuration [Hash, EntityStatement, nil] Optional: Entity Configuration of the issuer
       #   Required for validating Subordinate Statements (when iss != sub)
       # @param clock_skew_tolerance [Integer, nil] Clock skew tolerance in seconds (default: from config)
-      def initialize(jwt_string:, issuer_entity_configuration: nil, clock_skew_tolerance: nil)
+      def initialize(jwt_string:, issuer_entity_configuration: nil, subject_entity_configuration: nil, clock_skew_tolerance: nil)
         @jwt_string = jwt_string
         @issuer_entity_configuration = issuer_entity_configuration
+        # Subject Entity Configuration supplies authority_hints for Subordinate Statements.
+        # When omitted, issuer_entity_configuration is used for backward compatibility with
+        # callers that historically passed the subject config under that name.
+        @subject_entity_configuration = subject_entity_configuration
         @clock_skew_tolerance = clock_skew_tolerance || OmniauthOpenidFederation.config.clock_skew_tolerance
         @header = nil
         @payload = nil
@@ -153,30 +157,40 @@ module OmniauthOpenidFederation
         @is_subordinate_statement = !@is_entity_configuration
       end
 
-      # Step 7: For Subordinate Statements, validate iss matches authority_hints
+      # Step 7: For Subordinate Statements, validate iss matches subject's authority_hints
       def validate_authority_hints
-        unless @issuer_entity_configuration
-          # If issuer configuration not provided, we can't validate authority_hints
-          # This is acceptable for basic validation, but should be done for full validation
-          OmniauthOpenidFederation::Logger.warn("[EntityStatementValidator] Cannot validate authority_hints: issuer entity configuration not provided")
+        subject_source = @subject_entity_configuration || @issuer_entity_configuration
+        unless subject_source
+          OmniauthOpenidFederation::Logger.warn("[EntityStatementValidator] Cannot validate authority_hints: subject entity configuration not provided")
           return
         end
 
-        issuer_config = if @issuer_entity_configuration.is_a?(Hash)
-          @issuer_entity_configuration
-        elsif @issuer_entity_configuration.respond_to?(:parse)
-          @issuer_entity_configuration.parse
-        else
-          raise ValidationError, "Invalid issuer entity configuration format"
-        end
-
-        authority_hints = issuer_config[:claims]&.fetch("authority_hints", []) ||
-          issuer_config["claims"]&.fetch("authority_hints", []) ||
-          issuer_config.fetch("authority_hints", [])
+        subject_config = normalize_entity_configuration_hash(subject_source)
+        authority_hints = extract_authority_hints_from_config(subject_config)
 
         unless authority_hints.is_a?(Array) && authority_hints.include?(@payload["iss"])
           raise ValidationError, "Subordinate Statement issuer '#{@payload["iss"]}' MUST be listed in the authority_hints array of the subject's Entity Configuration"
         end
+      end
+
+      def normalize_entity_configuration_hash(config)
+        if config.is_a?(Hash)
+          config
+        elsif config.respond_to?(:parse)
+          config.parse
+        else
+          raise ValidationError, "Invalid entity configuration format"
+        end
+      end
+
+      def extract_authority_hints_from_config(config)
+        claims = config[:claims] || config["claims"]
+        if claims.is_a?(Hash)
+          hints = claims[:authority_hints] || claims["authority_hints"]
+          return hints if hints
+        end
+
+        config[:authority_hints] || config["authority_hints"] || []
       end
 
       def validate_iat_claim

@@ -211,10 +211,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         iss: provider_issuer,
         sub: provider_issuer,
         metadata: {
-          openid_provider: {
-            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-            token_endpoint: "https://provider.example.com/oauth2/token"
-          }
+          openid_provider: {}
         }
       }
       jwt = encode_entity_statement(entity_statement)
@@ -222,18 +219,26 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = described_class.new(
         nil,
+        issuer: provider_issuer,
         send_nonce: false,
+        fetch_userinfo: false,
         entity_statement_path: entity_statement_path,
+        entity_statement_url: nil,
         client_options: {
           identifier: client_id,
           redirect_uri: redirect_uri,
-          private_key: private_key
+          private_key: private_key,
+          host: URI.parse(provider_issuer).host,
+          authorization_endpoint: "/oauth2/authorize",
+          token_endpoint: "/oauth2/token",
+          jwks_uri: nil
         }
       )
 
-      id_token = JWT.encode({iss: provider_issuer, sub: "user-123"}, private_key, "RS256")
+      id_token = JWT.encode({iss: provider_issuer, sub: "user-123", aud: client_id, exp: Time.now.to_i + 3600, iat: Time.now.to_i}, private_key, "RS256", {kid: "missing"})
       access_token_double = double(id_token: id_token)
       strategy.instance_variable_set(:@access_token, access_token_double)
+      allow(strategy).to receive(:resolve_jwks_for_validation_with_kid).and_return(nil)
 
       expect { strategy.raw_info }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
     end
@@ -322,7 +327,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       strategy.instance_variable_set(:@access_token, access_token_double)
 
       expect { strategy.raw_info }
-        .to raise_error(OmniauthOpenidFederation::ValidationError, /Key with kid/)
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
     end
 
     it "raises SignatureError when ID token signature does not match JWKS key" do
@@ -467,7 +472,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       id_token = JWT.encode({iss: provider_issuer, sub: "user-123", aud: client_id, exp: Time.now.to_i + 3600, iat: Time.now.to_i}, private_key, "RS256", header)
       access_token_double = double(
         id_token: id_token,
-        userinfo!: {email: "user@example.com"}
+        userinfo!: {sub: "user-123", email: "user@example.com"}
       )
       strategy.instance_variable_set(:@access_token, access_token_double)
 
@@ -505,7 +510,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       id_token = JWT.encode({iss: provider_issuer, sub: "user-123", aud: client_id, exp: Time.now.to_i + 3600, iat: Time.now.to_i}, private_key, "RS256", header)
       access_token_double = double(
         id_token: id_token,
-        userinfo!: {email: "user@example.com"}
+        userinfo!: {sub: "user-123", email: "user@example.com"}
       )
       strategy.instance_variable_set(:@access_token, access_token_double)
 
@@ -688,7 +693,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       attach_access_token(
         strategy,
         id_token: encode_id_token_for_provider_jwk(jwk),
-        userinfo: {email: "user@example.com"}
+        userinfo: {sub: "user-123", email: "user@example.com"}
       )
 
       expect(strategy.raw_info).to be_a(Hash)

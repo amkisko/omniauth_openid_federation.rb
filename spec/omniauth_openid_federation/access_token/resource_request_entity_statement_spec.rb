@@ -239,8 +239,8 @@ RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
       )
       token = described_class.new(access_token: "token", client: client)
 
-      result = token.resource_request { response }
-      expect(result).to be_a(Hash)
+      expect { token.resource_request { response } }
+        .to raise_error(OmniauthOpenidFederation::ValidationError)
     end
 
     it "handles entity statement without jwks_uri in metadata" do
@@ -492,12 +492,8 @@ RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
 
       allow(OmniauthOpenidFederation::Logger).to receive(:warn)
 
-      result = token.resource_request { response }
-
-      aggregate_failures do
-        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/No keys found in entity statement/)
-        expect(result).to be_a(Hash)
-      end
+      expect { token.resource_request { response } }
+        .to raise_error(OmniauthOpenidFederation::ValidationError)
     ensure
       FileUtils.rm_rf(temp_dir) if temp_dir
     end
@@ -548,12 +544,8 @@ RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
 
       allow(OmniauthOpenidFederation::Logger).to receive(:warn)
 
-      result = token.resource_request { response }
-      aggregate_failures do
-        expect(result).to be_a(Hash)
-        # The actual error is about failed signed JWKS fetch, not missing keys
-        expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to fetch signed JWKS/)
-      end
+      expect { token.resource_request { response } }
+        .to raise_error(OmniauthOpenidFederation::ValidationError)
     ensure
       FileUtils.rm_rf(temp_dir) if temp_dir
     end

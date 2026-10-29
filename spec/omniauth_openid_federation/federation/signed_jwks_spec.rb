@@ -157,7 +157,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::SignedJWKS do
           if OmniauthOpenidFederation::CacheAdapter.available?
             OmniauthOpenidFederation::CacheAdapter.clear
             # Also clear via the cache module
-            OmniauthOpenidFederation::Cache.delete_signed_jwks(signed_jwks_uri)
+            OmniauthOpenidFederation::Cache.delete_signed_jwks(signed_jwks_uri, entity_jwks: entity_jwks)
           end
           OmniauthOpenidFederation.configure do |config|
             config.cache_ttl = nil
@@ -167,7 +167,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::SignedJWKS do
 
         it "caches forever and fetches once" do
           # Clear cache before test to ensure fresh fetch
-          cache_key = OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri)
+          cache_key = OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri, entity_jwks: entity_jwks)
           cache_was_available = false
           if OmniauthOpenidFederation::CacheAdapter.available?
             OmniauthOpenidFederation::CacheAdapter.delete(cache_key)
@@ -250,7 +250,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::SignedJWKS do
           # Clear cache before each test
           if defined?(Rails) && Rails.cache
             Rails.cache.clear
-            cache_key = OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri)
+            cache_key = OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri, entity_jwks: entity_jwks)
             Rails.cache.delete(cache_key)
           end
           OmniauthOpenidFederation.configure do |config|
@@ -309,7 +309,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::SignedJWKS do
           # Clear cache before test
           if OmniauthOpenidFederation::CacheAdapter.available?
             OmniauthOpenidFederation::CacheAdapter.clear
-            cache_key = OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri)
+            cache_key = OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri, entity_jwks: entity_jwks)
             OmniauthOpenidFederation::CacheAdapter.delete(cache_key)
           end
         end
@@ -356,7 +356,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::SignedJWKS do
           result = described_class.fetch!(signed_jwks_uri, entity_jwks, cache_ttl: custom_ttl)
 
           # Verify cache was written with custom TTL (we can't directly check TTL, but we can verify it was cached)
-          OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri)
+          OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri, entity_jwks: entity_jwks)
           # Second call should use cache (verify by checking only one HTTP request was made)
           result2 = described_class.fetch!(signed_jwks_uri, entity_jwks, cache_ttl: custom_ttl)
           aggregate_failures do
@@ -424,7 +424,7 @@ RSpec.describe OmniauthOpenidFederation::Federation::SignedJWKS do
 
       # Clear cache to ensure we hit the verification error path
       if OmniauthOpenidFederation::CacheAdapter.available?
-        cache_key = OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri)
+        cache_key = OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri, entity_jwks: entity_jwks)
         OmniauthOpenidFederation::CacheAdapter.delete(cache_key)
       end
 

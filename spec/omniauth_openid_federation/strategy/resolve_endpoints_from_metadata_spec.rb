@@ -65,7 +65,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles errors in resolve_endpoints_from_metadata" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       File.write(entity_statement_path, "invalid")
 
       strategy = build_strategy(
@@ -93,7 +93,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "uses entity issuer when metadata is nil" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer
@@ -104,7 +104,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
       strategy = build_strategy(
         nil,
-        entity_statement_path: entity_statement_path
+        entity_statement_path: entity_statement_path,
+        client_options: relative_path_client_options
       )
 
       # Behavior: Should use entity issuer (iss claim) when metadata doesn't have issuer
@@ -122,7 +123,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles errors in resolve_issuer_from_metadata" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       File.write(entity_statement_path, "invalid")
 
       strategy = build_strategy(
@@ -140,7 +141,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
 
   describe "resolve_audience - all branches" do
     it "handles entity issuer (iss claim) as audience fallback" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       jwk = JWT::JWK.new(public_key)
       jwk_export = jwk.export
       entity_statement = {
@@ -171,7 +172,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles non-URL entity issuer gracefully" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       entity_statement = {
         iss: "not-a-url",
         sub: "not-a-url",
@@ -735,7 +736,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles errors in extraction" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       File.write(entity_statement_path, "invalid.jwt")
 
       strategy = build_automatic_strategy(
@@ -771,27 +772,19 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       end
     end
 
-    it "returns nil when file does not exist" do
+    it "raises when configured entity statement file does not exist" do
       strategy = build_strategy(
         nil,
         entity_statement_path: "/nonexistent/path.jwt",
         client_options: relative_path_client_options
       )
 
-      # Behavior: When file doesn't exist, request object should not be encrypted
-      uri = strategy.authorize_uri
-      uri_obj = URI.parse(uri)
-      query_params = URI.decode_www_form(uri_obj.query || "").to_h
-      request_jwt = query_params["request"]
-      parts = request_jwt.split(".")
-      aggregate_failures do
-        expect(uri).to be_present
-        expect(parts.length).to eq(3) # Not encrypted
-      end
+      expect { strategy.authorize_uri }
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /entity statement file not found/)
     end
 
     it "loads metadata with encryption parameters" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       provider_encryption_key = OpenSSL::PKey::RSA.new(2048)
       provider_encryption_jwk = JWT::JWK.new(provider_encryption_key.public_key).export
       provider_encryption_jwk[:use] = "enc"
@@ -844,7 +837,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles errors in loading metadata" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       File.write(entity_statement_path, "invalid")
 
       strategy = build_strategy(
@@ -889,20 +882,19 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(uri).to be_present
     end
 
-    it "returns nil when file does not exist" do
+    it "raises when configured entity statement file does not exist for key extraction" do
       strategy = build_strategy(
         nil,
         entity_statement_path: "/nonexistent/path.jwt",
         client_options: relative_path_client_options
       )
 
-      # Behavior: When file doesn't exist, should work with configured private key
-      uri = strategy.authorize_uri
-      expect(uri).to be_present
+      expect { strategy.authorize_uri }
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /entity statement file not found/)
     end
 
     it "loads metadata with JWKS" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
       entity_statement = {
         iss: provider_issuer,
@@ -937,7 +929,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles errors in loading metadata" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_statement_path = durable_entity_statement_path("entity")
       File.write(entity_statement_path, "invalid")
 
       strategy = build_strategy(

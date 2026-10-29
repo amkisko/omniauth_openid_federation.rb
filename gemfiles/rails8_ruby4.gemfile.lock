@@ -1,7 +1,7 @@
 PATH
   remote: ..
   specs:
-    omniauth_openid_federation (2.0.0)
+    omniauth_openid_federation (2.1.0)
       http (~> 6.0)
       jwe (~> 1.1)
       jwt (~> 3.2)
@@ -417,7 +417,7 @@ CHECKSUMS
   oauth2 (2.0.25) sha256=2f736a2f93c2caa67c1b08dc3c9889bb907d62643f3183fefaa1723cba6a82ac
   omniauth (2.1.4) sha256=42a05b0496f0d22e1dd85d42aaf602f064e36bb47a6826a27ab55e5ba608763c
   omniauth-oauth2 (1.9.0) sha256=ed15f6d9d20991807ce114cc5b9c1453bce3645b64e51c68c90cff5ff153fee8
-  omniauth_openid_federation (2.0.0)
+  omniauth_openid_federation (2.1.0)
   parallel (2.1.0) sha256=b35258865c2e31134c5ecb708beaaf6772adf9d5efae28e93e99260877b09356
   parser (3.3.12.0) sha256=21a6d7f755d5a24dfbdc6e6b772e4e879a52e7631a88bc5a3a134606052c9828
   polyrun (2.2.2) sha256=fe2bbdd67c3111de641b88dae3c22ee524a14f8d8f028f033749a0b97334be68

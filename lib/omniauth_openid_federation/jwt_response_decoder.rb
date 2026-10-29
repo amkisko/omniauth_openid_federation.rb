@@ -176,12 +176,10 @@ module OmniauthOpenidFederation
       return nil if OmniauthOpenidFederation::StringHelpers.blank?(signed_jwks_uri)
 
       OmniauthOpenidFederation::Federation::SignedJWKS.fetch!(signed_jwks_uri, parsed[:entity_jwks])
-    rescue OmniauthOpenidFederation::SecurityError => error
-      OmniauthOpenidFederation::Logger.error("[JwtResponseDecoder] Security error: #{error.message}")
-      nil
-    rescue
-      OmniauthOpenidFederation::Logger.warn("[JwtResponseDecoder] Failed to fetch signed JWKS, falling back to standard JWKS")
-      nil
+    rescue OmniauthOpenidFederation::SecurityError, OmniauthOpenidFederation::ValidationError,
+      OmniauthOpenidFederation::FetchError => error
+      OmniauthOpenidFederation::Logger.error("[JwtResponseDecoder] Signed JWKS failure (fail closed): #{error.message}")
+      raise
     end
 
     def load_entity_statement_keys_for_jwks_validation(strategy_options)

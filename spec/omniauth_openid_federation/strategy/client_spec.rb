@@ -88,14 +88,14 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(strategy.client).to be_a(OmniauthOpenidFederation::OidcClient)
     end
 
-    it "handles missing entity statement file gracefully" do
-      strategy = build_decode_strategy(
-        nil,
-        entity_statement_path: "/nonexistent/path.jwt",
-        client_options: relative_path_client_options
-      )
-
-      expect(strategy.client).to be_a(OmniauthOpenidFederation::OidcClient)
+    it "fails closed when configured entity statement file is missing" do
+      expect {
+        build_decode_strategy(
+          nil,
+          entity_statement_path: "/nonexistent/path.jwt",
+          client_options: relative_path_client_options
+        ).client
+      }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /entity statement file not found/)
     end
 
     it "handles entity statement parsing errors gracefully" do
@@ -215,16 +215,16 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       expect(strategy.authorize_uri).to be_present
     end
 
-    it "handles missing entity statement file in resolve_audience" do
-      strategy = build_decode_strategy_for_authorize(
-        entity_statement_path: "/nonexistent/path.jwt",
-        client_options: decode_client_options(
-          authorization_endpoint: "https://provider.example.com/oauth2/authorize",
-          token_endpoint: "https://provider.example.com/oauth2/token"
-        )
-      )
-
-      expect(strategy.authorize_uri).to be_present
+    it "fails closed when entity statement file is missing in resolve_audience" do
+      expect {
+        build_decode_strategy_for_authorize(
+          entity_statement_path: "/nonexistent/path.jwt",
+          client_options: decode_client_options(
+            authorization_endpoint: "https://provider.example.com/oauth2/authorize",
+            token_endpoint: "https://provider.example.com/oauth2/token"
+          )
+        ).authorize_uri
+      }.to raise_error(OmniauthOpenidFederation::ConfigurationError, /entity statement file not found/)
     end
   end
 
@@ -374,7 +374,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         double(
           access_token: "token",
           id_token: encode_id_token_for_provider_jwk(jwk),
-          userinfo!: double(raw_attributes: {})
+          userinfo!: double(raw_attributes: {sub: "user-123"})
         )
       )
       allow(strategy).to receive_messages(request: double(params: {"code" => "auth-code"}), session: {})

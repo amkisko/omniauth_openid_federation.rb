@@ -250,6 +250,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
           id_token: id_token_jwt,
           userinfo!: double(
             raw_attributes: {
+              sub: "user-123",
               email: "user@example.com",
               name: "Test User",
               given_name: "Test",
@@ -351,6 +352,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
           id_token: id_token_jwt,
           userinfo!: double(
             raw_attributes: {
+              sub: "user-123",
               email: "user@example.com",
               name: "Test User"
             }
@@ -428,6 +430,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
           id_token: id_token_jwt,
           userinfo!: double(
             raw_attributes: {
+              sub: "user-123",
               email: "user@example.com",
               name: "Test User",
               given_name: "Test",
@@ -531,6 +534,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
             id_token: id_token_jwt,
             userinfo!: double(
               raw_attributes: {
+                sub: "user-123",
                 email: "user@example.com",
                 name: "Test User"
               }
