@@ -24,7 +24,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       attach_access_token(strategy, id_token: encode_rs256({iss: provider_issuer, sub: "user-123"}))
 
       expect { strategy.raw_info }
-        .to raise_error(OmniauthOpenidFederation::ValidationError, /Key with kid/)
+        .to raise_error(OmniauthOpenidFederation::ConfigurationError, /JWKS not available/)
     end
 
     context "with provider JWKS entity statement" do
@@ -149,7 +149,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       attach_access_token(
         decode_strategy,
         id_token: valid_id_token,
-        userinfo: '{"email":"user@example.com","name":"Test User"}'
+        userinfo: '{"sub":"user-123","email":"user@example.com","name":"Test User"}'
       )
 
       result = decode_strategy.raw_info
@@ -160,24 +160,24 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles hash userinfo" do
-      userinfo_hash = {email: "user@example.com", name: "Test User"}
+      userinfo_hash = {sub: "user-123", email: "user@example.com", name: "Test User"}
       attach_access_token(decode_strategy, id_token: valid_id_token, userinfo: userinfo_hash)
 
-      expect(decode_strategy.raw_info).to include(userinfo_hash)
+      expect(decode_strategy.raw_info).to include("sub" => "user-123", "email" => "user@example.com", "name" => "Test User")
     end
 
     it "handles userinfo with raw_attributes" do
       attach_access_token(
         decode_strategy,
         id_token: valid_id_token,
-        userinfo: double(raw_attributes: {email: "user@example.com"})
+        userinfo: double(raw_attributes: {sub: "user-123", email: "user@example.com"})
       )
 
-      expect(decode_strategy.raw_info[:email]).to eq("user@example.com")
+      expect(decode_strategy.raw_info["email"]).to eq("user@example.com")
     end
 
     it "handles userinfo with as_json" do
-      userinfo_double = double(raw_attributes: nil, as_json: {email: "user@example.com"})
+      userinfo_double = double(raw_attributes: nil, as_json: {sub: "user-123", email: "user@example.com"})
       allow(userinfo_double).to receive(:respond_to?).with(:raw_attributes).and_return(false)
       allow(userinfo_double).to receive(:respond_to?).with(:as_json).and_return(true)
       attach_access_token(decode_strategy, id_token: valid_id_token, userinfo: userinfo_double)
@@ -188,6 +188,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     it "handles userinfo with instance variables" do
       userinfo_obj = Class.new do
         def initialize
+          @sub = "user-123"
           @email = "user@example.com"
           @name = "Test User"
         end
@@ -200,8 +201,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       result = decode_strategy.raw_info
       aggregate_failures do
         expect(result).to be_a(Hash)
-        expect(result[:email]).to eq("user@example.com")
-        expect(result[:name]).to eq("Test User")
+        expect(result["email"]).to eq("user@example.com")
+        expect(result["name"]).to eq("Test User")
       end
     end
   end
@@ -264,21 +265,22 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
     end
 
     it "handles relative path with Rails.root" do
-      provider_entity_statement_path # stub Rails.root before writing under tmp/
+      rails_root = Pathname.new(Dir.mktmpdir("omniauth-openid-federation-rails-root"))
+      stub_const("Rails", double(root: rails_root, cache: nil))
       relative_path = "tmp/test_entity.jwt"
-      full_path = Rails.root.join(relative_path).to_s
+      full_path = rails_root.join(relative_path).to_s
       FileUtils.mkdir_p(File.dirname(full_path))
       File.write(full_path, encode_entity_statement(client_entity_statement_payload))
 
       strategy = build_decode_strategy_for_authorize(
-        entity_statement_path: provider_entity_statement_path,
+        entity_statement_path: write_provider_entity_statement_file,
         client_entity_statement_path: relative_path,
         client_registration_type: :automatic
       )
 
       expect(strategy.authorize_uri).to be_present
     ensure
-      File.delete(full_path) if defined?(full_path) && File.exist?(full_path)
+      FileUtils.remove_entry(rails_root) if defined?(rails_root) && rails_root && Dir.exist?(rails_root)
     end
   end
 
@@ -423,7 +425,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       attach_access_token(
         strategy,
         id_token: encode_id_token_for_provider_jwk(jwk),
-        userinfo: {email: "user@example.com"}
+        userinfo: {sub: "user-123", email: "user@example.com"}
       )
 
       expect(strategy.raw_info).to be_a(Hash)

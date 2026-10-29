@@ -22,14 +22,15 @@ module OmniauthOpenidFederation
 
         begin
           # Resolve endpoints from entity statement
-          # Use temporary file if we have content but no path
+          # Use temporary file if we have content but no readable configured path
+          created_temp_entity_statement = false
           entity_statement_path = if options.entity_statement_path && File.exist?(resolve_entity_statement_path(options.entity_statement_path))
             resolve_entity_statement_path(options.entity_statement_path)
           else
-            # Create temporary file for EndpointResolver
             temp_file = Tempfile.new(["entity_statement", ".jwt"])
             temp_file.write(entity_statement_content)
             temp_file.close
+            created_temp_entity_statement = true
             temp_file.path
           end
 
@@ -38,8 +39,7 @@ module OmniauthOpenidFederation
             config: {} # Don't pass client_options here - we want entity statement values
           )
 
-          # Clean up temp file if we created one
-          if entity_statement_path.start_with?(Dir.tmpdir)
+          if created_temp_entity_statement
             begin
               File.unlink(entity_statement_path)
             rescue
@@ -175,13 +175,14 @@ module OmniauthOpenidFederation
 
         if entity_statement_content
           begin
-            # Use temporary file for EndpointResolver
+            created_temp_entity_statement = false
             entity_statement_path = if options.entity_statement_path && File.exist?(resolve_entity_statement_path(options.entity_statement_path))
               resolve_entity_statement_path(options.entity_statement_path)
             else
               temp_file = Tempfile.new(["entity_statement", ".jwt"])
               temp_file.write(entity_statement_content)
               temp_file.close
+              created_temp_entity_statement = true
               temp_file.path
             end
 
@@ -193,8 +194,7 @@ module OmniauthOpenidFederation
 
             if resolved[:audience] && OmniauthOpenidFederation::StringHelpers.present?(resolved[:audience])
               OmniauthOpenidFederation::Logger.debug("[Strategy] Resolved audience from entity statement: #{resolved[:audience]}")
-              # Clean up temp file if we created one
-              if entity_statement_path.start_with?(Dir.tmpdir)
+              if created_temp_entity_statement
                 begin
                   File.unlink(entity_statement_path)
                 rescue
@@ -217,8 +217,7 @@ module OmniauthOpenidFederation
               OmniauthOpenidFederation::Logger.debug("[Strategy] Could not get entity issuer from entity statement: #{e.message}")
             end
 
-            # Clean up temp file if we created one
-            if entity_statement_path.start_with?(Dir.tmpdir)
+            if created_temp_entity_statement
               begin
                 File.unlink(entity_statement_path)
               rescue

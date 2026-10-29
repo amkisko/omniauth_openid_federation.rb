@@ -95,7 +95,7 @@ module OmniauthOpenidFederation
       if allowed_dirs && !allowed_dirs.empty?
         allowed = allowed_dirs.any? do |dir|
           expanded_dir = File.expand_path(dir)
-          resolved.start_with?(expanded_dir)
+          resolved == expanded_dir || resolved.start_with?(expanded_dir + File::SEPARATOR)
         end
         unless allowed
           raise SecurityError, "File path outside allowed directories: #{sanitize_path(path)}"

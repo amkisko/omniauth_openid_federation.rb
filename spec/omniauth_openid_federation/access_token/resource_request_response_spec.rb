@@ -343,8 +343,8 @@ RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
       )
       token = described_class.new(access_token: "token", client: client)
 
-      result = token.resource_request { response }
-      expect(result).to be_a(Hash)
+      expect { token.resource_request { response } }
+        .to raise_error(OmniauthOpenidFederation::ValidationError)
     end
 
     it "handles status as non-integer, non-code object" do

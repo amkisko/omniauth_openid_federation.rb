@@ -256,6 +256,7 @@ RSpec.describe "Rodauth integration with omniauth_openid_federation", type: :int
           .to_return(
             status: 200,
             body: {
+              sub: "user-123",
               email: "user@example.com",
               name: "Test User"
             }.to_json,

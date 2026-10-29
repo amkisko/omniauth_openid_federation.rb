@@ -21,8 +21,10 @@ spec/omniauth_openid_federation/federation/entity_statement_validator_spec.rb
 spec/omniauth_openid_federation/federation/federation_endpoint_spec.rb
 spec/omniauth_openid_federation/federation/metadata_policy_merger_spec.rb
 spec/omniauth_openid_federation/federation/signed_jwks_spec.rb
+spec/omniauth_openid_federation/federation/trust_chain_resolver_security_spec.rb
 spec/omniauth_openid_federation/federation/trust_chain_resolver_spec.rb
 spec/omniauth_openid_federation/http_client_spec.rb
+spec/omniauth_openid_federation/http_client_streaming_spec.rb
 spec/omniauth_openid_federation/id_token_spec.rb
 spec/omniauth_openid_federation/instrumentation_spec.rb
 spec/omniauth_openid_federation/integration_spec.rb
@@ -52,6 +54,7 @@ spec/omniauth_openid_federation/strategy/fail_spec.rb
 spec/omniauth_openid_federation/strategy/resolve_endpoints_from_metadata_spec.rb
 spec/omniauth_openid_federation/strategy/resolve_jwks_for_validation_spec.rb
 spec/omniauth_openid_federation/strategy/strategy_spec.rb
+spec/omniauth_openid_federation/strategy/userinfo_sub_binding_spec.rb
 spec/omniauth_openid_federation/string_helpers_spec.rb
 spec/omniauth_openid_federation/tasks/tasks_helper_fetch_entity_statement_spec.rb
 spec/omniauth_openid_federation/tasks/tasks_helper_fetch_jwks_spec.rb
@@ -68,6 +71,7 @@ spec/omniauth_openid_federation/utils_spec.rb
 spec/omniauth_openid_federation/validators_spec.rb
 spec/omniauth_openid_federation/version_spec.rb
 spec/omniauth_openid_federation_spec.rb
+spec/release_spec.rb
 spec/tasks/fetch_entity_statement_spec.rb
 spec/tasks/fetch_jwks_spec.rb
 spec/tasks/omniauth_openid_federation_rake_spec.rb

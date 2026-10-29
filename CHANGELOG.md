@@ -2,7 +2,22 @@
 
 ## Unreleased
 
-- Add `rfcs/` starter pack: process (RFC 0001), positioning (RFC 0002), and Standards Track design RFCs 0003–0006 for strategy, trust chain, token verification, and federation endpoint.
+## 2.1.0 (2026-10-29)
+
+- BREAKING: Require Ruby `>= 3.4` (gemspec); drop Rails 6 and TruffleRuby appraisal targets from the tested matrix
+- Fix trust chain resolution to bind fetched entity configurations to the requested entity id and verify trust-anchor statements with pinned `trust_anchors[].jwks`
+- Fix `EntityStatementValidator` authority_hints checks to use the subject entity configuration (`subject_entity_configuration:`)
+- Fix UserInfo merge so `sub` must match the ID token and identity claims (`iss`, `sub`, `aud`, `exp`, `iat`) stay from the ID token
+- Fix signed JWKS handling to fail closed on signature, validation, and fetch errors instead of falling back to unsigned `jwks_uri`
+- Fix signed JWKS cache keys to include the verifying `entity_jwks` digest
+- Fix OAuth callback to validate `state` before handling authorization `error` responses
+- Fix configured `entity_statement_path` missing-file handling to raise `ConfigurationError` instead of silent network fallback
+- Fix endpoint resolution so configured entity-statement files under `Dir.tmpdir` are not deleted after resolve
+- Fix `client_entity_statement_url` so `load_client_entity_statement` fetches from the URL
+- Fix `Utils.validate_file_path!` allowed-directory checks to require a path-separator boundary
+- Stop streaming HTTP responses at the configured byte limit and close oversized responses before buffering the remaining body
+- Add `rfcs/` starter pack: process (RFC 0001), positioning (RFC 0002), and Standards Track design RFCs 0003–0006 for strategy, trust chain, token verification, and federation endpoint
+- Document Ruby `>= 3.4` in README requirements
 
 ## 2.0.0 (2026-07-06)
 

@@ -323,7 +323,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
         refresh_token: "refresh-token",
         expires_in: 3600,
         id_token: id_token_jwt,
-        userinfo!: double(raw_attributes: {})
+        userinfo!: double(raw_attributes: {sub: "user-123", email: "user@example.com"})
       )
       allow(oidc_client).to receive(:access_token!).and_return(access_token_double)
 
@@ -505,6 +505,33 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation do
           expect(auth_hash).to be_present
         end
       end
+    end
+
+    it "rejects authorization error callbacks without a matching state" do
+      session = build_callback_session(state: SecureRandom.hex(16))
+
+      env = Rack::MockRequest.env_for(
+        "/auth/openid_federation/callback?error=access_denied",
+        "rack.session" => session
+      )
+
+      strategy = described_class.new(nil, name: "openid_federation",
+        client_options: {
+          identifier: client_id,
+          redirect_uri: redirect_uri,
+          private_key: private_key,
+          host: URI.parse(provider_issuer).host,
+          authorization_endpoint: "/oauth2/authorize",
+          token_endpoint: "/oauth2/token"
+        },
+        issuer: provider_issuer,
+        audience: provider_issuer)
+      strategy.instance_variable_set(:@env, env)
+      allow(strategy).to receive_messages(request: Rack::Request.new(env), session: session)
+
+      strategy.callback_phase
+
+      expect(strategy.env["omniauth.error.type"]).to eq(:csrf_detected)
     end
 
     it "handles authorization error with error_description in callback" do

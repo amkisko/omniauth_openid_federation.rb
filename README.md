@@ -473,8 +473,8 @@ rake openid_federation:test_authentication_flow[
 
 ## Requirements
 
-- Ruby >= 3.0
-- Rails >= 6.1 (or compatible Rack application)
+- Ruby >= 3.4
+- Rails >= 7.2 (or compatible Rack application; see Appraisal gemfiles)
 - OpenSSL (for RSA key operations)
 
 ## Example Files

@@ -20,9 +20,10 @@ module OmniauthOpenidFederation
           if File.exist?(path)
             OmniauthOpenidFederation::Logger.debug("[Strategy] Loading provider entity statement from file: #{path}")
             return File.read(path).strip
-          else
-            OmniauthOpenidFederation::Logger.warn("[Strategy] Provider entity statement file not found: #{path}, will try to fetch from URL")
           end
+
+          raise OmniauthOpenidFederation::ConfigurationError,
+            "Provider entity statement file not found: #{path}"
         end
 
         # Priority 2: Fetch from URL if provided

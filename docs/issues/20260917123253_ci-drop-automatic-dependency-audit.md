@@ -2,7 +2,7 @@ Test CI ran bundler-audit before specs. Quality was blocked by advisory freshnes
 
 ## Participants
 
-- amkisko
+Andrei Makarov (@amkisko)
 
 ## Decisions
 

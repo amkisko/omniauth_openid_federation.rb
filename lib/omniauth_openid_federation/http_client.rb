@@ -62,10 +62,47 @@ module OmniauthOpenidFederation
           next
         end
 
-        return response
+        return enforce_body_limit!(response)
       rescue *RETRYABLE_ERRORS => error
         retries = handle_network_error(method, uri, error, retries, max_retries, max_attempts, retry_delay)
       end
+    end
+
+    def self.enforce_body_limit!(response)
+      max_bytes = Constants::MAX_HTTP_RESPONSE_BODY_BYTES
+      content_length = response.headers&.[]("Content-Length") || response.headers&.[]("content-length")
+      if content_length && content_length.to_i > max_bytes
+        raise OmniauthOpenidFederation::NetworkError,
+          "HTTP response Content-Length exceeds limit (#{max_bytes} bytes)"
+      end
+
+      response = buffer_streamed_response(response, max_bytes) if response.body.is_a?(HTTP::Response::Body)
+      body = response.body
+      size = if body.respond_to?(:bytesize)
+        body.bytesize
+      else
+        body.to_s.bytesize
+      end
+
+      if size > max_bytes
+        raise OmniauthOpenidFederation::NetworkError,
+          "HTTP response body exceeds limit (#{max_bytes} bytes)"
+      end
+      response
+    end
+
+    def self.buffer_streamed_response(response, max_bytes)
+      contents = String.new(encoding: response.body.encoding)
+      response.body.each do |chunk|
+        if contents.bytesize + chunk.bytesize > max_bytes
+          response.connection.close
+          raise OmniauthOpenidFederation::NetworkError, "HTTP response body exceeds limit (#{max_bytes} bytes)"
+        end
+        contents << chunk
+      end
+      HTTP::Response.new(status: response.status.code, version: response.version,
+        headers: response.headers, proxy_headers: response.proxy_headers,
+        request: response.request, body: contents)
     end
 
     def self.perform_request(http_client, headers, method, uri, form)
@@ -178,6 +215,6 @@ module OmniauthOpenidFederation
 
     private_class_method :request, :perform_request, :should_retry_for_status?, :retry_after_status,
       :handle_network_error, :build_http_client, :build_http_options_hash, :ssl_verify_mode, :ssl_ca_file,
-      :max_retries_for, :resolve_timeout, :retryable_http_status?, :retry_delay_for
+      :max_retries_for, :resolve_timeout, :retryable_http_status?, :retry_delay_for, :enforce_body_limit!, :buffer_streamed_response
   end
 end

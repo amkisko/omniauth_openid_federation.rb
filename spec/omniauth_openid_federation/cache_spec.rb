@@ -34,6 +34,14 @@ RSpec.describe OmniauthOpenidFederation::Cache do
         expect(key1).to start_with("omniauth_openid_federation:signed_jwks:")
       end
     end
+
+    it "scopes the cache key by entity JWKS used for verification" do
+      uri = "https://example.com/.well-known/signed-jwks.json"
+      key_a = described_class.key_for_signed_jwks(uri, entity_jwks: {"keys" => [{"kid" => "a"}]})
+      key_b = described_class.key_for_signed_jwks(uri, entity_jwks: {"keys" => [{"kid" => "b"}]})
+
+      expect(key_a).not_to eq(key_b)
+    end
   end
 
   describe ".key_for_served_jwks" do

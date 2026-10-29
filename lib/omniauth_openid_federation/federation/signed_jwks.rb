@@ -60,7 +60,10 @@ module OmniauthOpenidFederation
       # @raise [FetchError] If fetching fails
       # @raise [ValidationError] If validation fails
       def self.fetch!(signed_jwks_uri, entity_jwks, cache_key: nil, cache_ttl: nil, force_refresh: false)
-        cache_key ||= OmniauthOpenidFederation::Cache.key_for_signed_jwks(signed_jwks_uri)
+        cache_key ||= OmniauthOpenidFederation::Cache.key_for_signed_jwks(
+          signed_jwks_uri,
+          entity_jwks: entity_jwks
+        )
         config = OmniauthOpenidFederation::Configuration.config
         cache_ttl ||= config.cache_ttl
         rotate_on_errors = config.rotate_on_errors

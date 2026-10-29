@@ -420,8 +420,8 @@ RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
       )
       token = described_class.new(access_token: "token", client: client)
 
-      result = token.resource_request { response }
-      expect(result).to be_a(Hash)
+      expect { token.resource_request { response } }
+        .to raise_error(OmniauthOpenidFederation::ValidationError)
     end
 
     it "fetches signed JWKS endpoint and validates response using entity_jwks keys from entity statement" do
@@ -493,8 +493,8 @@ RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
       )
       token = described_class.new(access_token: "token", client: client)
 
-      result = token.resource_request { response }
-      expect(result).to be_a(Hash)
+      expect { token.resource_request { response } }
+        .to raise_error(OmniauthOpenidFederation::ValidationError)
     end
 
     it "handles general error in fetch_signed_jwks" do
@@ -529,8 +529,8 @@ RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
       )
       token = described_class.new(access_token: "token", client: client)
 
-      result = token.resource_request { response }
-      expect(result).to be_a(Hash)
+      expect { token.resource_request { response } }
+        .to raise_error(OmniauthOpenidFederation::ValidationError)
     end
 
     it "processes entity_jwks when formatted as Hash with symbol keys during load_entity_statement_keys_for_jwks_validation" do
@@ -652,8 +652,8 @@ RSpec.describe OmniauthOpenidFederation::AccessToken, type: :access_token do
       )
       token = described_class.new(access_token: "token", client: client)
 
-      result = token.resource_request { response }
-      expect(result).to be_a(Hash)
+      expect { token.resource_request { response } }
+        .to raise_error(OmniauthOpenidFederation::ValidationError)
     end
   end
 end

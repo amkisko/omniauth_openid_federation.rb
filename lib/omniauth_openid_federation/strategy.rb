@@ -162,7 +162,9 @@ module OmniAuth
             begin
               userinfo = access_token.userinfo!
               userinfo_hash = decode_userinfo(userinfo)
-              id_token_claims.merge(userinfo_hash)
+              merge_userinfo_with_id_token_claims(id_token_claims, userinfo_hash)
+            rescue OmniauthOpenidFederation::ValidationError
+              raise
             rescue => e
               error_msg = "Failed to fetch or decode userinfo: #{e.class} - #{e.message}"
               OmniauthOpenidFederation::Logger.error("[Strategy] #{error_msg}")
