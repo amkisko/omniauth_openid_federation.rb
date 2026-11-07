@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency "http", "~> 6.0"
 
   spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "polyrun", ">= 2.2.0"
+  spec.add_development_dependency "polyrun", ">= 2.2.9"
   spec.add_development_dependency "prosopite", "~> 2.0"
   spec.add_development_dependency "webmock", "~> 3.26", ">= 3.26.2"
   spec.add_development_dependency "rake", "~> 13.3"

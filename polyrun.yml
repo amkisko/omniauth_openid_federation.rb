@@ -1,5 +1,14 @@
 # Parallel RSpec: spec/spec_paths.txt is generated from paths_build before plan/run-shards (or: bundle exec polyrun build-paths).
 
+version: 1
+
+coverage:
+  output_path: coverage
+  formats:
+    - html
+    - cobertura
+    - console
+
 partition:
   suite: rspec
   paths_file: spec/spec_paths.txt
