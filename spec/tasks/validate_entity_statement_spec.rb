@@ -31,7 +31,7 @@ RSpec.describe "openid_federation:validate_entity_statement" do
     it "exits with error" do
       result = run_rake_task("openid_federation:validate_entity_statement", "/nonexistent/file.jwt")
 
-      expect(result[:stdout]).to include("❌ Entity statement file not found")
+      expect(result[:stdout]).to include("Error: Entity statement file not found")
     end
   end
 
@@ -44,8 +44,8 @@ RSpec.describe "openid_federation:validate_entity_statement" do
       result = run_rake_task("openid_federation:validate_entity_statement", entity_statement_file)
 
       aggregate_failures do
-        expect(result[:stdout]).to include("📋 Entity statement fingerprint:")
-        expect(result[:stdout]).to include("📋 Entity Statement Metadata:")
+        expect(result[:stdout]).to include("Entity statement fingerprint:")
+        expect(result[:stdout]).to include("Entity Statement Metadata:")
       end
     end
 
@@ -53,7 +53,7 @@ RSpec.describe "openid_federation:validate_entity_statement" do
       fingerprint = Digest::SHA256.hexdigest(entity_statement_content).downcase
       result = run_rake_task("openid_federation:validate_entity_statement", entity_statement_file, fingerprint)
 
-      expect(result[:stdout]).to include("✅ Fingerprint matches:")
+      expect(result[:stdout]).to include("OK: Fingerprint matches:")
     end
 
     it "exits with error when fingerprint does not match" do
@@ -71,7 +71,7 @@ RSpec.describe "openid_federation:validate_entity_statement" do
       # This test documents the current behavior - validation should fail but doesn't due to the bug
       # We verify it at least processes the fingerprint parameter
       expect(result[:stdout]).to be_present
-      # The bug means it will show "✅ Fingerprint matches" even with wrong fingerprint
+      # The bug means it will show "OK: Fingerprint matches" even with wrong fingerprint
       # This test documents this known issue
     end
 
@@ -120,7 +120,7 @@ RSpec.describe "openid_federation:validate_entity_statement" do
     it "uses default path" do
       result = run_rake_task("openid_federation:validate_entity_statement")
 
-      expect(result[:stdout]).to include("📋 Entity statement fingerprint:")
+      expect(result[:stdout]).to include("Entity statement fingerprint:")
     end
   end
 end

@@ -2,7 +2,7 @@
 
 [![Gem Version](https://badge.fury.io/rb/omniauth_openid_federation.svg?v=1.1.0)](https://badge.fury.io/rb/omniauth_openid_federation) [![Test Status](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/omniauth_openid_federation.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/omniauth_openid_federation.rb/graph/badge.svg?token=CX3O9M1GIT)](https://app.codecov.io/github/amkisko/omniauth_openid_federation.rb) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=amkisko_omniauth_openid_federation.rb&metric=alert_status)](https://sonarcloud.io/project/overview?id=amkisko_omniauth_openid_federation.rb)
 
-OmniAuth strategy for OpenID Federation providers with comprehensive security features, supporting signed request objects, ID token encryption, and full OpenID Federation 1.0 compliance.
+OmniAuth strategy for OpenID Federation providers. Supports signed request objects, ID token encryption, and OpenID Federation 1.0 entity statements.
 
 Design changes go through `rfcs/` (RFC 0001).
 
@@ -41,15 +41,15 @@ bundle install
 
 ## Features
 
-- ✅ **Signed Request Objects (RFC 9101)** - RS256 signing of authorization requests
-- ✅ **Optional Request Object Encryption** - RSA-OAEP encryption when provider requires it
-- ✅ **ID Token Encryption/Decryption** - RSA-OAEP encryption and A128CBC-HS256 decryption
-- ✅ **OpenID Federation 1.0** - Full entity statement support and federation metadata
-- ✅ **Federation Endpoint** - Publish entity statements at `/.well-known/openid-federation`
-- ✅ **Automatic Key Provisioning** - Automatic extraction/generation of signing and encryption keys
-- ✅ **Separate Key Support** - Production-ready support for separate signing and encryption keys
-- ✅ **Client Assertion (private_key_jwt)** - Secure client authentication
-- ✅ **Security Hardened** - OWASP compliant, input validation, rate limiting
+- Signed request objects (RFC 9101): RS256 signing of authorization requests
+- Optional request object encryption: RSA-OAEP when the provider requires it
+- ID token encryption and decryption: RSA-OAEP and A128CBC-HS256
+- OpenID Federation 1.0: entity statements and federation metadata
+- Federation endpoint: publish entity statements at `/.well-known/openid-federation`
+- Automatic key provisioning: extract or generate signing and encryption keys
+- Separate signing and encryption keys when the host needs them
+- Client assertion (`private_key_jwt`) for client authentication
+- Input validation, rate limiting, and related request hardening
 
 ## Quick Start
 

@@ -162,19 +162,19 @@ module OmniauthOpenidFederation
           {
             type: :single,
             count: keys.length,
-            recommendation: "⚠️  Single key detected (duplicate Key IDs). This is NOT RECOMMENDED for production. Use separate signing and encryption keys for better security. Generate with: rake openid_federation:prepare_client_keys[separate]"
+            recommendation: "Warning: Single key detected (duplicate Key IDs). NOT RECOMMENDED for production. Prefer separate signing and encryption keys. Generate with: rake openid_federation:prepare_client_keys[separate]"
           }
         elsif has_both_uses && keys.length >= 2
           {
             type: :separate,
             count: keys.length,
-            recommendation: "✅ Separate keys detected (recommended for production)"
+            recommendation: "Separate keys detected (recommended for production)"
           }
         elsif keys.length == 1
           {
             type: :single,
             count: 1,
-            recommendation: "⚠️  Single key detected. This is NOT RECOMMENDED for production. Use separate signing and encryption keys for better security. Generate with: rake openid_federation:prepare_client_keys[separate]"
+            recommendation: "Warning: Single key detected. NOT RECOMMENDED for production. Prefer separate signing and encryption keys. Generate with: rake openid_federation:prepare_client_keys[separate]"
           }
         else
           {

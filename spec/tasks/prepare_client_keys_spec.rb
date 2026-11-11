@@ -46,7 +46,7 @@ RSpec.describe "openid_federation:prepare_client_keys" do
       result = run_rake_task("openid_federation:prepare_client_keys", "invalid", temp_dir)
 
       aggregate_failures do
-        expect(result[:stdout]).to include("❌ Invalid key_type:")
+        expect(result[:stdout]).to include("Error: Invalid key_type:")
         expect(result[:stdout]).to include("Valid options:")
       end
     end
@@ -58,7 +58,7 @@ RSpec.describe "openid_federation:prepare_client_keys" do
 
       aggregate_failures do
         verify_single_key_files(temp_dir)
-        expect(result[:stdout]).to include("✅ Keys generated successfully:")
+        expect(result[:stdout]).to include("OK: Keys generated successfully:")
         expect(result[:stdout]).to include("Private key:")
         expect(result[:stdout]).to include("Public JWKS:")
       end
@@ -68,7 +68,7 @@ RSpec.describe "openid_federation:prepare_client_keys" do
       result = run_rake_task("openid_federation:prepare_client_keys", "single", temp_dir)
 
       aggregate_failures do
-        expect(result[:stdout]).to include("📋 Send this JWKS to your provider for client registration:")
+        expect(result[:stdout]).to include("Send this JWKS to your provider for client registration:")
         expect(result[:stdout]).to include("SECURITY WARNING:")
       end
     end
@@ -80,7 +80,7 @@ RSpec.describe "openid_federation:prepare_client_keys" do
 
       aggregate_failures do
         verify_separate_key_files(temp_dir)
-        expect(result[:stdout]).to include("✅ Keys generated successfully:")
+        expect(result[:stdout]).to include("OK: Keys generated successfully:")
         expect(result[:stdout]).to include("Signing private key:")
         expect(result[:stdout]).to include("Encryption private key:")
       end
@@ -121,7 +121,7 @@ RSpec.describe "openid_federation:prepare_client_keys" do
     it "exits with error" do
       result = run_rake_task("openid_federation:prepare_client_keys", "single", temp_dir)
 
-      expect(result[:stdout]).to include("❌ Error generating keys:")
+      expect(result[:stdout]).to include("Error generating keys:")
     end
   end
 end

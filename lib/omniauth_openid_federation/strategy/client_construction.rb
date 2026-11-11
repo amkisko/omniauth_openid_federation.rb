@@ -74,7 +74,7 @@ module OmniauthOpenidFederation
             jwks_uri: jwks_uri_endpoint
           )
 
-          # Store key source (object, PEM, or callable) — resolved on each assertion
+          # Store key source (object, PEM, or callable) - resolved on each assertion
           oidc_client.private_key = merged_options[:signing_key] ||
             merged_options["signing_key"] ||
             options.signing_key ||

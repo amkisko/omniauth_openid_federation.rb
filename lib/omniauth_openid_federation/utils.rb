@@ -120,7 +120,7 @@ module OmniauthOpenidFederation
     # @param key [OpenSSL::PKey::RSA] RSA private or public key
     # @param use [String, nil] Key use ("sig" for signing, "enc" for encryption, nil for both)
     # @return [Hash] JWK hash with kty, kid, n, e, and optionally use
-    # @param include_private [Boolean] when true, include private RSA fields (`d`, …).
+    # @param include_private [Boolean] when true, include private RSA fields (`d`, ...).
     #   Public JWKS serving must keep this false so private material is not published.
     def self.rsa_key_to_jwk(key, use: "sig", include_private: false)
       require "digest"

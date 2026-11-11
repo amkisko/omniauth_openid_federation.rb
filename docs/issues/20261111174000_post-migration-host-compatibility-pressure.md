@@ -36,7 +36,7 @@ Andrei Makarov (@amkisko)
 
 ## Next
 
-- Broader suite / coverage job as part of `2.2.0` release prep.
+- Operator publish of `2.2.0` via `make release` when the tree is clean.
 - Downstream hosts can drop local well-known shims after upgrading to `2.2.0`.
 - Keep rolling-restart notes only where callables are not yet wired.
 
@@ -44,4 +44,4 @@ Andrei Makarov (@amkisko)
 
 - `benchmarks/cooker.rb`
 - `benchmarks/ceilings.json`
-- OpenID Federation 1.0 §9.2 entity configuration content type
+- OpenID Federation 1.0 section 9.2 entity configuration content type

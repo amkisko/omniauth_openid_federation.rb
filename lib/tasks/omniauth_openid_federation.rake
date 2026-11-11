@@ -12,7 +12,7 @@ namespace :openid_federation do
     output_file = args[:output_file] || ENV["ENTITY_STATEMENT_OUTPUT"] || "config/provider-entity-statement.jwt"
 
     unless url
-      puts "❌ Entity statement URL is required"
+      puts "Error: Entity statement URL is required"
       puts "   Usage: rake openid_federation:fetch_entity_statement[URL,FINGERPRINT,OUTPUT_FILE]"
       puts "   Or set: ENTITY_STATEMENT_URL, ENTITY_STATEMENT_FINGERPRINT, ENTITY_STATEMENT_OUTPUT"
       exit 1
@@ -32,11 +32,11 @@ namespace :openid_federation do
         output_file: output_file
       )
 
-      puts "✅ Entity statement saved to: #{result[:output_path]}"
-      puts "✅ Fingerprint: #{result[:fingerprint]}"
+      puts "OK: Entity statement saved to: #{result[:output_path]}"
+      puts "OK: Fingerprint: #{result[:fingerprint]}"
 
       metadata = result[:metadata]
-      puts "\n📋 Entity Statement Metadata:"
+      puts "\nEntity Statement Metadata:"
       puts "   Issuer: #{metadata[:issuer]}"
       puts "   Authorization Endpoint: #{metadata[:metadata][:openid_provider][:authorization_endpoint]}"
       puts "   Token Endpoint: #{metadata[:metadata][:openid_provider][:token_endpoint]}"
@@ -46,14 +46,14 @@ namespace :openid_federation do
         puts "   Signed JWKS URI: #{metadata[:metadata][:openid_provider][:signed_jwks_uri]}"
       end
     rescue OmniauthOpenidFederation::Federation::EntityStatement::FetchError => e
-      puts "❌ Error fetching entity statement: #{e.message}"
+      puts "Error fetching entity statement: #{e.message}"
       exit 1
     rescue OmniauthOpenidFederation::Federation::EntityStatement::ValidationError => e
-      puts "❌ Validation error: #{e.message}"
-      puts "   ⚠️  Entity statement fingerprint mismatch. Check provider documentation."
+      puts "Validation error: #{e.message}"
+      puts "   Warning: Entity statement fingerprint mismatch. Check provider documentation."
       exit 1
     rescue => e
-      puts "❌ Unexpected error: #{e.message}"
+      puts "Unexpected error: #{e.message}"
       puts "   #{e.class}: #{e.backtrace.first}"
       exit 1
     end
@@ -73,13 +73,13 @@ namespace :openid_federation do
       )
 
       if expected_fingerprint
-        puts "✅ Fingerprint matches: #{result[:fingerprint]}"
+        puts "OK: Fingerprint matches: #{result[:fingerprint]}"
       else
-        puts "📋 Entity statement fingerprint: #{result[:fingerprint]}"
+        puts "Entity statement fingerprint: #{result[:fingerprint]}"
       end
 
       metadata = result[:metadata]
-      puts "\n📋 Entity Statement Metadata:"
+      puts "\nEntity Statement Metadata:"
       puts "   Issuer: #{metadata[:issuer]}"
       puts "   Authorization Endpoint: #{metadata[:metadata][:openid_provider][:authorization_endpoint]}"
       puts "   Token Endpoint: #{metadata[:metadata][:openid_provider][:token_endpoint]}"
@@ -89,13 +89,13 @@ namespace :openid_federation do
         puts "   Signed JWKS URI: #{metadata[:metadata][:openid_provider][:signed_jwks_uri]}"
       end
     rescue OmniauthOpenidFederation::ConfigurationError => e
-      puts "❌ #{e.message}"
+      puts "Error: #{e.message}"
       exit 1
     rescue OmniauthOpenidFederation::ValidationError => e
-      puts "❌ Validation error: #{e.message}"
+      puts "Validation error: #{e.message}"
       exit 1
     rescue => e
-      puts "❌ Error: #{e.message}"
+      puts "Error: #{e.message}"
       puts "   #{e.class}: #{e.backtrace.first}"
       exit 1
     end
@@ -109,7 +109,7 @@ namespace :openid_federation do
     output_file = args[:output_file] || ENV["JWKS_OUTPUT"] || "config/provider-jwks.json"
 
     unless jwks_uri
-      puts "❌ JWKS URI is required"
+      puts "Error: JWKS URI is required"
       puts "   Usage: rake openid_federation:fetch_jwks[JWKS_URI,OUTPUT_FILE]"
       puts "   Or set: JWKS_URI, JWKS_OUTPUT"
       exit 1
@@ -125,8 +125,8 @@ namespace :openid_federation do
       )
 
       jwks = result[:jwks]
-      puts "✅ JWKS saved to: #{result[:output_path]}"
-      puts "✅ Keys found: #{jwks&.[]("keys")&.length || 0}"
+      puts "OK: JWKS saved to: #{result[:output_path]}"
+      puts "OK: Keys found: #{jwks&.[]("keys")&.length || 0}"
 
       jwks&.[]("keys")&.each_with_index do |key, index|
         puts "   Key #{index + 1}:"
@@ -135,7 +135,7 @@ namespace :openid_federation do
         puts "     - use: #{key["use"] || "not specified"}"
       end
     rescue => e
-      puts "❌ Error fetching JWKS: #{e.message}"
+      puts "Error fetching JWKS: #{e.message}"
       puts "   #{e.class}: #{e.backtrace.first}"
       exit 1
     end
@@ -151,13 +151,13 @@ namespace :openid_federation do
     begin
       metadata = OmniauthOpenidFederation::TasksHelper.parse_entity_statement(file_path: file_path)
 
-      puts "📋 Entity Statement Metadata:"
+      puts "Entity Statement Metadata:"
       puts JSON.pretty_generate(metadata)
     rescue OmniauthOpenidFederation::ConfigurationError, OmniauthOpenidFederation::ValidationError => e
-      puts "❌ Error: #{e.message}"
+      puts "Error: #{e.message}"
       exit 1
     rescue => e
-      puts "❌ Error parsing entity statement: #{e.message}"
+      puts "Error parsing entity statement: #{e.message}"
       puts "   #{e.class}: #{e.backtrace.first}"
       exit 1
     end
@@ -189,7 +189,7 @@ namespace :openid_federation do
         output_dir: output_dir
       )
 
-      puts "\n✅ Keys generated successfully:"
+      puts "\nOK: Keys generated successfully:"
       if key_type == "single"
         puts "   Private key: #{result[:private_key_path]}"
       else
@@ -198,23 +198,23 @@ namespace :openid_federation do
       end
 
       puts "   Public JWKS: #{result[:public_jwks_path]}"
-      puts "\n📋 Send this JWKS to your provider for client registration:"
+      puts "\nSend this JWKS to your provider for client registration:"
       separator = "=" * 70
       puts separator
       puts JSON.pretty_generate(result[:jwks])
       puts separator
 
-      puts "\n⚠️  SECURITY WARNING:"
-      puts "   - Keep private keys secure! Never commit them to version control."
+      puts "\nSECURITY WARNING:"
+      puts "   - Keep private keys secure. Never commit them to version control."
       puts "   - Add to .gitignore: config/*-private-key.pem"
       puts "   - Prefer storing secrets in secret vaults (1Password, HashiCorp Vault, etc.)"
       puts "   - Only send the public JWKS (client-jwks.json) to your provider"
     rescue ArgumentError => e
-      puts "❌ #{e.message}"
+      puts "Error: #{e.message}"
       puts "   Valid options: 'single' (one key for both signing/encryption) or 'separate' (two keys)"
       exit 1
     rescue => e
-      puts "❌ Error generating keys: #{e.message}"
+      puts "Error generating keys: #{e.message}"
       puts "   #{e.class}: #{e.backtrace.first}"
       exit 1
     end
@@ -243,23 +243,23 @@ namespace :openid_federation do
       key_status = result[:key_status]
       validation_warnings = result[:validation_warnings] || []
 
-      puts "📥 Step 1: Fetching entity statement..."
+      puts "Step 1: Fetching entity statement..."
       if validation_warnings.any? { |w| w.include?("fetch") || w.include?("Fetch") }
-        puts "⚠️  Entity statement fetched with warnings"
+        puts "Warning: Entity statement fetched with warnings"
       else
-        puts "✅ Entity statement fetched successfully"
+        puts "OK: Entity statement fetched successfully"
       end
       puts "   Fingerprint: #{entity_statement.fingerprint}"
       puts
 
-      puts "📋 Step 2: Parsing entity statement..."
+      puts "Step 2: Parsing entity statement..."
       if validation_warnings.any?
-        puts "⚠️  Entity statement parsed with validation warnings:"
+        puts "Warning: Entity statement parsed with validation warnings:"
         validation_warnings.each do |warning|
-          puts "   ⚠️  #{warning}"
+          puts "   Warning: #{warning}"
         end
       else
-        puts "✅ Entity statement parsed successfully"
+        puts "OK: Entity statement parsed successfully"
       end
       puts "   Issuer: #{metadata[:issuer]}"
       puts "   Subject: #{metadata[:sub]}"
@@ -269,7 +269,7 @@ namespace :openid_federation do
 
       # Key status information
       if key_status
-        puts "🔑 Key Configuration:"
+        puts "Key Configuration:"
         case key_status[:type]
         when :single
           puts "   Status: Single key detected (#{key_status[:count]} key(s))"
@@ -282,7 +282,7 @@ namespace :openid_federation do
         puts
       end
 
-      puts "🔗 Step 3: Testing endpoints from entity statement..."
+      puts "Step 3: Testing endpoints from entity statement..."
       puts "   Found #{results.length} endpoint(s) to test"
       puts
 
@@ -291,9 +291,9 @@ namespace :openid_federation do
         case result_data[:status]
         when :success
           if result_data[:keys]
-            puts "   ✅ JWKS fetched successfully (#{result_data[:keys]} key(s))"
+            puts "   OK: JWKS fetched successfully (#{result_data[:keys]} key(s))"
           else
-            puts "   ✅ Endpoint accessible (HTTP #{result_data[:code]})"
+            puts "   OK: Endpoint accessible (HTTP #{result_data[:code]})"
           end
         when :warning
           warning_msg = "HTTP #{result_data[:code]}"
@@ -301,9 +301,9 @@ namespace :openid_federation do
             body_text = result_data[:body].strip
             warning_msg += " - #{body_text}" if body_text.length > 0
           end
-          puts "   ⚠️  Endpoint returned #{warning_msg}"
+          puts "   Warning: Endpoint returned #{warning_msg}"
         when :error
-          puts "   ❌ Error: #{result_data[:message]}"
+          puts "   Error: #{result_data[:message]}"
         end
         puts
       end
@@ -321,16 +321,16 @@ namespace :openid_federation do
       results.each do |name, result_data|
         case result_data[:status]
         when :success
-          puts "✅ #{name}: #{result_data[:keys] ? "#{result_data[:keys]} key(s)" : "OK"}"
+          puts "OK: #{name}: #{result_data[:keys] ? "#{result_data[:keys]} key(s)" : "OK"}"
         when :warning
           warning_msg = "HTTP #{result_data[:code]}"
           if result_data[:code] == "404" && result_data[:body]
             body_text = result_data[:body].strip
             warning_msg += " - #{body_text}" if body_text.length > 0
           end
-          puts "⚠️  #{name}: #{warning_msg}"
+          puts "Warning: #{name}: #{warning_msg}"
         when :error
-          puts "❌ #{name}: #{result_data[:message]}"
+          puts "Error: #{name}: #{result_data[:message]}"
         end
       end
 
@@ -342,10 +342,10 @@ namespace :openid_federation do
         end
         puts
         if validation_warnings.any?
-          puts "⚠️  Entity statement has validation warnings (see above)."
+          puts "Warning: Entity statement has validation warnings (see above)."
           puts "   Review the warnings and fix any issues before deploying to production."
         else
-          puts "ℹ️  Entity statement parsed successfully, but no testable endpoints found."
+          puts "Note: Entity statement parsed successfully, but no testable endpoints found."
         end
       else
         puts "Total: #{success_count} successful, #{warning_count} warning(s), #{error_count} error(s)"
@@ -355,21 +355,21 @@ namespace :openid_federation do
         puts
 
         if error_count > 0
-          puts "⚠️  Some endpoints failed. Check the errors above."
+          puts "Warning: Some endpoints failed. Check the errors above."
           exit 1
         elsif validation_warnings.any?
-          puts "⚠️  Entity statement has validation warnings (see above), but endpoints were tested."
+          puts "Warning: Entity statement has validation warnings (see above), but endpoints were tested."
           puts "   Review the warnings and fix any issues before deploying to production."
         else
-          puts "✅ All endpoints tested successfully!"
+          puts "OK: All endpoints tested successfully!"
         end
       end
     rescue OmniauthOpenidFederation::Federation::EntityStatement::FetchError => e
-      puts "❌ Error fetching entity statement: #{e.message}"
+      puts "Error fetching entity statement: #{e.message}"
       puts "   Make sure the server is running and the endpoint is accessible"
       exit 1
     rescue => e
-      puts "❌ Unexpected error: #{e.message}"
+      puts "Unexpected error: #{e.message}"
       puts "   #{e.class}: #{e.backtrace.first(3).join("\n   ")}"
       exit 1
     end
@@ -415,7 +415,7 @@ namespace :openid_federation do
 
     # Validate required parameters
     unless login_page_url
-      puts "❌ LOGIN_PAGE_URL is required"
+      puts "Error: LOGIN_PAGE_URL is required"
       puts "   Set it as an environment variable or pass as first argument:"
       puts "   rake openid_federation:test_authentication_flow[https://example.com/login]"
       exit 1
@@ -427,26 +427,26 @@ namespace :openid_federation do
       begin
         private_key = OpenSSL::PKey::RSA.new(private_key_pem)
       rescue => e
-        puts "❌ Failed to parse private key from PRIVATE_KEY or PRIVATE_KEY_BASE64: #{e.message}"
+        puts "Error: Failed to parse private key from PRIVATE_KEY or PRIVATE_KEY_BASE64: #{e.message}"
         exit 1
       end
     elsif private_key_path
       begin
         private_key = OpenSSL::PKey::RSA.new(File.read(private_key_path))
       rescue => e
-        puts "❌ Failed to load private key from #{private_key_path}: #{e.message}"
+        puts "Error: Failed to load private key from #{private_key_path}: #{e.message}"
         exit 1
       end
     end
 
     unless private_key
-      puts "❌ Private key is required"
+      puts "Error: Private key is required"
       puts "   Set one of: PRIVATE_KEY, PRIVATE_KEY_BASE64, or PRIVATE_KEY_PATH"
       exit 1
     end
 
     unless client_id
-      puts "❌ CLIENT_ID is required"
+      puts "Error: CLIENT_ID is required"
       puts "   Set it as an environment variable: CLIENT_ID=your_client_id"
       exit 1
     end
@@ -456,42 +456,42 @@ namespace :openid_federation do
       # Try to fetch from well-known endpoint
       begin
         well_known_url = "#{base_url}/.well-known/openid-federation"
-        puts "📥 Attempting to fetch entity statement from: #{well_known_url}"
+        puts "Attempting to fetch entity statement from: #{well_known_url}"
         response = OmniauthOpenidFederation::HttpClient.get(well_known_url, timeout: 5, max_retries: 0)
         if response.status.success?
           entity_statement_path = "/tmp/entity_statement_#{Time.now.to_i}.json"
           File.write(entity_statement_path, response.body.to_s)
-          puts "   ✅ Entity statement cached to: #{entity_statement_path}"
+          puts "   OK: Entity statement cached to: #{entity_statement_path}"
         end
       rescue => e
-        puts "   ⚠️  Could not fetch entity statement: #{e.message}"
+        puts "   Warning: Could not fetch entity statement: #{e.message}"
         puts "   Set ENTITY_STATEMENT_URL or ENTITY_STATEMENT_PATH manually"
       end
     end
 
     # Display configuration status
-    puts "📋 Configuration Status:"
-    puts "   ✅ Client ID: #{client_id}"
-    puts "   ✅ Redirect URI: #{redirect_uri}"
-    puts "   ✅ Private Key: Loaded"
+    puts "Configuration Status:"
+    puts "   OK: Client ID: #{client_id}"
+    puts "   OK: Redirect URI: #{redirect_uri}"
+    puts "   OK: Private Key: Loaded"
     if entity_statement_url
-      puts "   ✅ Provider Entity Statement URL: #{entity_statement_url}"
+      puts "   OK: Provider Entity Statement URL: #{entity_statement_url}"
     elsif entity_statement_path
-      puts "   ✅ Provider Entity Statement Path: #{entity_statement_path}"
+      puts "   OK: Provider Entity Statement Path: #{entity_statement_path}"
     else
-      puts "   ⚠️  Provider Entity Statement: Not configured"
+      puts "   Warning: Provider Entity Statement: Not configured"
     end
     if client_entity_statement_url
-      puts "   ✅ Client Entity Statement URL: #{client_entity_statement_url}"
+      puts "   OK: Client Entity Statement URL: #{client_entity_statement_url}"
     elsif client_entity_statement_path
-      puts "   ✅ Client Entity Statement Path: #{client_entity_statement_path}"
+      puts "   OK: Client Entity Statement Path: #{client_entity_statement_path}"
     end
     puts
 
     begin
       # Step 1: Request authorization URL
       puts "=" * 80
-      puts "📋 Step 1: Requesting Authorization URL"
+      puts "Step 1: Requesting Authorization URL"
       puts "-" * 80
       puts
 
@@ -502,26 +502,26 @@ namespace :openid_federation do
       )
 
       if result[:errors].any?
-        puts "❌ Errors occurred:"
+        puts "Error: Errors occurred:"
         result[:errors].each { |error| puts "   - #{error}" }
         exit 1
       end
 
-      puts "✅ CSRF token extracted: #{result[:csrf_token][0..20]}..." if result[:csrf_token]
-      puts "✅ Cookies received: #{result[:cookies].length} cookie(s)"
+      puts "OK: CSRF token extracted: #{result[:csrf_token][0..20]}..." if result[:csrf_token]
+      puts "OK: Cookies received: #{result[:cookies].length} cookie(s)"
       puts
-      puts "✅ Authorization URL received"
+      puts "OK: Authorization URL received"
       puts
-      puts "🔗 Authorization URL:"
+      puts "Authorization URL:"
       puts result[:authorization_url]
       puts
-      puts "📋 Instructions:"
+      puts "Instructions:"
       result[:instructions].each { |instruction| puts "   #{instruction}" }
       puts
 
       # Step 2: Get callback URL from user
       puts "=" * 80
-      puts "📥 Step 2: Waiting for Callback URL"
+      puts "Step 2: Waiting for Callback URL"
       puts "-" * 80
       puts
       print "Paste the callback URL here (or press Enter to skip to manual code entry): "
@@ -533,7 +533,7 @@ namespace :openid_federation do
         auth_code = $stdin.gets.chomp
 
         if auth_code.empty?
-          puts "❌ No authorization code provided"
+          puts "Error: No authorization code provided"
           exit 1
         end
 
@@ -544,7 +544,7 @@ namespace :openid_federation do
       # Step 3: Process callback and validate
       puts
       puts "=" * 80
-      puts "🔄 Step 3: Processing Callback and Validating"
+      puts "Step 3: Processing Callback and Validating"
       puts "-" * 80
       puts
 
@@ -562,16 +562,16 @@ namespace :openid_federation do
       )
 
       if callback_result[:errors].any?
-        puts "❌ Errors occurred:"
+        puts "Error: Errors occurred:"
         callback_result[:errors].each { |error| puts "   - #{error}" }
         exit 1
       end
 
-      puts "✅ Authorization code extracted"
-      puts "✅ Strategy initialized"
-      puts "✅ Tokens received"
+      puts "OK: Authorization code extracted"
+      puts "OK: Strategy initialized"
+      puts "OK: Tokens received"
       puts
-      puts "📋 Token Information:"
+      puts "Token Information:"
       callback_result[:token_info].each do |key, value|
         if value
           label = key.to_s.split("_").map(&:capitalize).join(" ")
@@ -582,14 +582,14 @@ namespace :openid_federation do
 
       # Step 4: ID Token validation
       puts "=" * 80
-      puts "🔐 Step 4: ID Token Validation"
+      puts "Step 4: ID Token Validation"
       puts "-" * 80
       puts
 
       if callback_result[:id_token_valid]
-        puts "✅ ID token decrypted and validated"
+        puts "OK: ID token decrypted and validated"
         puts
-        puts "📋 ID Token Claims:"
+        puts "ID Token Claims:"
         callback_result[:id_token_claims].each do |key, value|
           if value
             if [:exp, :iat, :auth_time].include?(key)
@@ -605,20 +605,20 @@ namespace :openid_federation do
           end
         end
         puts
-        puts "✅ All required claims present"
+        puts "OK: All required claims present"
       else
-        puts "❌ ID token validation failed"
+        puts "Error: ID token validation failed"
       end
       puts
 
       # Step 5: OpenID Federation Compliance
       puts "=" * 80
-      puts "✅ Step 5: OpenID Federation Compliance Check"
+      puts "OK: Step 5: OpenID Federation Compliance Check"
       puts "-" * 80
       puts
 
       callback_result[:compliance_checks].each do |check_name, check_data|
-        status_icon = check_data[:verified] ? "✅" : "❌"
+        status_icon = check_data[:verified] ? "OK:" : "Error:"
         puts "#{status_icon} #{check_name}"
         puts "   Status: #{check_data[:status]}"
         puts "   Description: #{check_data[:description]}"
@@ -628,15 +628,15 @@ namespace :openid_federation do
       all_verified = callback_result[:all_compliance_verified]
 
       if all_verified
-        puts "✅ All OpenID Federation requirements verified"
+        puts "OK: All OpenID Federation requirements verified"
       else
-        puts "⚠️  Some requirements not verified"
+        puts "Warning: Some requirements not verified"
       end
       puts
 
       # Step 6: Summary
       puts "=" * 80
-      puts "📊 Test Summary"
+      puts "Test Summary"
       puts "=" * 80
       puts
       puts "Provider ACR: #{provider_acr || "Default"}"
@@ -653,19 +653,19 @@ namespace :openid_federation do
         puts "Authentication Context (acr): #{callback_result[:id_token_claims][:acr]}"
       end
       puts
-      puts "OpenID Federation Compliance: #{all_verified ? "✅ PASS" : "❌ FAIL"}"
+      puts "OpenID Federation Compliance: #{all_verified ? "PASS" : "FAIL"}"
       puts
       puts "=" * 80
 
       if all_verified
-        puts "✅ All tests passed! Implementation is compliant."
+        puts "OK: All checks passed."
         exit 0
       else
-        puts "⚠️  Some checks failed. Review the output above."
+        puts "Warning: Some checks failed. Review the output above."
         exit 1
       end
     rescue => e
-      puts "❌ Test failed: #{e.message}"
+      puts "Error: Test failed: #{e.message}"
       puts "   #{e.class}"
       puts "   #{e.backtrace.first(10).join("\n   ")}"
       exit 1

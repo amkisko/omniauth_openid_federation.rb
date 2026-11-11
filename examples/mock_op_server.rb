@@ -3,7 +3,7 @@
 
 # Enhanced Mock OpenID Provider (OP) Server for OpenID Federation Testing
 #
-# This is a comprehensive standalone Webrick server that acts as a mock OP server
+# Standalone Webrick server that acts as a mock OP server
 # for testing OpenID Federation flows. It supports:
 # - Entity Configuration endpoint (/.well-known/openid-federation)
 # - Fetch Endpoint (/.well-known/openid-federation/fetch)

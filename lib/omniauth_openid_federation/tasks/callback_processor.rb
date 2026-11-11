@@ -182,27 +182,27 @@ module OmniauthOpenidFederation
         # Validate OpenID Federation compliance
         results[:compliance_checks] = {
           "Signed Request Objects" => {
-            status: "✅ MANDATORY",
+            status: "MANDATORY",
             description: "All requests use signed request objects (RFC 9101)",
             verified: true
           },
           "ID Token Encryption" => {
-            status: "✅ MANDATORY",
+            status: "MANDATORY",
             description: "ID tokens are encrypted (RSA-OAEP + A128CBC-HS256)",
             verified: OmniauthOpenidFederation::Jwe.encrypted?(id_token_raw)
           },
           "Client Assertion (private_key_jwt)" => {
-            status: "✅ MANDATORY",
+            status: "MANDATORY",
             description: "Token endpoint uses private_key_jwt authentication",
             verified: true
           },
           "Entity Statement JWKS" => {
-            status: "✅ MANDATORY",
+            status: "MANDATORY",
             description: "JWKS extracted from entity statement",
             verified: StringHelpers.present?(entity_statement_path) || StringHelpers.present?(entity_statement_url)
           },
           "Signed JWKS Support" => {
-            status: "✅ MANDATORY",
+            status: "MANDATORY",
             description: "Supports OpenID Federation signed JWKS for key rotation",
             verified: true
           }
@@ -211,7 +211,7 @@ module OmniauthOpenidFederation
         # Check for client entity statement (optional but recommended)
         if StringHelpers.present?(client_entity_statement_path) || StringHelpers.present?(client_entity_statement_url)
           results[:compliance_checks]["Client Entity Statement"] = {
-            status: "✅ RECOMMENDED",
+            status: "RECOMMENDED",
             description: "Client entity statement for federation-based key management",
             verified: true
           }
@@ -220,7 +220,7 @@ module OmniauthOpenidFederation
         # Check registration type (automatic if client entity statement is provided)
         if StringHelpers.present?(client_entity_statement_path) || StringHelpers.present?(client_entity_statement_url)
           results[:compliance_checks]["Automatic Registration"] = {
-            status: "✅ ENABLED",
+            status: "ENABLED",
             description: "Automatic client registration using entity statement",
             verified: true
           }

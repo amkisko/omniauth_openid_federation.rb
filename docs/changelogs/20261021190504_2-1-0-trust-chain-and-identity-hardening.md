@@ -6,7 +6,7 @@ Andrei Makarov (@amkisko)
 
 ## Decisions
 
-- Cut **2.1.0** after multi-model engineering audit: Ruby floor is already `>= 3.4` in the gemspec, so the release is minor rather than patch.
+- Cut 2.1.0 after multi-model engineering audit: Ruby floor is already `>= 3.4` in the gemspec, so the release is minor rather than patch.
 - Ship trust-anchor pinning, userinfo `sub` binding, signed-JWKS fail-closed, and callback `state`-before-`error` in the same release.
 
 ## Effects

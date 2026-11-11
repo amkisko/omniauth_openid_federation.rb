@@ -42,7 +42,7 @@ RSpec.describe "openid_federation:fetch_entity_statement" do
       result = run_rake_task("openid_federation:fetch_entity_statement")
 
       aggregate_failures do
-        expect(result[:stdout]).to include("❌ Entity statement URL is required")
+        expect(result[:stdout]).to include("Error: Entity statement URL is required")
         expect(result[:stdout]).to include("Usage:")
       end
     end
@@ -62,8 +62,8 @@ RSpec.describe "openid_federation:fetch_entity_statement" do
       aggregate_failures do
         expect(File.exist?(output_file)).to be true
         expect(File.read(output_file)).to eq(cached_entity_statement_content)
-        expect(result[:stdout]).to include("✅ Entity statement saved to:")
-        expect(result[:stdout]).to include("✅ Fingerprint:")
+        expect(result[:stdout]).to include("OK: Entity statement saved to:")
+        expect(result[:stdout]).to include("OK: Fingerprint:")
       end
     end
 
@@ -71,7 +71,7 @@ RSpec.describe "openid_federation:fetch_entity_statement" do
       result = run_rake_task("openid_federation:fetch_entity_statement", entity_statement_url, nil, output_file)
 
       aggregate_failures do
-        expect(result[:stdout]).to include("📋 Entity Statement Metadata:")
+        expect(result[:stdout]).to include("Entity Statement Metadata:")
         expect(result[:stdout]).to include("Issuer:")
         expect(result[:stdout]).to include("Authorization Endpoint:")
       end
@@ -116,7 +116,7 @@ RSpec.describe "openid_federation:fetch_entity_statement" do
 
       aggregate_failures do
         expect(File.exist?(default_output_path)).to be true
-        expect(result[:stdout]).to include("✅ Entity statement saved to:")
+        expect(result[:stdout]).to include("OK: Entity statement saved to:")
       end
     end
   end
@@ -132,7 +132,7 @@ RSpec.describe "openid_federation:fetch_entity_statement" do
       result = run_rake_task("openid_federation:fetch_entity_statement", entity_statement_url, nil, output_file)
 
       aggregate_failures do
-        expect(result[:stdout]).to include("❌ Error fetching entity statement")
+        expect(result[:stdout]).to include("Error fetching entity statement")
         expect(File.exist?(output_file)).to be false
       end
     end
@@ -149,7 +149,7 @@ RSpec.describe "openid_federation:fetch_entity_statement" do
       result = run_rake_task("openid_federation:fetch_entity_statement", entity_statement_url, wrong_fingerprint, output_file)
 
       aggregate_failures do
-        expect(result[:stdout]).to include("❌ Validation error")
+        expect(result[:stdout]).to include("Validation error")
         expect(result[:stdout]).to include("fingerprint mismatch")
       end
     end

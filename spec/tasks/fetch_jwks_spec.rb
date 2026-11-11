@@ -29,7 +29,7 @@ RSpec.describe "openid_federation:fetch_jwks" do
       result = run_rake_task("openid_federation:fetch_jwks")
 
       aggregate_failures do
-        expect(result[:stdout]).to include("❌ JWKS URI is required")
+        expect(result[:stdout]).to include("Error: JWKS URI is required")
         expect(result[:stdout]).to include("Usage:")
       end
     end
@@ -48,8 +48,8 @@ RSpec.describe "openid_federation:fetch_jwks" do
         expect(File.exist?(jwks_file)).to be true
         saved_jwks = JSON.parse(File.read(jwks_file))
         expect(saved_jwks["keys"].length).to eq(1)
-        expect(result[:stdout]).to include("✅ JWKS saved to:")
-        expect(result[:stdout]).to include("✅ Keys found:")
+        expect(result[:stdout]).to include("OK: JWKS saved to:")
+        expect(result[:stdout]).to include("OK: Keys found:")
       end
     end
 
@@ -74,7 +74,7 @@ RSpec.describe "openid_federation:fetch_jwks" do
       result = run_rake_task("openid_federation:fetch_jwks", jwks_uri, jwks_file)
 
       aggregate_failures do
-        expect(result[:stdout]).to include("❌ Error fetching JWKS")
+        expect(result[:stdout]).to include("Error fetching JWKS")
         expect(File.exist?(jwks_file)).to be false
       end
     end

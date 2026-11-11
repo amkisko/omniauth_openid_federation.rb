@@ -1,6 +1,6 @@
 # OpenID Federation Integration Testing
 
-This directory contains comprehensive mock servers and integration tests for the complete OpenID Federation flow.
+This directory contains mock servers and integration tests for the OpenID Federation flow.
 
 ## Architecture
 
@@ -354,7 +354,7 @@ redirect_uris:
 
 ## Security Testing
 
-The mock servers support comprehensive security testing:
+The mock servers support security testing:
 
 - **Algorithm Confusion**: Test rejection of non-RS256 algorithms
 - **Key Confusion**: Test rejection of wrong keys
@@ -398,5 +398,5 @@ The mock servers support comprehensive security testing:
 2. **Performance Testing**: Add load testing scenarios
 3. **Security Testing**: Add fuzzing and penetration tests
 4. **Trust Mark Testing**: Add trust mark validation
-5. **Metadata Policy Testing**: Add comprehensive policy merging tests
+5. Metadata Policy Testing: Add policy merging tests
 

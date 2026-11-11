@@ -107,21 +107,21 @@ bin/rails runner 'FederationCacheRefreshJob.perform_now'
 ## When to Use Each Job
 
 ### Use FederationFilesGenerationJob when:
-- ✅ You want files on disk for backup/recovery
-- ✅ You want to serve from files instead of generating on-demand
-- ✅ You need files for external tools or scripts
-- ✅ You want to version control generated files (not recommended for production)
+- You want files on disk for backup/recovery
+- You want to serve from files instead of generating on-demand
+- You need files for external tools or scripts
+- You want to version control generated files (not recommended for production)
 
 ### Use FederationCacheRefreshJob when:
-- ✅ You only need in-memory caching (Rails.cache)
-- ✅ You want to refresh caches without generating files
-- ✅ You want faster cache refresh cycles
-- ✅ You don't need files on disk
+- You only need in-memory caching (Rails.cache)
+- You want to refresh caches without generating files
+- You want faster cache refresh cycles
+- You don't need files on disk
 
 ### Use Both when:
-- ✅ You want both file generation and cache refresh
-- ✅ You want redundancy (files + cache)
-- ✅ You have different refresh cycles for files vs cache
+- You want both file generation and cache refresh
+- You want redundancy (files + cache)
+- You have different refresh cycles for files vs cache
 
 ## Key Rotation Workflow
 

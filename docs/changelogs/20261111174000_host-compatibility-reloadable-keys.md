@@ -6,7 +6,7 @@ Andrei Makarov (@amkisko)
 
 ## Decisions
 
-- Ship Rack and Rails entity-statement content types aligned to OpenID Federation 1.0 §9.2.
+- Ship Rack and Rails entity-statement content types aligned to OpenID Federation 1.0 section 9.2.
 - Support API hosts via injectable FederationController base and Rack-only mount docs.
 - Resolve RP signing and encryption keys at use time (callable allowed) so rotation does not require process restart.
 - Offer optional RelyingPartyKeyStore file, ENV, and cache adapters without forcing them on every host.
@@ -24,8 +24,8 @@ Andrei Makarov (@amkisko)
 
 ## Next
 
-- Cut `2.2.0` from this work (version and CHANGELOG heading prepared for 2026-11-11).
-- Downstream deletion of host well-known and thin key-store shims after upgrade.
+- Operator runs `make release` / `usr/bin/release.rb` to publish, tag, and create the GitHub release for `2.2.0`.
+- Downstream hosts can delete local well-known and thin key-store shims after upgrade.
 
 ## Source
 

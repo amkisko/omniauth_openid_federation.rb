@@ -4,12 +4,12 @@ A standalone Rack/Sinatra application for testing OpenID Federation flows.
 
 ## Features
 
-- ✅ Entity Configuration endpoint (`/.well-known/openid-federation`)
-- ✅ Fetch Endpoint (`/.well-known/openid-federation/fetch`) for Subordinate Statements
-- ✅ Authorization Endpoint (`/auth`) with trust chain resolution
-- ✅ Token Endpoint (`/token`) with ID Token signing
-- ✅ JWKS endpoints (standard and signed)
-- ✅ UserInfo endpoint (mock)
+- Entity Configuration endpoint (`/.well-known/openid-federation`)
+- Fetch Endpoint (`/.well-known/openid-federation/fetch`) for Subordinate Statements
+- Authorization Endpoint (`/auth`) with trust chain resolution
+- Token Endpoint (`/token`) with ID Token signing
+- JWKS endpoints (standard and signed)
+- UserInfo endpoint (mock)
 
 ## Quick Start
 
@@ -203,11 +203,11 @@ config.omniauth :openid_federation,
 
 This is a **mock server for testing only**:
 
-- ⚠️ No real user authentication (always returns mock user)
-- ⚠️ Authorization codes stored in memory (lost on restart)
-- ⚠️ No database persistence
-- ⚠️ No production security hardening
-- ⚠️ ID Tokens contain mock user data
+- WARNING: No real user authentication (always returns mock user)
+- WARNING: Authorization codes stored in memory (lost on restart)
+- WARNING: No database persistence
+- WARNING: No production security hardening
+- WARNING: ID Tokens contain mock user data
 
 ## Production Considerations
 

@@ -33,7 +33,7 @@ RSpec.describe "openid_federation:parse_entity_statement" do
     it "exits with error" do
       result = run_rake_task("openid_federation:parse_entity_statement", "/nonexistent/file.jwt")
 
-      expect(result[:stdout]).to include("❌ Error: Entity statement file not found")
+      expect(result[:stdout]).to include("Error: Entity statement file not found")
     end
   end
 
@@ -46,7 +46,7 @@ RSpec.describe "openid_federation:parse_entity_statement" do
       result = run_rake_task("openid_federation:parse_entity_statement", entity_statement_file)
 
       aggregate_failures do
-        expect(result[:stdout]).to include("📋 Entity Statement Metadata:")
+        expect(result[:stdout]).to include("Entity Statement Metadata:")
         # Should be valid JSON
         json_match = result[:stdout].match(/\{.*\}/m)
         expect(json_match).to be_present

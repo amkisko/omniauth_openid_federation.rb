@@ -331,7 +331,7 @@ class IntegrationTestFlow
 
           if response.code == "200"
             elapsed = (OmniauthOpenidFederation::TimeHelpers.now - start_time).round(1)
-            puts "  ✓ #{url} is ready (#{elapsed}s)"
+            puts "  OK: #{url} is ready (#{elapsed}s)"
             ready = true
           end
         rescue
@@ -351,7 +351,7 @@ class IntegrationTestFlow
 
       unless ready
         elapsed = (OmniauthOpenidFederation::TimeHelpers.now - start_time).round(1)
-        puts "\n  ✗ #{server_name} server at #{url} did not become ready in time (#{elapsed}s)"
+        puts "\n  Error: #{server_name} server at #{url} did not become ready in time (#{elapsed}s)"
         err_log = File.join(@tmp_dir, "#{server_name.downcase}_server_error.log")
         log_file = File.join(@tmp_dir, "#{server_name.downcase}_server.log")
 
@@ -378,7 +378,7 @@ class IntegrationTestFlow
   end
 
   def test(name)
-    print "  ✓ #{name}... "
+    print "  OK: #{name}... "
     begin
       result = yield
       if result
@@ -389,7 +389,7 @@ class IntegrationTestFlow
         @test_results << {name: name, status: :fail}
       end
     rescue => e
-      puts "ERROR: #{e.message}"
+      puts "Error: #{e.message}"
       @test_results << {name: name, status: :error, error: e.message}
     end
   end
@@ -1260,7 +1260,7 @@ class IntegrationTestFlow
     end
 
     puts ""
-    puts (passed == @test_results.length) ? "✅ All tests passed!" : "❌ Some tests failed."
+    puts (passed == @test_results.length) ? "OK: All tests passed!" : "Error: Some tests failed."
 
     passed == @test_results.length
   end

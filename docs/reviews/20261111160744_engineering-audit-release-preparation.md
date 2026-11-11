@@ -19,7 +19,7 @@
 
 ## Next
 
-- Commit the release tree, then run `make release` (or `ruby usr/bin/release.rb`) to push the gem, tag `2.2.0`, and create the GitHub release.
+- Operator runs `make release` (or `ruby usr/bin/release.rb`) to push the gem, tag `2.2.0`, and create the GitHub release.
 - Hosted GitHub Actions and the full supported Ruby/framework matrix were not executed locally beyond the Rails 8 appraisal path used by `make test`.
 - Scope limits: production traffic, production database size and query plans, external service retention, and co-located resource interference were not measured.
 - Downstream hosts can remove local well-known and thin key-store shims after upgrading to 2.2.0 when they adopt callables / Engine base / Rack mount as needed.

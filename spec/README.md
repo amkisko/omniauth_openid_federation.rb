@@ -120,12 +120,12 @@ spec/
 
 The fundamental principle of refactoring-resistant testing is the distinction between **what** a system does (Behavior) and **how** it does it (Implementation).
 
-- **Behavior:** Defined by the Public Contract—the inputs accepted by the System Under Test (SUT) and the observable outputs or side effects it produces at its architectural boundaries.
+- **Behavior:** Defined by the Public Contract - the inputs accepted by the System Under Test (SUT) and the observable outputs or side effects it produces at its architectural boundaries.
 - **Implementation:** Encompasses internal control flow, private helper methods, auxiliary data structures, and the specific sequence of internal operations.
 
 > **Principle:** True refactoring resistance is achieved only when the test suite is agnostic to the SUT's internal composition.
 
-When a test couples itself to implementation details—for instance, by asserting that a specific private method was called or by mocking an internal helper—it violates encapsulation. Such tests verify that the code *looks* a certain way, not that it *works*. This leads to **"False Negatives"** or **"Fragile Tests,"** where a test fails simply because a developer renamed a private method or optimized a loop, even though the business logic remains correct.
+When a test couples itself to implementation details - for instance, by asserting that a specific private method was called or by mocking an internal helper - it violates encapsulation. Such tests verify that the code *looks* a certain way, not that it *works*. This leads to **"False Negatives"** or **"Fragile Tests,"** where a test fails simply because a developer renamed a private method or optimized a loop, even though the business logic remains correct.
 
 ### Core Principles
 
@@ -189,9 +189,9 @@ For the **Split Specs** approach used in this gem:
 - **Folder names** = Module/Class names (matches `lib/` structure)
 - **File names** = Method names or behavior areas
 - **Examples:**
-  - `lib/omniauth_openid_federation/strategy.rb` → `spec/omniauth_openid_federation/strategy/authorize_uri_spec.rb`
-  - `lib/omniauth_openid_federation/access_token.rb` → `spec/omniauth_openid_federation/access_token/resource_request_spec.rb`
-  - `lib/omniauth_openid_federation/tasks_helper.rb` → `spec/omniauth_openid_federation/tasks/test_authentication_flow_spec.rb`
+  - `lib/omniauth_openid_federation/strategy.rb` -> `spec/omniauth_openid_federation/strategy/authorize_uri_spec.rb`
+  - `lib/omniauth_openid_federation/access_token.rb` -> `spec/omniauth_openid_federation/access_token/resource_request_spec.rb`
+  - `lib/omniauth_openid_federation/tasks_helper.rb` -> `spec/omniauth_openid_federation/tasks/test_authentication_flow_spec.rb`
 
 **Naming Rules:**
 - Use method names for files when testing a single method: `authorize_uri_spec.rb`
@@ -219,7 +219,7 @@ For the **Split Specs** approach used in this gem:
 
 To enforce refactoring resistance, strict controls must be placed on the use of Test Doubles (mocks, stubs, spies).
 
-#### 🚫 STRICTLY FORBIDDEN: Internal Mocks
+#### Forbidden: Internal Mocks
 
 The policy unequivocally prohibits the mocking of internals. This prohibition covers:
 
@@ -236,9 +236,9 @@ The policy unequivocally prohibits the mocking of internals. This prohibition co
    - Using reflection to set private fields to bypass validation logic
    - This tests a state that might be unreachable in the actual application
 
-#### ✅ PERMITTED MOCKS: Architectural Boundaries
+#### Permitted Mocks: Architectural Boundaries
 
-Mocking is reserved exclusively for **Architectural Boundaries**—the seams where the SUT interacts with systems it does not own or control.
+Mocking is reserved exclusively for **Architectural Boundaries** - the seams where the SUT interacts with systems it does not own or control.
 
 | Boundary Type | Examples | Rationale for Mocking | Preferred Double |
 | :--- | :--- | :--- | :--- |
@@ -329,10 +329,10 @@ If the Input Derivation Protocol fails (no public input can trigger the line), t
 
 #### When to Isolate
 
-- Expensive or flaky external IO (HTTP, file system) → stub or use WebMock
-- Rare/error branches hard to trigger → stub to reach them
-- Nondeterminism (random, time, UUIDs) → stub to deterministic values
-- Performance in tight unit scopes → replace heavy collaborators
+- Expensive or flaky external IO (HTTP, file system) -> stub or use WebMock
+- Rare/error branches hard to trigger -> stub to reach them
+- Nondeterminism (random, time, UUIDs) -> stub to deterministic values
+- Performance in tight unit scopes -> replace heavy collaborators
 
 #### When NOT to Isolate
 
@@ -452,12 +452,12 @@ end
 
 ### Code Examples: Anti-Patterns vs. Best Practices
 
-#### 🔴 Bad Practice: Targeted Mocking (Internal Mocks)
+#### Bad Practice: Targeted Mocking (Internal Mocks)
 
 **Why it is bad:** It couples the test to `validate_user`. If renamed, the test crashes. The test accepts invalid input because of the mock, creating a false positive.
 
 ```ruby
-# ❌ DO NOT DO THIS
+# DO NOT DO THIS
 RSpec.describe OmniauthOpenidFederation::Jws do
   it "signs JWT when validation passes" do
     jws = described_class.new(
@@ -476,12 +476,12 @@ RSpec.describe OmniauthOpenidFederation::Jws do
 end
 ```
 
-#### 🟢 Best Practice: Input Driven
+#### Best Practice: Input Driven
 
 **Why it is good:** It treats the class as a black box. It proves the logic works with valid input.
 
 ```ruby
-# ✅ DO THIS
+# DO THIS
 RSpec.describe OmniauthOpenidFederation::Jws do
   it "signs JWT with valid private key" do
     # 1. Setup SUT with architectural fakes (if needed)
@@ -506,12 +506,12 @@ RSpec.describe OmniauthOpenidFederation::Jws do
 end
 ```
 
-#### 🟢 Best Practice: Boundary Mocking (External Dependencies)
+#### Best Practice: Boundary Mocking (External Dependencies)
 
 **Why it is good:** Time is an architectural boundary. We control it via dependency injection.
 
 ```ruby
-# ✅ DO THIS
+# DO THIS
 RSpec.describe OmniauthOpenidFederation::Jws do
   it "includes expiration time in JWT" do
     # 1. Control 'now' via Boundary Stub (if time was injected)
@@ -549,7 +549,7 @@ end
 
 Before committing, perform this audit:
 
-1. **Ownership Check:** Am I mocking a method that belongs to the class I am testing? (If YES → Delete mock)
+1. **Ownership Check:** Am I mocking a method that belongs to the class I am testing? (If YES -> Delete mock)
 2. **Verification Target:** Am I testing that the code works, or how the code works?
 3. **Input Integrity:** Did I create the necessary input data to reach the code path naturally?
 4. **Refactoring Resilience:** If I rename private helper methods, will this test still pass?
@@ -565,7 +565,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
     
     context "with successful response" do
       it "fetches and returns JWKS" do
-        # ✅ Mocking HTTP (architectural boundary) is allowed
+        # Mocking HTTP (architectural boundary) is allowed
         stub_request(:get, jwks_uri)
           .to_return(status: 200, body: { keys: [] }.to_json)
         
@@ -580,7 +580,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Fetch do
     
     context "with HTTP error" do
       it "raises error on failure" do
-        # ✅ Mocking HTTP error (architectural boundary)
+        # Mocking HTTP error (architectural boundary)
         stub_request(:get, jwks_uri)
           .to_return(status: 500)
         

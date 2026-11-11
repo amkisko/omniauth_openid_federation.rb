@@ -7,7 +7,7 @@ Andrei Makarov (@amkisko)
 ## Decisions
 
 - Treat trust-anchor JWKS pinning, entity-id binding, userinfo `sub` match, and signed-JWKS fail-closed as release blockers.
-- Ship as **2.1.0**: gemspec already requires Ruby `>= 3.4`; README and CHANGELOG must match.
+- Ship as 2.1.0: gemspec already requires Ruby `>= 3.4`; README and CHANGELOG must match.
 - Defer SSRF allowlists, full RBS rewrite, and HttpClient jitter/`Retry-After` to follow-on work unless they fit the same patch without scope creep.
 - Base release notes on history after the rewritten `2.0.0` tag (`2aeeea3..HEAD` plus this fix set), not `git log 2.0.0..HEAD`.
 
@@ -39,4 +39,4 @@ Andrei Makarov (@amkisko)
 
 - Multi-model audit session on `omniauth_openid_federation.rb` (2026-10-21)
 - `rfcs/0004-trust-chain-and-entity-statements.md`
-- OpenID Federation 1.0 §3.2.1 / §10; OIDC Core §5.3.2 (userinfo `sub`)
+- OpenID Federation 1.0 section 3.2.1 / section 10; OIDC Core section 5.3.2 (userinfo `sub`)

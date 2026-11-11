@@ -1,4 +1,4 @@
-# Polyrun::Coverage::Rails — loaded from spec/spec_helper via Polyrun::Coverage::Rails.start!
+# Polyrun::Coverage::Rails  -  loaded from spec/spec_helper via Polyrun::Coverage::Rails.start!
 # (must run before application code; keep coverage config here, not in initializers)
 #
 # Do not set track_files here: with track_files, Polyrun merges the full Coverage.result blob
