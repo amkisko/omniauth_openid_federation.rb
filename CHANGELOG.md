@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2.2.0 (2026-11-11)
+
+- Fix Rack well-known entity configuration responses to use `application/entity-statement+jwt`
+- Add `require "omniauth_openid_federation/rails"` for `require: false` hosts, injectable federation controller base, and signed JWKS `.jwt` / `.jose` path aliases
+- Add reloadable relying-party signing and encryption keys (callables), `reset_client!`, and optional file / ENV / cache key stores
+- Stop depending on ActiveSupport `Hash#stringify_keys` when normalizing JWKS
+
 ## 2.1.0 (2026-10-29)
 
 - BREAKING: Require Ruby `>= 3.4` (gemspec); drop Rails 6 and TruffleRuby appraisal targets from the tested matrix

@@ -88,6 +88,10 @@ module OmniAuth
       option :key_source, :local # Key source: :local (use local static private_key) or :federation (use federation/JWKS) - used as default for both signing and decryption
       option :signing_key_source, nil # Signing key source: :local, :federation, or nil (uses key_source)
       option :decryption_key_source, nil # Decryption key source: :local, :federation, or nil (uses key_source)
+      # First-class RP keys (OpenSSL::PKey::RSA, PEM string, or callable). Prefer these over a single private_key.
+      # When key_source/signing_key_source is :federation, JWKS must include private material (`d`) for local signing.
+      option :signing_key, nil
+      option :encryption_key, nil
       option :entity_statement_path, nil # Path to provider entity statement JWT file (cached copy)
       option :entity_statement_url, nil # URL to provider entity statement (source of truth, Section 9)
       option :entity_statement_fingerprint, nil # Expected SHA-256 fingerprint for verification

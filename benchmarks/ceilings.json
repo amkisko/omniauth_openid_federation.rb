@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "load": "L1",
+    "ops": 200,
+    "propose_basis": "median",
+    "headroom": 1.15,
+    "memory_probe_class": "process_lifetime",
+    "network": "not_in_scope",
+    "recorded_at": "2026-11-11T15:42:03Z"
+  },
+  "ceilings": {
+    "wall_s": 0.49138120000716295,
+    "cpu_s": 0.49270140000000007,
+    "rss_delta_bytes": 791347.2,
+    "heap_delta_bytes": 2786524.75,
+    "storage_delta_bytes": 0.0,
+    "network_in_bytes": 0.0,
+    "network_out_bytes": 0.0,
+    "allocated_objects": 14081.749999999998
+  }
+}

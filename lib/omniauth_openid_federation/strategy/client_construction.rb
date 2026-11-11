@@ -74,27 +74,34 @@ module OmniauthOpenidFederation
             jwks_uri: jwks_uri_endpoint
           )
 
-          # Store private key for client assertion (private_key_jwt authentication)
-          oidc_client.private_key = merged_options[:private_key] || merged_options["private_key"]
+          # Store key source (object, PEM, or callable) — resolved on each assertion
+          oidc_client.private_key = merged_options[:signing_key] ||
+            merged_options["signing_key"] ||
+            options.signing_key ||
+            merged_options[:private_key] ||
+            merged_options["private_key"]
 
-          # Store strategy options on client for AccessToken to access later
-          # This allows AccessToken to get configuration without relying on Devise
-          # Ensure all entity statement options are included (to_h might not include all options)
           strategy_options_hash = options.to_h.dup
-          # Explicitly include entity statement options that AccessToken needs
           strategy_options_hash[:entity_statement_path] = options.entity_statement_path if options.entity_statement_path
           strategy_options_hash[:entity_statement_url] = options.entity_statement_url if options.entity_statement_url
           strategy_options_hash[:entity_statement_fingerprint] = options.entity_statement_fingerprint if options.entity_statement_fingerprint
           strategy_options_hash[:issuer] = options.issuer if options.issuer
+          strategy_options_hash[:signing_key] = options.signing_key if options.signing_key
+          strategy_options_hash[:encryption_key] = options.encryption_key if options.encryption_key
           oidc_client.instance_variable_set(:@strategy_options, strategy_options_hash)
 
-          # OidcClient extends OAuth2::Client, so it's compatible with OmniAuth::Strategies::OAuth2
           oidc_client
         end
       end
 
       def oidc_client
         client
+      end
+
+      # Drop memoized OAuth/OIDC client so the next request rebuilds endpoints.
+      # Key material on the client is already resolved per use when callables are configured.
+      def reset_client!
+        @client = nil
       end
     end
   end

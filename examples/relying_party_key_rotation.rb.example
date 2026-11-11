@@ -1,0 +1,29 @@
+# Example: rotate RP signing/encryption keys and refresh served JWKS without restart.
+#
+#   store = OmniauthOpenidFederation::RelyingPartyKeyStore::CacheStore.new(
+#     cache_key_prefix: "openid_federation/rp_keys"
+#   )
+#   record = store.rotate
+#
+#   OmniauthOpenidFederation::FederationEndpoint.configure do |config|
+#     config.signing_key = record.signing_key
+#     config.encryption_key = record.encryption_key
+#     config.private_key = record.signing_key
+#     config.current_jwks_proc = -> {
+#       {
+#         keys: [
+#           OmniauthOpenidFederation::Utils.rsa_key_to_jwk(record.signing_key, use: "sig"),
+#           OmniauthOpenidFederation::Utils.rsa_key_to_jwk(record.encryption_key, use: "enc")
+#         ]
+#       }
+#     }
+#   end
+#
+# Strategy client_options can use callables:
+#
+#   client_options: {
+#     signing_key: -> { store.load.signing_key },
+#     encryption_key: -> { store.load.encryption_key }
+#   }
+#
+# Invalidate served JWKS cache keys after rotation when CacheAdapter is enabled.

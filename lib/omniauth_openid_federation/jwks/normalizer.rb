@@ -35,7 +35,7 @@ module OmniauthOpenidFederation
         {
           "keys" => Array(keys).map do |jwk|
             if jwk.is_a?(Hash)
-              jwk.stringify_keys
+              stringify_hash_keys(jwk)
             else
               JSON.parse(jwk.to_json)
             end
@@ -43,7 +43,13 @@ module OmniauthOpenidFederation
         }
       end
 
-      private_class_method :normalize_keys_array
+      def self.stringify_hash_keys(hash)
+        hash.each_with_object({}) do |(key, value), result|
+          result[key.to_s] = value.is_a?(Hash) ? stringify_hash_keys(value) : value
+        end
+      end
+
+      private_class_method :normalize_keys_array, :stringify_hash_keys
     end
   end
 end

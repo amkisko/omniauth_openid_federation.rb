@@ -20,6 +20,9 @@ unless @_omniauth_openid_federation_routes_loaded
 
       # Signed JWKS endpoint (OpenID Federation requirement)
       get "/.well-known/signed-jwks.json", to: "omniauth_openid_federation/federation#signed_jwks", as: :openid_federation_signed_jwks
+      # Compatibility aliases for registrars that expect .jwt / .jose paths
+      get "/.well-known/signed-jwks.jwt", to: "omniauth_openid_federation/federation#signed_jwks", as: :openid_federation_signed_jwks_jwt
+      get "/.well-known/signed-jwks.jose", to: "omniauth_openid_federation/federation#signed_jwks", as: :openid_federation_signed_jwks_jose
     end
   rescue NameError, LoadError
     # Rails not available or not fully initialized - routes will be loaded when Engine initializes

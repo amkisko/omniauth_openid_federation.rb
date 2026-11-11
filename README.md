@@ -13,6 +13,28 @@ Design changes go through `rfcs/` (RFC 0001).
 gem "omniauth_openid_federation"
 ```
 
+For `require: false` (feature-flagged load), require the Rails entrypoint before routes:
+
+```ruby
+# Gemfile
+gem "omniauth_openid_federation", require: false
+
+# config/application.rb or an early initializer
+require "omniauth_openid_federation/rails"
+# Optional for API hosts without a HTML ApplicationController:
+# OmniauthOpenidFederation.base_controller = "ActionController::API"
+```
+
+API hosts that must avoid Action Controller filters can mount Rack only:
+
+```ruby
+# config.ru or middleware
+require "omniauth_openid_federation/rack"
+map "/.well-known" do
+  run OmniauthOpenidFederation::RackEndpoint.new
+end
+```
+
 ```bash
 bundle install
 ```
@@ -437,11 +459,14 @@ rake openid_federation:test_authentication_flow[
 
 - `client_options.identifier` - Client ID from provider
 - `client_options.redirect_uri` - Callback URL
-- `client_options.private_key` - RSA private key for signing
+- `client_options.private_key` or `signing_key` - RSA private key for signing (OpenSSL key, PEM string, or callable resolved on each use)
 - `entity_statement_path` - Path to cached entity statement file
 
 ### Optional
 
+- `signing_key` / `client_options.signing_key` - RP signing key (preferred over a shared `private_key`)
+- `encryption_key` / `client_options.encryption_key` - RP decryption key for encrypted ID tokens / userinfo
+- `signing_key_source` / `decryption_key_source` - `:local` or `:federation` (federation JWKS must include private `d` to sign or decrypt locally)
 - `entity_statement_url` - URL to fetch entity statement (auto-fetches if provided)
 - `entity_statement_fingerprint` - Fingerprint for verification
 - `client_entity_statement_url` - Client entity statement URL (for automatic registration)

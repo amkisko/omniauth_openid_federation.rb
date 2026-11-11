@@ -48,7 +48,7 @@ module OmniauthOpenidFederation
         handle_fetch(request)
       when "/jwks.json"
         handle_jwks
-      when "/signed-jwks.json"
+      when "/signed-jwks.json", "/signed-jwks.jwt", "/signed-jwks.jose"
         handle_signed_jwks
       else
         not_found
@@ -73,7 +73,7 @@ module OmniauthOpenidFederation
       entity_statement = OmniauthOpenidFederation::FederationEndpoint.generate_entity_statement
 
       headers = {
-        "Content-Type" => "application/jwt",
+        "Content-Type" => Constants::CONTENT_TYPE_ENTITY_STATEMENT_JWT,
         "Cache-Control" => "public, max-age=3600"
       }
 
@@ -100,7 +100,7 @@ module OmniauthOpenidFederation
       end
 
       headers = {
-        "Content-Type" => "application/json",
+        "Content-Type" => Constants::CONTENT_TYPE_JSON,
         "Cache-Control" => "public, max-age=3600"
       }
 
@@ -144,7 +144,7 @@ module OmniauthOpenidFederation
       end
 
       headers = {
-        "Content-Type" => "application/entity-statement+jwt",
+        "Content-Type" => Constants::CONTENT_TYPE_ENTITY_STATEMENT_JWT,
         "Cache-Control" => "public, max-age=3600"
       }
 
@@ -171,7 +171,7 @@ module OmniauthOpenidFederation
       end
 
       headers = {
-        "Content-Type" => "application/jwt",
+        "Content-Type" => Constants::CONTENT_TYPE_JWT,
         "Cache-Control" => "public, max-age=3600"
       }
 

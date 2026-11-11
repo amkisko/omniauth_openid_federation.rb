@@ -54,8 +54,10 @@ module OmniauthOpenidFederation
         # Enforce signed request objects (RFC 9101) - unsigned requests are not allowed
         client_options_hash = options.client_options || {}
         normalized_options = OmniauthOpenidFederation::Validators.normalize_hash(client_options_hash)
-        private_key = normalized_options[:private_key]
-        OmniauthOpenidFederation::Validators.validate_private_key!(private_key)
+        private_key = OmniauthOpenidFederation::ClientKeys.validate_signing_key!(
+          normalized_options,
+          {signing_key: options.signing_key, encryption_key: options.encryption_key}
+        )
 
         resolved_issuer = options.issuer
         unless OmniauthOpenidFederation::StringHelpers.present?(resolved_issuer)
@@ -151,7 +153,7 @@ module OmniauthOpenidFederation
           hd: validated_hd,
           acr_values: normalized_acr_values,
           extra_params: options.extra_authorize_params || {},
-          private_key: normalized_options[:private_key],
+          private_key: private_key,
           jwks: jwks,
           entity_statement_path: options.entity_statement_path,
           key_source: signing_key_source,

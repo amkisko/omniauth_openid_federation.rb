@@ -20,5 +20,13 @@ module OmniauthOpenidFederation
 
     # Maximum HTTP response body size for federation/JWKS fetches (1 MiB)
     MAX_HTTP_RESPONSE_BODY_BYTES = 1_048_576
+
+    # OpenID Federation 1.0 entity statement / entity configuration responses (§8.1, §9.2)
+    CONTENT_TYPE_ENTITY_STATEMENT_JWT = "application/entity-statement+jwt"
+
+    # Signed JWKS and generic JWT responses
+    CONTENT_TYPE_JWT = "application/jwt"
+
+    CONTENT_TYPE_JSON = "application/json"
   end
 end

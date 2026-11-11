@@ -114,8 +114,13 @@ module OmniauthOpenidFederation
       raw_client_options = @strategy_options[:client_options] || @strategy_options["client_options"] || {}
       client_options = OmniauthOpenidFederation::Validators.normalize_hash(raw_client_options)
 
-      private_key = client_options[:private_key] ||
-        ((@client.respond_to?(:private_key) ? @client.private_key : nil))
+      local_encryption_key = OmniauthOpenidFederation::ClientKeys.encryption_key(
+        client_options,
+        {
+          signing_key: @strategy_options[:signing_key],
+          encryption_key: @strategy_options[:encryption_key]
+        }
+      ) || ((@client.respond_to?(:private_key) ? @client.private_key : nil))
       jwks = client_options[:jwks] || client_options["jwks"]
 
       metadata = nil
@@ -135,8 +140,8 @@ module OmniauthOpenidFederation
       key = OmniauthOpenidFederation::KeyExtractor.extract_encryption_key(
         jwks: jwks,
         metadata: metadata,
-        private_key: private_key
-      ) || private_key
+        private_key: local_encryption_key
+      ) || local_encryption_key
 
       OmniauthOpenidFederation::Validators.validate_private_key!(key)
       key

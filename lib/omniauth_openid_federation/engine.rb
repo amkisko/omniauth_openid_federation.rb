@@ -6,12 +6,13 @@ module OmniauthOpenidFederation
   class Engine < ::Rails::Engine
     # Don't isolate namespace because we need routes at specific well-known paths
     # (/.well-known/openid-federation) rather than under a mount point
-    # isolate_namespace OmniauthOpenidFederation
 
-    # Add controllers to autoload_once_paths so Rails can autoload them
-    # This ensures controllers are available for route matching in production with eager loading
-    # Rails will automatically eager load classes in autoload_once_paths in production
-    # Must be done in config block before paths are frozen
-    # config.autoload_once_paths << root.join("app", "controllers").to_s if root.join("app", "controllers").exist?
+    initializer "omniauth_openid_federation.append_controller_paths", before: :set_load_path do |app|
+      controllers = root.join("app", "controllers")
+      next unless controllers.exist?
+
+      app.config.autoload_paths << controllers.to_s
+      app.config.eager_load_paths << controllers.to_s
+    end
   end
 end

@@ -50,7 +50,7 @@ RSpec.describe OmniauthOpenidFederation::RackEndpoint do
 
         aggregate_failures do
           expect(status).to eq(200)
-          expect(headers["Content-Type"]).to eq("application/jwt")
+          expect(headers["Content-Type"]).to eq("application/entity-statement+jwt")
           expect(headers["Cache-Control"]).to eq("public, max-age=3600")
           expect(body.first).to be_a(String)
           expect(body.first.split(".").length).to eq(3) # JWT format

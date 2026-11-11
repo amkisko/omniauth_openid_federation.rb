@@ -29,7 +29,7 @@ AllCops:
   Exclude:
     - bin/**/*
     - db/**/*
-
+    - benchmarks/**/*
     - vendor/**/*
     - gemfiles/vendor/**/*
     - tmp/**/*

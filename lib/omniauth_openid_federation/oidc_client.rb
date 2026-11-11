@@ -5,13 +5,15 @@ require "uri"
 
 require_relative "errors"
 require_relative "access_token"
+require_relative "key_resolver"
+require_relative "validators"
 
 module OmniauthOpenidFederation
   class OidcClient < OAuth2::Client
     CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
     CLIENT_ASSERTION_EXPIRATION_SECONDS = 180
 
-    attr_accessor :private_key, :authorization_code, :jwks_uri
+    attr_accessor :authorization_code, :jwks_uri
     attr_reader :authorization_endpoint, :token_endpoint, :userinfo_endpoint
 
     def initialize(identifier:, redirect_uri:, authorization_endpoint:, token_endpoint:, secret: nil,
@@ -34,6 +36,7 @@ module OmniauthOpenidFederation
       @userinfo_endpoint = userinfo_endpoint
       @jwks_uri = jwks_uri
       @authorization_code = nil
+      @private_key_source = nil
     end
 
     def identifier
@@ -54,6 +57,15 @@ module OmniauthOpenidFederation
 
     def host
       URI.parse(site.to_s).host
+    end
+
+    # Stores key material or a callable resolved on each use (rotation without restart).
+    def private_key=(value)
+      @private_key_source = value
+    end
+
+    def private_key
+      KeyResolver.resolve(@private_key_source)
     end
 
     def access_token!(client_auth_method = :jwt_bearer)
@@ -85,6 +97,9 @@ module OmniauthOpenidFederation
     end
 
     def build_client_assertion
+      key = private_key
+      OmniauthOpenidFederation::Validators.validate_private_key!(key)
+
       now = Time.now.to_i
       payload = {
         iss: identifier,
@@ -95,7 +110,7 @@ module OmniauthOpenidFederation
         exp: now + CLIENT_ASSERTION_EXPIRATION_SECONDS
       }
 
-      JWT.encode(payload, private_key, "RS256")
+      JWT.encode(payload, key, "RS256")
     end
   end
 end

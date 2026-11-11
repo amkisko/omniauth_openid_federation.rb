@@ -2,30 +2,24 @@
 require_relative "constants"
 require_relative "configuration"
 require_relative "string_helpers"
+require_relative "key_resolver"
 
 module OmniauthOpenidFederation
   module Validators
     # Validate that a private key is present and valid
     #
-    # @param private_key [OpenSSL::PKey::RSA, String, nil] The private key to validate
+    # @param private_key [OpenSSL::PKey::RSA, String, #call, nil]
     # @raise [ConfigurationError] If private key is missing or invalid
     def self.validate_private_key!(private_key, min_bits: Constants::MIN_RSA_KEY_BITS)
-      if private_key.nil?
+      normalized_key = KeyResolver.resolve(private_key)
+
+      if normalized_key.nil?
         raise ConfigurationError, "Private key is required for signed request objects"
       end
 
-      normalized_key =
-        if private_key.is_a?(String)
-          begin
-            OpenSSL::PKey::RSA.new(private_key)
-          rescue => error
-            raise ConfigurationError, "Invalid private key format: #{error.message}"
-          end
-        elsif private_key.is_a?(OpenSSL::PKey::RSA)
-          private_key
-        else
-          raise ConfigurationError, "Private key must be an OpenSSL::PKey::RSA instance or PEM string"
-        end
+      unless normalized_key.is_a?(OpenSSL::PKey::RSA)
+        raise ConfigurationError, "Private key must be an OpenSSL::PKey::RSA instance, PEM string, or callable"
+      end
 
       if min_bits.to_i.positive? && normalized_key.n.num_bits < min_bits.to_i
         raise ConfigurationError,

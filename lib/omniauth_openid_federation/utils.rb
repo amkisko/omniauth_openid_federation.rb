@@ -120,25 +120,32 @@ module OmniauthOpenidFederation
     # @param key [OpenSSL::PKey::RSA] RSA private or public key
     # @param use [String, nil] Key use ("sig" for signing, "enc" for encryption, nil for both)
     # @return [Hash] JWK hash with kty, kid, n, e, and optionally use
-    def self.rsa_key_to_jwk(key, use: "sig")
+    # @param include_private [Boolean] when true, include private RSA fields (`d`, …).
+    #   Public JWKS serving must keep this false so private material is not published.
+    def self.rsa_key_to_jwk(key, use: "sig", include_private: false)
       require "digest"
       require "base64"
+      require "jwt"
 
-      n = Base64.urlsafe_encode64(key.n.to_s(2), padding: false)
-      e = Base64.urlsafe_encode64(key.e.to_s(2), padding: false)
+      jwk = if include_private
+        JWT::JWK.new(key).export(include_private: true)
+      else
+        public_key = key.respond_to?(:public_key) ? key.public_key : key
+        n = Base64.urlsafe_encode64(public_key.n.to_s(2), padding: false)
+        e = Base64.urlsafe_encode64(public_key.e.to_s(2), padding: false)
+        public_key_pem = public_key.to_pem
+        kid = Digest::SHA256.hexdigest(public_key_pem)[0, 16]
+        {
+          kty: "RSA",
+          kid: kid,
+          n: n,
+          e: e
+        }
+      end
 
-      public_key_pem = key.public_key.to_pem
-      kid = Digest::SHA256.hexdigest(public_key_pem)[0, 16]
-
-      jwk = {
-        kty: "RSA",
-        kid: kid,
-        n: n,
-        e: e
-      }
-
+      jwk = jwk.transform_keys(&:to_sym)
       jwk[:use] = use if use
-
+      jwk.delete(:d) unless include_private
       jwk
     end
 

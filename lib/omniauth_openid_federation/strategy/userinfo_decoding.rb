@@ -42,7 +42,10 @@ module OmniauthOpenidFederation
             normalized_options = OmniauthOpenidFederation::Validators.normalize_hash(client_options_hash)
 
             decryption_key_source = options.decryption_key_source || options.key_source || :local
-            private_key = normalized_options[:private_key]
+            local_encryption_key = OmniauthOpenidFederation::ClientKeys.encryption_key(
+              normalized_options,
+              {signing_key: options.signing_key, encryption_key: options.encryption_key}
+            )
             jwks = normalized_options[:jwks] || normalized_options["jwks"]
             metadata = load_metadata_for_key_extraction
 
@@ -50,10 +53,10 @@ module OmniauthOpenidFederation
               OmniauthOpenidFederation::KeyExtractor.extract_encryption_key(
                 jwks: jwks,
                 metadata: metadata,
-                private_key: private_key
-              ) || private_key
+                private_key: local_encryption_key
+              ) || local_encryption_key
             else
-              private_key
+              local_encryption_key
             end
 
             OmniauthOpenidFederation::Validators.validate_private_key!(encryption_key)
