@@ -74,29 +74,41 @@ module OmniauthOpenidFederation
       end
     end
 
+    # Cache-backed RP private keys.
+    #
+    # Default writes PEM strings through CacheAdapter with no confidentiality layer.
+    # Shared or durable cache backends need host-provided `encrypt` / `decrypt`
+    # callables, or a backend that already encrypts values at rest. Cipher choice
+    # and key custody stay a host concern.
     class CacheStore < RelyingPartyKeyStore
       SIGNING_SUFFIX = "signing_pem"
       ENCRYPTION_SUFFIX = "encryption_pem"
 
-      def initialize(cache_key_prefix:, expires_in: nil)
+      # @param cache_key_prefix [String] shared prefix for signing and encryption entries
+      # @param expires_in [Integer, nil] optional CacheAdapter TTL
+      # @param encrypt [Proc, nil] transform PEM string before write (default: identity)
+      # @param decrypt [Proc, nil] transform stored blob after read (default: identity)
+      def initialize(cache_key_prefix:, expires_in: nil, encrypt: nil, decrypt: nil)
         @prefix = cache_key_prefix
         @expires_in = expires_in
+        @encrypt = encrypt || ->(pem) { pem }
+        @decrypt = decrypt || ->(blob) { blob }
       end
 
       def load
-        signing_pem = CacheAdapter.read(key(SIGNING_SUFFIX))
-        encryption_pem = CacheAdapter.read(key(ENCRYPTION_SUFFIX))
-        raise ConfigurationError, "RP keys missing from cache (#{@prefix})" if signing_pem.nil? || encryption_pem.nil?
+        signing_blob = CacheAdapter.read(key(SIGNING_SUFFIX))
+        encryption_blob = CacheAdapter.read(key(ENCRYPTION_SUFFIX))
+        raise ConfigurationError, "RP keys missing from cache (#{@prefix})" if signing_blob.nil? || encryption_blob.nil?
 
         Record.new(
-          signing_key: OpenSSL::PKey::RSA.new(signing_pem),
-          encryption_key: OpenSSL::PKey::RSA.new(encryption_pem)
+          signing_key: OpenSSL::PKey::RSA.new(@decrypt.call(signing_blob)),
+          encryption_key: OpenSSL::PKey::RSA.new(@decrypt.call(encryption_blob))
         )
       end
 
       def store(signing_key:, encryption_key:)
-        CacheAdapter.write(key(SIGNING_SUFFIX), signing_key.to_pem, expires_in: @expires_in)
-        CacheAdapter.write(key(ENCRYPTION_SUFFIX), encryption_key.to_pem, expires_in: @expires_in)
+        CacheAdapter.write(key(SIGNING_SUFFIX), @encrypt.call(signing_key.to_pem), expires_in: @expires_in)
+        CacheAdapter.write(key(ENCRYPTION_SUFFIX), @encrypt.call(encryption_key.to_pem), expires_in: @expires_in)
         Record.new(signing_key: signing_key, encryption_key: encryption_key)
       end
 

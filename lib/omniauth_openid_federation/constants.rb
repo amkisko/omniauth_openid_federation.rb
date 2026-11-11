@@ -15,7 +15,7 @@ module OmniauthOpenidFederation
     # Use Configuration.config.max_string_length for runtime configuration instead of patching this constant
     MAX_STRING_LENGTH = 8192
 
-    # Minimum RSA modulus size for OIDC signing and encryption keys (FTN and common federation profiles)
+    # Minimum RSA modulus size for OIDC signing and encryption keys (common federation profiles)
     MIN_RSA_KEY_BITS = 2048
 
     # Maximum HTTP response body size for federation/JWKS fetches (1 MiB)

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.2.1 (2026-11-11)
+
+- Fix README Rails routes example: keep Engine mount inside one `routes.draw` (a nested second draw cleared the mount and 404'd well-known paths)
+- Add `OmniauthOpenidFederation.draw_well_known_routes` for host-drawn well-known paths; share route definitions with the Engine
+- Add optional `encrypt` / `decrypt` callables on `RelyingPartyKeyStore::CacheStore` (default remains plaintext PEM through the cache adapter)
+
 ## 2.2.0 (2026-11-11)
 
 - Fix Rack well-known entity configuration responses to use `application/entity-statement+jwt`

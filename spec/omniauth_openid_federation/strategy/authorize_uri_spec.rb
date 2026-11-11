@@ -172,7 +172,7 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       end
     end
 
-    # Provider-specific parameters (for example FTN ftn_spname) use request_object_params and
+    # Provider-specific parameters (for example a registrar claim name) use request_object_params and
     # default_request_object_claims instead of hard-coded strategy options.
 
     it "merges default_request_object_claims before signing" do

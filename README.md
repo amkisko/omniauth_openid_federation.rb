@@ -209,18 +209,26 @@ end
 
 ### Step 6: Add Routes
 
+Well-known paths must sit at site root (`/.well-known/...`). Put one of these inside a single `Rails.application.routes.draw` block. A nested second `routes.draw` clears earlier routes in that file, including an Engine mount.
+
 ```ruby
 # config/routes.rb
-if ENV["OPENID_ENABLED"] == "true"
-  mount OmniauthOpenidFederation::Engine => "/"
-end
-
 Rails.application.routes.draw do
+  if ENV["OPENID_ENABLED"] == "true"
+    # Option A: mount Engine at site root
+    mount OmniauthOpenidFederation::Engine => "/"
+
+    # Option B (API / feature-flag hosts): draw the same controller actions on the host
+    # OmniauthOpenidFederation.draw_well_known_routes(self)
+  end
+
   devise_for :users, controllers: {
     omniauth_callbacks: "users/omniauth_callbacks"
   }
 end
 ```
+
+For hosts that must stay outside Action Controller filters, use Rack instead of the Engine (see Installation).
 
 ### Step 7: Create Callback Controller
 
@@ -297,7 +305,7 @@ Use `prepare_request_object_params` proc to modify parameters before they're add
 
 ```ruby
 config.omniauth :openid_federation,
-  request_object_params: [:ftn_spname], # Allow-list for provider-specific params (example: Finnish FTN)
+  request_object_params: [:ftn_spname], # Allow-list for provider-specific params (example claim name)
   default_request_object_claims: {
     ui_locales: "fi",
     acr_values: ENV["OPENID_ACR_VALUES"]

@@ -9,8 +9,10 @@
 #   require "omniauth_openid_federation/rails"
 #   OmniauthOpenidFederation.base_controller = "ActionController::API" # optional
 #
-# Prefer mounting OmniauthOpenidFederation::Engine, or use RackEndpoint alone for
-# hosts that must stay outside Action Controller filters.
+# Prefer one of:
+#   mount OmniauthOpenidFederation::Engine => "/"   # inside a single routes.draw
+#   OmniauthOpenidFederation.draw_well_known_routes(self)
+#   RackEndpoint under map "/.well-known" for hosts outside Action Controller
 require "omniauth_openid_federation"
 
 unless defined?(Rails)

@@ -395,14 +395,14 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
       strategy = build_decode_strategy(
         nil,
         entity_statement_path: entity_statement_path,
-        allowed_acr_values: ["http://ftn.ficora.fi/2021/loa/substantial"],
+        allowed_acr_values: ["urn:example:acr:substantial"],
         fetch_userinfo: false
       )
       attach_access_token(
         strategy,
         id_token: encode_id_token_for_provider_jwk(
           provider_jwk,
-          {acr: "http://ftn.ficora.fi/2021/loa/low"}
+          {acr: "urn:example:acr:low"}
         )
       )
 

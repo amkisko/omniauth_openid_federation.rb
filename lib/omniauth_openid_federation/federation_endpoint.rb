@@ -466,18 +466,15 @@ module OmniauthOpenidFederation
         RackEndpoint.new
       end
 
-      # Mount the federation endpoint routes in Rails routes
+      # Mount or draw well-known routes inside one host routes.draw block:
+      #   mount OmniauthOpenidFederation::Engine => "/"
+      #   # or OmniauthOpenidFederation.draw_well_known_routes(self)
       #
-      # RECOMMENDED: Use the Engine (Rails-idiomatic way):
-      #   Rails.application.routes.draw do
-      #     mount OmniauthOpenidFederation::Engine => "/"
-      #   end
-      #
-      # This mounts all four endpoints at the root level:
-      #   - GET /.well-known/openid-federation (entity statement)
-      #   - GET /.well-known/openid-federation/fetch (fetch endpoint for Subordinate Statements)
-      #   - GET /.well-known/jwks.json (standard JWKS)
-      #   - GET /.well-known/signed-jwks.json (signed JWKS)
+      # Paths:
+      #   - GET /.well-known/openid-federation
+      #   - GET /.well-known/openid-federation/fetch
+      #   - GET /.well-known/jwks.json
+      #   - GET /.well-known/signed-jwks.json|.jwt|.jose
       #
 
       # Generate fresh signing and encryption keys and write entity statement to file

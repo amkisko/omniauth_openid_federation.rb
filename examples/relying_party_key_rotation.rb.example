@@ -1,7 +1,12 @@
 # Example: rotate RP signing/encryption keys and refresh served JWKS without restart.
 #
+# CacheStore writes PEM through CacheAdapter. Default is plaintext. For shared or
+# durable caches, pass encrypt/decrypt callables (cipher and KMS stay host-owned):
+#
 #   store = OmniauthOpenidFederation::RelyingPartyKeyStore::CacheStore.new(
-#     cache_key_prefix: "openid_federation/rp_keys"
+#     cache_key_prefix: "openid_federation/rp_keys",
+#     encrypt: ->(pem) { HostKeySeal.seal(pem) },
+#     decrypt: ->(blob) { HostKeySeal.open(blob) }
 #   )
 #   record = store.rotate
 #

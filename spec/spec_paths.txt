@@ -11,6 +11,7 @@ spec/omniauth_openid_federation/configuration_spec.rb
 spec/omniauth_openid_federation/constants_spec.rb
 spec/omniauth_openid_federation/content_type_contract_spec.rb
 spec/omniauth_openid_federation/endpoint_resolver_spec.rb
+spec/omniauth_openid_federation/engine_host_routes_spec.rb
 spec/omniauth_openid_federation/entity_statement_reader_spec.rb
 spec/omniauth_openid_federation/errors_spec.rb
 spec/omniauth_openid_federation/federation/entity_statement_builder_spec.rb
