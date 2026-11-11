@@ -31,6 +31,7 @@ end
 tree ".agents/skills" do
   pray "amkisko/dependency-policy", "~> 4.1"
   pray "amkisko/engineering-audit", "~> 2.14"
+  pray "amkisko/pressure-benchmarking", "~> 1.1"
   pray "amkisko/changelog-update", "~> 3.0"
   pray "amkisko/claims-audit", "~> 1.2"
   pray "amkisko/rfc-process", "~> 1.2"
