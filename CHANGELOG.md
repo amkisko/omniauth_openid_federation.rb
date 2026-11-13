@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Stop shipping `examples/` inside the gem package; use the repository tree for examples
+- Load rake/CLI helpers via `require "omniauth_openid_federation/tasks"` instead of the main gem entry
+
 ## 2.2.1 (2026-11-11)
 
 - Fix README Rails routes example: keep Engine mount inside one `routes.draw` (a nested second draw cleared the mount and 404'd well-known paths)

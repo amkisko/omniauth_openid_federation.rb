@@ -42,11 +42,9 @@ require "securerandom"
 require "fileutils"
 require "timeout"
 require "open3"
-require_relative "../lib/omniauth_openid_federation"
-require "jwt"
-
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
-require "omniauth_openid_federation"
+require "omniauth_openid_federation/tasks"
+require "jwt"
 
 class IntegrationTestFlow
   OP_URL = ENV["OP_URL"] || "http://localhost:9292"

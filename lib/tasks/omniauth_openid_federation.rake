@@ -5,7 +5,7 @@ require_relative "../omniauth_openid_federation/time_helpers"
 namespace :openid_federation do
   desc "Fetch entity statement from OpenID Federation provider"
   task :fetch_entity_statement, [:url, :fingerprint, :output_file] => :environment do |_t, args|
-    require "omniauth_openid_federation"
+    require "omniauth_openid_federation/tasks"
 
     url = args[:url] || ENV["ENTITY_STATEMENT_URL"]
     fingerprint = args[:fingerprint] || ENV["ENTITY_STATEMENT_FINGERPRINT"]
@@ -61,7 +61,7 @@ namespace :openid_federation do
 
   desc "Validate existing entity statement file"
   task :validate_entity_statement, [:file_path, :fingerprint] => :environment do |_t, args|
-    require "omniauth_openid_federation"
+    require "omniauth_openid_federation/tasks"
 
     file_path = args[:file_path] || ENV["ENTITY_STATEMENT_PATH"] || "config/provider-entity-statement.jwt"
     expected_fingerprint = args[:fingerprint] || ENV["ENTITY_STATEMENT_FINGERPRINT"]
@@ -103,7 +103,7 @@ namespace :openid_federation do
 
   desc "Fetch JWKS from provider"
   task :fetch_jwks, [:jwks_uri, :output_file] => :environment do |_t, args|
-    require "omniauth_openid_federation"
+    require "omniauth_openid_federation/tasks"
 
     jwks_uri = args[:jwks_uri] || ENV["JWKS_URI"]
     output_file = args[:output_file] || ENV["JWKS_OUTPUT"] || "config/provider-jwks.json"
@@ -143,7 +143,7 @@ namespace :openid_federation do
 
   desc "Parse entity statement and display endpoints"
   task :parse_entity_statement, [:file_path] => :environment do |_t, args|
-    require "omniauth_openid_federation"
+    require "omniauth_openid_federation/tasks"
     require "json"
 
     file_path = args[:file_path] || ENV["ENTITY_STATEMENT_PATH"] || "config/provider-entity-statement.jwt"
@@ -165,7 +165,7 @@ namespace :openid_federation do
 
   desc "Generate client keys and prepare public JWKS for provider registration"
   task :prepare_client_keys, [:key_type, :output_dir] => :environment do |_t, args|
-    require "omniauth_openid_federation"
+    require "omniauth_openid_federation/tasks"
     require "json"
     require "fileutils"
 
@@ -222,7 +222,7 @@ namespace :openid_federation do
 
   desc "Test local entity statement endpoint and all linked endpoints"
   task :test_local_endpoint, [:base_url] => :environment do |_t, args|
-    require "omniauth_openid_federation"
+    require "omniauth_openid_federation/tasks"
 
     base_url = args[:base_url] || ENV["BASE_URL"] || "http://localhost:3000"
 
@@ -377,7 +377,7 @@ namespace :openid_federation do
 
   desc "Test full OpenID Federation authentication flow with a real provider"
   task :test_authentication_flow, [:login_page_url, :base_url, :provider_acr] => :environment do |_t, args|
-    require "omniauth_openid_federation"
+    require "omniauth_openid_federation/tasks"
     require "cgi"
     require "base64"
     require "openssl"
