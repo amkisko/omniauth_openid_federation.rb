@@ -10,11 +10,12 @@
 
 - Strategy stores `@id_token_claims` when building `raw_info` and returns it from `id_token_claims` and `extra`.
 - Specs cover diverging UserInfo `acr` / identity claims versus signed token values, auth hash exposure, and fetch_userinfo disabled.
-- Unreleased CHANGELOG documents the new extra field.
+- CHANGELOG section `2.3.0` documents the new extra field.
 
 ## Next
 
 - Hosts that gate on authentication method should read `extra.id_token_claims` (for example `acr`) rather than the merged `raw_info`.
+- Operator publishes `2.3.0` via `make release` after the release commit is clean.
 
 ## Source
 

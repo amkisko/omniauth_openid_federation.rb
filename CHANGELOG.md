@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.3.0 (2026-11-18)
+
 - Expose verified ID token claims on `auth.extra.id_token_claims` (including `acr` and other signed claims) separately from the UserInfo-merged `raw_info`
 - Stop shipping `examples/` inside the gem package; use the repository tree for examples
 - Load rake/CLI helpers via `require "omniauth_openid_federation/tasks"` instead of the main gem entry

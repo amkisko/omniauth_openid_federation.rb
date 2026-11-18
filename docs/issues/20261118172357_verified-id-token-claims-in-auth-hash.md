@@ -18,7 +18,7 @@ Andrei Makarov
 ## Next
 
 - Optional: pin `acr` / `amr` / `auth_time` in the merge, or document assurance reads in README callback examples.
-- Cut a release when packaging.
+- Operator publishes `2.3.0` via `make release` after the release commit is clean.
 
 ## Source
 
