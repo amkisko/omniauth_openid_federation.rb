@@ -3,17 +3,23 @@
 require "fileutils"
 require_relative "../lib/release_version_check"
 
-def execute_command(command)
+def execute_command(command, allow_failure: false)
   green = "\033[0;32m"
   red = "\033[1;31m"
+  yellow = "\033[1;33m"
   nc = "\033[0m"
 
   puts "#{green}#{command}#{nc}"
   shell_command = command.include?("|") ? "set -o pipefail; #{command}" : command
-  unless system("bash", "-c", shell_command)
-    puts "#{red}Command failed: #{command}#{nc}"
-    exit 1
+  return true if system("bash", "-c", shell_command)
+
+  if allow_failure
+    puts "#{yellow}Command failed: #{command}#{nc}"
+    return false
   end
+
+  puts "#{red}Command failed: #{command}#{nc}"
+  exit 1
 end
 
 execute_command("bundle")
@@ -58,5 +64,16 @@ File.write(notes_path, changelog_notes)
 
 execute_command("gem push #{gem_file}")
 execute_command("git tag #{version}")
-execute_command("git push origin HEAD \"refs/tags/#{version}\"")
+# origin may have multiple push URLs (GitHub, GitLab, Codeberg). One mirror
+# failing must not skip the GitHub release after gem push and local tag succeed.
+push_ok = execute_command(
+  "git push origin HEAD \"refs/tags/#{version}\"",
+  allow_failure: true
+)
+unless push_ok
+  yellow = "\033[1;33m"
+  nc = "\033[0m"
+  puts "#{yellow}Continuing with GitHub release despite git push failure#{nc}"
+end
 execute_command("gh release create #{version} --title #{version} --notes-file #{notes_path}")
+exit 1 unless push_ok

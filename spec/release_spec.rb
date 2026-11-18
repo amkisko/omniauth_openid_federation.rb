@@ -3,7 +3,7 @@ require "open3"
 require_relative "../usr/lib/release_version_check"
 
 RSpec.describe ReleaseVersionCheck do
-  let(:bootstrap) do
+  def bootstrap(fail_git_push: false)
     <<~RUBY
       require_relative "usr/lib/release_version_check"
       module ReleaseVersionCheck
@@ -11,7 +11,10 @@ RSpec.describe ReleaseVersionCheck do
       end
       Kernel.prepend(Module.new do
         def system(*command)
-          puts "EXEC:\#{command.last}"
+          shell = command.last.to_s
+          puts "EXEC:\#{shell}"
+          return false if #{fail_git_push} && shell.include?("git push")
+
           true
         end
 
@@ -42,6 +45,24 @@ RSpec.describe ReleaseVersionCheck do
       expect(output).to include("--notes-file tmp/github-release-notes.md")
       expect(output).to include("--title")
       expect(output).not_to include("--generate-notes")
+    end
+  end
+
+  it "creates the GitHub release when git push to a mirror fails" do
+    output, error, status = Open3.capture3(
+      Gem.ruby,
+      "-e",
+      bootstrap(fail_git_push: true),
+      stdin_data: "\n"
+    )
+
+    aggregate_failures do
+      expect(status.exitstatus).to eq(1), error
+      expect(output).to include("EXEC:gem push")
+      expect(output).to include("git push")
+      expect(output).to include("Continuing with GitHub release despite git push failure")
+      expect(output).to include("EXEC:gh release create")
+      expect(output).to include("--notes-file tmp/github-release-notes.md")
     end
   end
 end
