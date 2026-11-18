@@ -479,13 +479,15 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :integration do
         JWT.encode(id_token_payload, private_key, "RS256", header)
       end
 
-      it "includes raw_info in extra" do
+      it "includes raw_info and id_token_claims in extra" do
         extra = strategy.extra
 
         aggregate_failures do
           expect(extra[:raw_info]).to be_a(Hash)
           expect(extra[:raw_info]["sub"] || extra[:raw_info][:sub]).to eq("user-123")
           expect(extra[:raw_info]["email"] || extra[:raw_info][:email]).to eq("user@example.com")
+          expect(extra[:id_token_claims]).to be_a(Hash)
+          expect(extra[:id_token_claims]["sub"]).to eq("user-123")
         end
       end
     end

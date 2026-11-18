@@ -148,8 +148,16 @@ module OmniAuth
 
       extra do
         {
-          raw_info: raw_info
+          raw_info: raw_info,
+          id_token_claims: id_token_claims
         }
+      end
+
+      # Verified ID token claims after signature and claim validation.
+      # Distinct from raw_info, which may merge UserInfo over non-identity claims.
+      def id_token_claims
+        raw_info
+        @id_token_claims || {}
       end
 
       def raw_info
@@ -160,24 +168,25 @@ module OmniAuth
           access_token ||= exchange_authorization_code(request.params["code"])
 
           id_token = decode_id_token(access_token.id_token)
-          id_token_claims = id_token.raw_attributes || {}
+          verified_claims = stringify_claim_keys(id_token.raw_attributes || {})
+          @id_token_claims = verified_claims.dup
 
           if options.fetch_userinfo
             begin
               userinfo = access_token.userinfo!
               userinfo_hash = decode_userinfo(userinfo)
-              merge_userinfo_with_id_token_claims(id_token_claims, userinfo_hash)
+              merge_userinfo_with_id_token_claims(verified_claims, userinfo_hash)
             rescue OmniauthOpenidFederation::ValidationError
               raise
             rescue => e
               error_msg = "Failed to fetch or decode userinfo: #{e.class} - #{e.message}"
               OmniauthOpenidFederation::Logger.error("[Strategy] #{error_msg}")
               OmniauthOpenidFederation::Logger.warn("[Strategy] Falling back to ID token claims only")
-              id_token_claims
+              verified_claims
             end
           else
             OmniauthOpenidFederation::Logger.debug("[Strategy] Userinfo fetching disabled, using ID token claims only")
-            id_token_claims
+            verified_claims
           end
         end
       end

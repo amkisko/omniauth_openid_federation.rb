@@ -8,6 +8,7 @@ module OmniAuth
       def auth_hash: () -> OmniAuth::AuthHash
       def authorize_uri: () -> String
       def raw_info: () -> Hash[String, untyped]
+      def id_token_claims: () -> Hash[String, untyped]
       def client_jwk_signing_key: () -> untyped
       def options: () -> untyped
       def exchange_authorization_code: (String authorization_code) -> OmniauthOpenidFederation::AccessToken

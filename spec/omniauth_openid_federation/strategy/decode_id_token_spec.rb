@@ -139,8 +139,8 @@ RSpec.describe OmniAuth::Strategies::OpenIDFederation, type: :strategy do
         result = decode_strategy.raw_info
         aggregate_failures do
           expect(result).to be_a(Hash)
-          expect(result[:sub]).to eq("user-123")
-          expect(result[:email]).to eq("user@example.com")
+          expect(result["sub"]).to eq("user-123")
+          expect(result["email"]).to eq("user@example.com")
         end
       end
     end

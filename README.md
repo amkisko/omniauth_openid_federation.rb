@@ -240,6 +240,8 @@ class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
 
   def openid_federation
     auth = request.env["omniauth.auth"]
+    # auth.extra.raw_info is ID token claims merged with UserInfo (iss/sub/aud/exp/iat stay from the ID token).
+    # auth.extra.id_token_claims is the verified ID token payload only (use this for acr and other signed claims).
     user = User.find_or_create_from_omniauth(auth)
     
     if user&.persisted?
