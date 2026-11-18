@@ -71,6 +71,8 @@ RSpec/DescribeClass:
     - spec/omniauth_openid_federation/security_fuzzing_spec.rb
     - spec/omniauth_openid_federation/rodauth_integration_spec.rb
     - spec/omniauth_openid_federation/telia_tunnistus_pp_contract_spec.rb
+    - spec/omniauth_openid_federation/packaging_spec.rb
+    - spec/omniauth_openid_federation/tasks_entrypoint_spec.rb
 
 RSpec/ContextWording:
   Exclude:
