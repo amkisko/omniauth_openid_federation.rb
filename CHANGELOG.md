@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Document host Ruby security patch floor 3.4.13+ or 4.0.10+ for Regexp and String case-conversion fixes; local toolchain pin is 4.0.10
+- Require OmniAuth `>= 2.3.1` and omniauth-oauth2 `>= 1.10.1` (host-header binding / CVE-2026-63183); document `OmniAuth.config.allowed_hosts` or `full_host` in README and Devise example
+- Refresh lockfiles for rack 3.2.8, addressable 2.9.2, activesupport security patches, rodauth `>= 2.50.0`, and sqlite3 2.10.2
+
 ## 2.3.0 (2026-11-18)
 
 - Expose verified ID token claims on `auth.extra.id_token_claims` (including `acr` and other signed claims) separately from the UserInfo-merged `raw_info`

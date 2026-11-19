@@ -94,7 +94,8 @@ RSpec.describe OmniauthOpenidFederation do
       it "uses signed JWKS when available in entity statement" do
         if defined?(Rails)
           # Create entity statement with signed_jwks_uri
-          entity_statement_path = Tempfile.new(["entity_statement", ".jwt"]).path
+          entity_file = Tempfile.new(["entity_statement", ".jwt"])
+          entity_statement_path = entity_file.path
           private_key = OpenSSL::PKey::RSA.new(2048)
           public_key = private_key.public_key
           jwk = JWT::JWK.new(public_key)
@@ -127,7 +128,7 @@ RSpec.describe OmniauthOpenidFederation do
               expect(result["keys"]).to be_present
             end
           ensure
-            File.delete(entity_statement_path) if File.exist?(entity_statement_path)
+            entity_file.close!
           end
         end
       end
@@ -135,7 +136,8 @@ RSpec.describe OmniauthOpenidFederation do
       it "falls back to standard JWKS when signed JWKS fails" do
         if defined?(Rails)
           # Create entity statement with signed_jwks_uri
-          entity_statement_path = Tempfile.new(["entity_statement", ".jwt"]).path
+          entity_file = Tempfile.new(["entity_statement", ".jwt"])
+          entity_statement_path = entity_file.path
           private_key = OpenSSL::PKey::RSA.new(2048)
           public_key = private_key.public_key
           jwk = JWT::JWK.new(public_key)
@@ -172,7 +174,7 @@ RSpec.describe OmniauthOpenidFederation do
               expect(result["keys"]).to be_present
             end
           ensure
-            File.delete(entity_statement_path) if File.exist?(entity_statement_path)
+            entity_file.close!
           end
         end
       end
@@ -190,7 +192,8 @@ RSpec.describe OmniauthOpenidFederation do
       it "uses entity statement keys for standard JWKS fallback" do
         if defined?(Rails)
           # Create entity statement without signed_jwks_uri
-          entity_statement_path = Tempfile.new(["entity_statement", ".jwt"]).path
+          entity_file = Tempfile.new(["entity_statement", ".jwt"])
+          entity_statement_path = entity_file.path
           header = Base64.urlsafe_encode64({alg: "RS256"}.to_json, padding: false)
           payload = Base64.urlsafe_encode64({
             iss: "https://provider.example.com",
@@ -205,7 +208,7 @@ RSpec.describe OmniauthOpenidFederation do
             result = described_class.rotate_jwks(jwks_uri, entity_statement_path: entity_statement_path)
             expect(result).to be_a(Hash)
           ensure
-            File.delete(entity_statement_path) if File.exist?(entity_statement_path)
+            entity_file.close!
           end
         end
       end

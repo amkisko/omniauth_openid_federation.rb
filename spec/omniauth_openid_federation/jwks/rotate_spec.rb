@@ -69,7 +69,8 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
       end
 
       it "uses signed JWKS when entity statement has signed_jwks_uri" do
-        entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+        entity_file = Tempfile.new(["entity", ".jwt"])
+        entity_statement_path = entity_file.path
         entity_statement = {
           iss: "https://provider.example.com",
           sub: "https://provider.example.com",
@@ -102,11 +103,12 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
           expect(result).to have_key(:keys)
         end
       ensure
-        File.delete(entity_statement_path) if File.exist?(entity_statement_path)
+        entity_file.close!
       end
 
       it "validates absolute paths for path traversal only" do
-        entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+        entity_file = Tempfile.new(["entity", ".jwt"])
+        entity_statement_path = entity_file.path
         entity_statement = {
           iss: "https://provider.example.com",
           sub: "https://provider.example.com",
@@ -130,7 +132,7 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
           expect(result).to have_key(:keys)
         end
       ensure
-        File.delete(entity_statement_path) if File.exist?(entity_statement_path)
+        entity_file.close!
       end
 
       it "re-raises SecurityError when loading entity statement" do
@@ -142,7 +144,8 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
       end
 
       it "handles general errors when using signed JWKS and falls back" do
-        entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+        entity_file = Tempfile.new(["entity", ".jwt"])
+        entity_statement_path = entity_file.path
         entity_statement = {
           iss: "https://provider.example.com",
           sub: "https://provider.example.com",
@@ -175,6 +178,8 @@ RSpec.describe OmniauthOpenidFederation::Jwks::Rotate do
           expect(result).to have_key(:keys)
           expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to use signed JWKS, falling back to standard JWKS/)
         end
+      ensure
+        entity_file.close!
       end
     end
 

@@ -503,7 +503,8 @@ RSpec.describe OmniauthOpenidFederation::Jws do
     end
 
     it "handles errors when loading metadata from entity statement" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_file = Tempfile.new(["entity", ".jwt"])
+      entity_statement_path = entity_file.path
       File.write(entity_statement_path, "invalid jwt content")
 
       jws = described_class.new(
@@ -519,6 +520,8 @@ RSpec.describe OmniauthOpenidFederation::Jws do
         expect(signed.split(".").length).to eq(3)
         expect(OmniauthOpenidFederation::Logger).to have_received(:warn).with(/Failed to load metadata from entity statement/)
       end
+    ensure
+      entity_file.close!
     end
   end
 end

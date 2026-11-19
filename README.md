@@ -125,9 +125,12 @@ if ENV["OPENID_ENABLED"] == "true"
   entity_statement_path = ENV["OPENID_ENTITY_STATEMENT_PATH"] || 
     Rails.root.join("config", ".federation-entity-statement.jwt").to_s
 
-  # Configure CSRF protection
+  # Configure CSRF protection and host binding (OmniAuth 2.2+)
   if defined?(OmniAuth)
     OmniAuth.config.allowed_request_methods = [:post]
+    # Reject forged Host / X-Forwarded-Host on callback URL construction (CVE-2026-63183).
+    # Prefer an explicit full_host string or proc when the public origin is fixed.
+    OmniAuth.config.allowed_hosts = [ENV.fetch("APP_HOST", "localhost")]
     OmniAuth.config.request_validation_phase = lambda do |env|
       request = Rack::Request.new(env)
       return true if request.path.end_with?("/callback")
@@ -508,7 +511,7 @@ rake openid_federation:test_authentication_flow[
 
 ## Requirements
 
-- Ruby >= 3.4
+- Ruby >= 3.4 (security patch floor: 3.4.13+ or 4.0.10+; see ruby-lang.org Regexp/String advisories from 2026-10-23 and 2026-11-18)
 - Rails >= 7.2 (or compatible Rack application; see Appraisal gemfiles)
 - OpenSSL (for RSA key operations)
 

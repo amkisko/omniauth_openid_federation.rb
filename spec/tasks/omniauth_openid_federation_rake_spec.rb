@@ -82,7 +82,8 @@ RSpec.describe "Rake tasks", type: :rake do
         {alg: "RS256", typ: "entity-statement+jwt", kid: "key-1"}
       )
 
-      output_file = Tempfile.new(["entity", ".jwt"]).path
+      output_file_handle = Tempfile.new(["entity", ".jwt"])
+      output_file = output_file_handle.path
 
       stub_request(:get, "#{provider_issuer}/.well-known/openid-federation")
         .to_return(status: 200, body: jwt, headers: {"Content-Type" => "application/jwt"})
@@ -157,7 +158,8 @@ RSpec.describe "Rake tasks", type: :rake do
 
   describe "openid_federation:validate_entity_statement" do
     it "validates entity statement successfully" do
-      entity_statement_path = Tempfile.new(["entity", ".jwt"]).path
+      entity_file = Tempfile.new(["entity", ".jwt"])
+      entity_statement_path = entity_file.path
       entity_statement = {
         iss: provider_issuer,
         sub: provider_issuer,
@@ -220,7 +222,8 @@ RSpec.describe "Rake tasks", type: :rake do
     it "fetches JWKS successfully" do
       jwks_uri = "#{provider_issuer}/.well-known/jwks.json"
       jwk = OmniauthOpenidFederation::Utils.rsa_key_to_jwk(public_key)
-      output_file = Tempfile.new(["jwks", ".json"]).path
+      output_file_handle = Tempfile.new(["jwks", ".json"])
+      output_file = output_file_handle.path
 
       stub_request(:get, jwks_uri)
         .to_return(status: 200, body: {keys: [jwk]}.to_json, headers: {"Content-Type" => "application/json"})

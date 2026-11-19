@@ -51,6 +51,8 @@ Devise.setup do |config|
   if defined?(OmniAuth)
     OmniAuth.config.allowed_request_methods = [:post]
     OmniAuth.config.silence_get_warning = false
+    # OmniAuth 2.2+: bind callback URL host (CVE-2026-63183). Use full_host instead when fixed.
+    OmniAuth.config.allowed_hosts = [ENV.fetch("APP_HOST", "localhost")]
 
     # Configure CSRF validation to check tokens only for request phase (initiating OAuth)
     # Callback phase uses OAuth state parameter for CSRF protection (validated in strategy)

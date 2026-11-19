@@ -26,7 +26,8 @@ Gem::Specification.new do |spec|
     "documentation_uri" => "https://rubydoc.info/gems/omniauth_openid_federation"
   }
 
-  spec.add_runtime_dependency "omniauth-oauth2", "~> 1.8"
+  spec.add_runtime_dependency "omniauth", "~> 2.3", ">= 2.3.1"
+  spec.add_runtime_dependency "omniauth-oauth2", "~> 1.8", ">= 1.10.1"
   spec.add_runtime_dependency "oauth2", "~> 2.0"
   spec.add_runtime_dependency "jwt", "~> 3.2"
   spec.add_runtime_dependency "jwe", "~> 1.1"
@@ -51,10 +52,10 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rbs", "~> 4.0"
   spec.add_development_dependency "webrick", "~> 1.9"
   # Rodauth + rodauth-omniauth for integration testing with OpenID Federation strategy
-  spec.add_development_dependency "rodauth", "~> 2.0"
+  spec.add_development_dependency "rodauth", "~> 2.0", ">= 2.50.0"
   spec.add_development_dependency "rodauth-omniauth", "~> 0.6"
   spec.add_development_dependency "sequel", "~> 5.0"
-  spec.add_development_dependency "sqlite3", "~> 2.0"
+  spec.add_development_dependency "sqlite3", "~> 2.0", ">= 2.10.2"
   spec.add_development_dependency "rack-test", "~> 2.0"
   spec.add_development_dependency "tilt", "~> 2.0" # Required by Rodauth for rendering
   spec.add_development_dependency "bcrypt", "~> 3.1" # Required by Rodauth for password hashing
